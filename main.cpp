@@ -2,6 +2,9 @@
 #include <cstdint>
 #include <string>
 #include <format>
+#include <filesystem> //ファイルやディレクトリに関する操作を行うライブラリ
+#include <fstream> //ファイルに書いたり読んだりするライブラリ
+#include <chrono> //時間を扱うライブラリ
 
 // ウィンドウプロシージャ
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -18,19 +21,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
   return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
-// 文字列を格納する
-std::string str0{"STRING!!!"};
-
-//整数を文字列にする
-std::string str1{std::to_string(10)};
-
 void Log(const std::string &message) { OutputDebugStringA(message.c_str()); }
-
-// strung->wstring
-//std::wstring ConvertString(const std::string &str);
-
-// wstrung->string
-//std::string ConvertString(const std::wstring &str);
 
 std::wstring ConvertString(const std::string &str) {
   if (str.empty()) {
@@ -65,6 +56,36 @@ std::string ConvertString(const std::wstring &str) {
                       result.data(), sizeNeeded, NULL, NULL);
   return result;
 }
+
+void Log(std::ostream& os, const std::string& message) {
+  os << message << std::endl;
+  OutputDebugStringA(message.c_str());
+}
+
+// 文字列を格納する
+std::string str0{"STRING!!!"};
+
+//整数を文字列にする
+std::string str1{std::to_string(10)};
+
+// 現在時刻を取得(UTC時刻)
+std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+
+// ログファイルの名前にコンマ何秒はいらないので、削って秒にする
+std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>
+    nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
+
+//日本時間(PCの設定時間)に変換
+std::chrono::zoned_time localTime{std::chrono::current_zone(), nowSeconds};
+
+// formatを使って年月日_時分秒の文字列に変換
+std::string dateString = std::format("{:%Y%m%d_%H%M&S}", localTime);
+
+//時刻を使ってファイル名を決定
+std::string logFilePath = std::string("logs/") + dateString + ".log";
+
+//ファイルを作って書き込み準備
+std::ofstream lobStream(logFilePath);
 
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -126,6 +147,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   //wstring->string
   Log(ConvertString(std::format(L"WSTRING{}\n",wstringValue)));
+
+  // ログのディレクトリを用意
+  std::filesystem::create_directory("logs");
 
   // ウィンドウの×ボタンが押されるまでループ
   while (msg.message != WM_QUIT) {
