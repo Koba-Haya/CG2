@@ -651,7 +651,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   ---------------------------*/
   // 実際に頂点リソースを作る
   ID3D12Resource *vertexResource =
-      CreateBufferResource(device, sizeof(VertexData) * 3);
+      CreateBufferResource(device, sizeof(VertexData) * 6);
 
   /*VertexBufferViewを作成
   ----------------------------*/
