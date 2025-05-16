@@ -34,6 +34,8 @@ struct VertexData {
   Vector2 texcoord;
 };
 
+Vector4 materialColor = {1.0f, 1.0f, 1.0f, 1.0f};
+
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
                                                              UINT msg,
                                                              WPARAM wParam,
@@ -741,19 +743,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Vector4 *materialData = nullptr;
   // 書き込むためのアドレスを取得
   materialResource->Map(0, nullptr, reinterpret_cast<void **>(&materialData));
-  // 今回は赤を書き込んでみる
-  *materialData = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+  // 今回は白を書き込んでみる
+  *materialData = materialColor;
 
   /* TransformationMatrix用のResourceを作る
   -----------------------------------------------------*/
   // WVP用のリソースを作る。Matrix4x4 1つ分のサイズを用意する
-  ID3D12Resource *wvpResource = CreateBufferResource(device, sizeof(Matrix4x4));
+  ID3D12Resource *wvpResource[2] = {
+      CreateBufferResource(device, sizeof(Matrix4x4)),
+      CreateBufferResource(device, sizeof(Matrix4x4))};
   // データを描き込む
-  Matrix4x4 *wvpData = nullptr;
+  Matrix4x4 *wvpData[2] = {nullptr, nullptr};
   // 書き込むためのアドレスを取得
-  wvpResource->Map(0, nullptr, reinterpret_cast<void **>(&wvpData));
+  wvpResource[0]->Map(0, nullptr, reinterpret_cast<void **>(&wvpData[0]));
+  wvpResource[1]->Map(0, nullptr, reinterpret_cast<void **>(&wvpData[1]));
   // 単位行列に書き込んでおく
-  *wvpData = MakeIdentity4x4();
+  *wvpData[0] = MakeIdentity4x4();
+  *wvpData[1] = MakeIdentity4x4();
 
   // Textureを読んで転送する
   DirectX::ScratchImage mipImages = LoadTexture("resources/uvChecker.png");
@@ -788,10 +794,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   --------------------------------------------*/
 
   // Transform変数を作る
-  Transform transform{
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+  Transform transform[2]{
+      {{1.0f, 1.0f, 1.0f}, {0.0f, 0.7f, 0.0f}, {0.0f, 0.0f, 0.0f}},
+      {{1.0f, 1.0f, 1.0f}, {0.0f, -0.7f, 0.0f}, {0.0f, 0.0f, 0.0f}}};
   Transform cameraTransform{
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -5.0f}};
+      {1.0f, 1.0f, 1.0f}, {0.45f, 0.0f, 0.0f}, {0.0f, 2.5f, -5.0f}};
+  Matrix4x4 worldMatrix[2];
+  Matrix4x4 worldViewProjectionMatrix[2];
+  D3D12_GPU_VIRTUAL_ADDRESS wvpAddress[2];
 
   // ImGuiの初期化
   IMGUI_CHECKVERSION();
@@ -809,7 +819,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
       TranslateMessage(&msg);
       DispatchMessage(&msg);
-      continue;
     }
 
     // ImGuiにフレームが始まることを伝える
@@ -822,19 +831,64 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         ShowDemoWindow(); // 開発者用UIの処理。UIを出す場合はここをゲーム固有の処理に置き換える
 
     // ゲームの処理
-    transform.rotate.y += 0.03f;
-    Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate,
-                                             transform.translate);
-    *wvpData = worldMatrix;
+    // transform.rotate.y += 0.03f;
+
     Matrix4x4 cameraMatrix =
         MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate,
                          cameraTransform.translate);
     Matrix4x4 viewMatrix = Inverse(cameraMatrix);
     Matrix4x4 projectionMatrix =
         MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
-    Matrix4x4 worldViewProjectionMatrix =
-        Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-    *wvpData = worldViewProjectionMatrix;
+    worldMatrix[0] = MakeAffineMatrix(transform[0].scale, transform[0].rotate,
+                                      transform[0].translate);
+    worldViewProjectionMatrix[0] =
+        Multiply(worldMatrix[0], Multiply(viewMatrix, projectionMatrix));
+    *wvpData[0] = worldViewProjectionMatrix[0];
+
+    // GPUアドレスをずらす
+    wvpAddress[0] = wvpResource[0]->GetGPUVirtualAddress();
+    wvpAddress[0] += sizeof(Matrix4x4);
+
+    worldMatrix[1] = MakeAffineMatrix(transform[1].scale, transform[1].rotate,
+                                      transform[1].translate);
+    worldViewProjectionMatrix[1] =
+        Multiply(worldMatrix[1], Multiply(viewMatrix, projectionMatrix));
+    *wvpData[1] = worldViewProjectionMatrix[1];
+    wvpAddress[1] = wvpResource[1]->GetGPUVirtualAddress();
+    wvpAddress[1] += sizeof(Matrix4x4);
+
+    // ImGuiウィンドウとカラーピッカー
+    ImGui::Begin("Window");
+    ImGui::ColorEdit3("Color", reinterpret_cast<float *>(&materialColor));
+
+    // UIのSRT
+    std::string label = "Model " + std::to_string(0);
+    if (ImGui::TreeNode(label.c_str())) {
+      ImGui::SliderFloat3(
+          "Scale", reinterpret_cast<float *>(&transform[0].scale), 0.1f, 5.0f);
+      ImGui::SliderFloat3("Rotate",
+                          reinterpret_cast<float *>(&transform[0].rotate),
+                          -3.14f, 3.14f);
+      ImGui::SliderFloat3("Translate",
+                          reinterpret_cast<float *>(&transform[0].translate),
+                          -5.0f, 5.0f);
+      ImGui::TreePop();
+    }
+
+    label = "Model " + std::to_string(1);
+    if (ImGui::TreeNode(label.c_str())) {
+      ImGui::SliderFloat3(
+          "Scale1", reinterpret_cast<float *>(&transform[1].scale), 0.1f, 5.0f);
+      ImGui::SliderFloat3("Rotate1",
+                          reinterpret_cast<float *>(&transform[1].rotate),
+                          -3.14f, 3.14f);
+      ImGui::SliderFloat3("Translate1",
+                          reinterpret_cast<float *>(&transform[1].translate),
+                          -5.0f, 5.0f);
+      ImGui::TreePop();
+    }
+
+    ImGui::End();
 
     // ImGuiの内部コマンドを生成する
     ImGui::Render();
@@ -845,6 +899,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ------------------------------*/
     // これから書き込むバックバッファのインデクスを取得
     UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
+
+    // 色の変更を GPU に反映
+    *materialData = materialColor;
 
     /*TransitionBarrierを張るコード
     ----------------------------------------------------------------------------*/
@@ -898,6 +955,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView); // VBVを設定
     // 形状を設定。PSOに設定しているものとはまた別。同じものを設定すると考えておけばいい
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    /* DescriptorTableを設定する
+    --------------------------------*/
+    // SRVのDescriptorTableの先頭を設定。2は、rootParamater[2]である。
+    commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+    /*------------------------------------------------------*/
     /*CBVを設定する
     --------------------------------------------------------*/
     // マテリアルCBufferの場所を特定
@@ -905,14 +967,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         0, materialResource->GetGPUVirtualAddress());
     // wvp用のCBufferの場所を特定
     commandList->SetGraphicsRootConstantBufferView(
-        1, wvpResource->GetGPUVirtualAddress());
-    /* DescriptorTableを設定する
-    --------------------------------*/
-    // SRVのDescriptorTableの先頭を設定。2は、rootParamater[2]である。
-    commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
-    /*------------------------------------------------------*/
-    // 描画 (DrawCall/ドローコール)。6頂点で1つのインスタンス。
-    commandList->DrawInstanced(6, 1, 0, 0);
+        1, wvpResource[0]->GetGPUVirtualAddress());
+    // 描画 (DrawCall/ドローコール)。3頂点で1つのインスタンス。
+    commandList->DrawInstanced(3, 1, 0, 0);
+    commandList->SetGraphicsRootConstantBufferView(
+        1, wvpResource[1]->GetGPUVirtualAddress());
+    // 描画 (DrawCall/ドローコール)。3頂点で1つのインスタンス。
+    commandList->DrawInstanced(3, 1, 0, 0);
 
     /* ImGuiを描画
     -------------------------------*/
@@ -997,7 +1058,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   pixelShaderBlob->Release();
   vertexShaderBlob->Release();
   materialResource->Release();
-  wvpResource->Release();
+  wvpResource[0]->Release();
+  wvpResource[1]->Release();
   textureResource->Release();
   depthStencilResource->Release();
   dsvDescriptorHeap->Release();
