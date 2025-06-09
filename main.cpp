@@ -1,5 +1,7 @@
 #include "include.h"
 #include <Windows.h>
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 struct Vector2 {
   float x;
@@ -32,6 +34,11 @@ struct Transform {
 struct VertexData {
   Vector4 position;
   Vector2 texcoord;
+};
+
+struct Sphere {
+  Vector3 center;
+  float radius;
 };
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
@@ -677,7 +684,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   ---------------------------*/
   // 実際に頂点リソースを作る
   ID3D12Resource *vertexResource =
-      CreateBufferResource(device, sizeof(VertexData) * 6);
+      CreateBufferResource(device, sizeof(VertexData) * 1536);
 
   /*VertexBufferViewを作成
   ----------------------------*/
@@ -686,35 +693,91 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // リソースの先頭のアドレスから作成する
   vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
   // 使用するリソースのサイズは頂点6つ分のサイズ
-  vertexBufferView.SizeInBytes = sizeof(VertexData) * 6;
+  vertexBufferView.SizeInBytes = sizeof(VertexData) * 1536;
   // 1頂点当たりのサイズ
   vertexBufferView.StrideInBytes = sizeof(VertexData);
 
   /*Resourceにデータを書き込む
   -----------------------------*/
   // 頂点リソースにデータを書き込む
-  VertexData *vertexData = nullptr;
+  VertexData *sphereVertices = nullptr;
   // 書き込むためのアドレスを取得
-  vertexResource->Map(0, nullptr, reinterpret_cast<void **>(&vertexData));
-  // 左下1
-  vertexData[0].position = {-0.5f, -0.5f, 0.0f, 1.0f};
-  vertexData[0].texcoord = {0.0f, 1.0f};
-  // 上1
-  vertexData[1].position = {0.0f, 0.5f, 0.0f, 1.0f};
-  vertexData[1].texcoord = {0.5f, 0.0f};
-  // 右下1
-  vertexData[2].position = {0.5f, -0.5f, 0.0f, 1.0f};
-  vertexData[2].texcoord = {1.0f, 1.0f};
+  vertexResource->Map(0, nullptr, reinterpret_cast<void **>(&sphereVertices));
 
-  // 左下2
-  vertexData[3].position = {-0.5f, -0.5f, 0.5f, 1.0f};
-  vertexData[3].texcoord = {0.0f, 1.0f};
-  // 上2
-  vertexData[4].position = {0.0f, 0.0f, 0.0f, 1.0f};
-  vertexData[4].texcoord = {0.5f, 0.0f};
-  // 右下2
-  vertexData[5].position = {0.5f, -0.5f, -0.5f, 1.0f};
-  vertexData[5].texcoord = {1.0f, 1.0f};
+  const uint32_t kSubdivision = 16;
+  const float kLatEvery =
+      static_cast<float>(M_PI) / static_cast<float>(kSubdivision);
+  const float kLonEvery =
+      static_cast<float>(2.0f * M_PI) / static_cast<float>(kSubdivision);
+
+  for (uint32_t latIndex = 0; latIndex < kSubdivision; ++latIndex) {
+    float lat = -static_cast<float>(M_PI) / 2.0f + kLatEvery * latIndex;
+    for (uint32_t lonIndex = 0; lonIndex < kSubdivision; ++lonIndex) {
+      uint32_t start = (latIndex * kSubdivision + lonIndex) * 6;
+      float lon = kLonEvery * lonIndex;
+
+      // A
+      sphereVertices[start].position.x = cosf(lat) * cosf(lon);
+      sphereVertices[start].position.y = sinf(lat);
+      sphereVertices[start].position.z = cosf(lat) * sinf(lon);
+      sphereVertices[start].position.w = 1.0f;
+      sphereVertices[start].texcoord.x = float(lonIndex) / float(kSubdivision);
+      sphereVertices[start].texcoord.y =
+          1.0f - float(latIndex) / float(kSubdivision);
+
+      // B
+      uint32_t b = start + 1;
+      sphereVertices[b].position.x = cosf(lat + kLatEvery) * cosf(lon);
+      sphereVertices[b].position.y = sinf(lat + kLatEvery);
+      sphereVertices[b].position.z = cosf(lat + kLatEvery) * sinf(lon);
+      sphereVertices[b].position.w = 1.0f;
+      sphereVertices[b].texcoord.x = float(lonIndex) / float(kSubdivision);
+      sphereVertices[b].texcoord.y =
+          1.0f - float(latIndex + 1) / float(kSubdivision);
+
+      // C
+      uint32_t c = start + 2;
+      sphereVertices[c].position.x = cosf(lat) * cosf(lon + kLonEvery);
+      sphereVertices[c].position.y = sinf(lat);
+      sphereVertices[c].position.z = cosf(lat) * sinf(lon + kLonEvery);
+      sphereVertices[c].position.w = 1.0f;
+      sphereVertices[c].texcoord.x = float(lonIndex + 1) / float(kSubdivision);
+      sphereVertices[c].texcoord.y =
+          1.0f - float(latIndex) / float(kSubdivision);
+
+      // D
+      uint32_t d = start + 4;
+      sphereVertices[d].position.x =
+          cosf(lat + kLatEvery) * cosf(lon + kLonEvery);
+      sphereVertices[d].position.y = sinf(lat + kLatEvery);
+      sphereVertices[d].position.z =
+          cosf(lat + kLatEvery) * sinf(lon + kLonEvery);
+      sphereVertices[d].position.w = 1.0f;
+      sphereVertices[d].texcoord.x = float(lonIndex + 1) / float(kSubdivision);
+      sphereVertices[d].texcoord.y =
+          1.0f - float(latIndex + 1) / float(kSubdivision);
+
+      // B
+      uint32_t e = start + 3;
+      sphereVertices[e].position.x = cosf(lat + kLatEvery) * cosf(lon);
+      sphereVertices[e].position.y = sinf(lat + kLatEvery);
+      sphereVertices[e].position.z = cosf(lat + kLatEvery) * sinf(lon);
+      sphereVertices[e].position.w = 1.0f;
+      sphereVertices[e].texcoord.x = float(lonIndex) / float(kSubdivision);
+      sphereVertices[e].texcoord.y =
+          1.0f - float(latIndex + 1) / float(kSubdivision);
+
+      // C
+      uint32_t f = start + 5;
+      sphereVertices[f].position.x = cosf(lat) * cosf(lon + kLonEvery);
+      sphereVertices[f].position.y = sinf(lat);
+      sphereVertices[f].position.z = cosf(lat) * sinf(lon + kLonEvery);
+      sphereVertices[f].position.w = 1.0f;
+      sphereVertices[f].texcoord.x = float(lonIndex + 1) / float(kSubdivision);
+      sphereVertices[f].texcoord.y =
+          1.0f - float(latIndex) / float(kSubdivision);
+    }
+  }
 
   /*ViewportとScissor
   -------------------------*/
@@ -844,9 +907,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Transform transform{
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
   Transform cameraTransform{
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -5.0f}};
+      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -10.0f}};
   Transform transformSprite{
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+  Sphere sphere = {{0.0f, 0.0f, 0.0f}, 0.5f};
 
   // ImGuiの初期化
   IMGUI_CHECKVERSION();
@@ -895,7 +959,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     *wvpData = worldViewProjectionMatrix;
 
     /* WVPMatrixを作って書き込む
----------------------------------*/
+    ---------------------------------*/
     // Sprite用のWorldViewProjectionMatrixを作る
     Matrix4x4 worldMatrixSprite =
         MakeAffineMatrix(transformSprite.scale, transformSprite.rotate,
@@ -981,7 +1045,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
     /*------------------------------------------------------*/
     // 描画 (DrawCall/ドローコール)。6頂点で1つのインスタンス。
-    commandList->DrawInstanced(6, 1, 0, 0);
+    commandList->DrawInstanced(kSubdivision * kSubdivision * 6, 1, 0, 0);
 
     /* 2D描画コマンドを積む
 -----------------------------*/
@@ -1080,6 +1144,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   textureResource->Release();
   depthStencilResource->Release();
   dsvDescriptorHeap->Release();
+  vertexResourceSprite->Release();
+  transformationMatrixResourceSprite->Release();
 
   CoUninitialize();
 
