@@ -678,7 +678,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   hr = device->CreateGraphicsPipelineState(
       &graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState));
   assert(SUCCEEDED(hr));
-  /*------------------------------------------------------------------------------------------*/
+  /*----------------------------------------  ここまで  --------------------------------------------------*/
 
   /*VertexResourceを生成
   ---------------------------*/
