@@ -1,7 +1,5 @@
 #include "include.h"
 #include <Windows.h>
-#define _USE_MATH_DEFINES
-#include <math.h>
 
 struct Vector2 {
   float x;
@@ -34,11 +32,23 @@ struct Transform {
 struct VertexData {
   Vector4 position;
   Vector2 texcoord;
+  Vector3 normal;
 };
 
-struct Sphere {
-  Vector3 center;
-  float radius;
+struct Material {
+  Vector4 color;
+  int32_t enableLighting;
+};
+
+struct TransformationMatrix {
+  Matrix4x4 WVP;
+  Matrix4x4 World;
+};
+
+struct DirectionalLight {
+  Vector4 color;     // ライトの色
+  Vector3 direction; // ライトの向き
+  float intensity;   // 輝度
 };
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
@@ -569,7 +579,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
   // RootParameter作成。複数設定できるので配列。今回は結果1つだけなので長さ1の配列
-  D3D12_ROOT_PARAMETER rootParameters[3] = {};
+  D3D12_ROOT_PARAMETER rootParameters[4] = {};
   rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
   rootParameters[0].ShaderVisibility =
       D3D12_SHADER_VISIBILITY_PIXEL;               // PixelShaderで使う
@@ -586,6 +596,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       descriptorRange; // Tableの中身の配列を指定
   rootParameters[2].DescriptorTable.NumDescriptorRanges =
       _countof(descriptorRange); // Tableで利用する数
+  rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
+  rootParameters[3].ShaderVisibility =
+      D3D12_SHADER_VISIBILITY_PIXEL;               // PixelShaderで使う
+  rootParameters[3].Descriptor.ShaderRegister = 1; // レジスタ番号1を使う
   descriptionRootSignature.pParameters =
       rootParameters; // ルートパラメーター配列へのポインタ
   descriptionRootSignature.NumParameters =
@@ -611,7 +625,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   /*InputLayout
   --------------------------*/
   // InputLayout
-  D3D12_INPUT_ELEMENT_DESC inputElementDescs[2] = {};
+  D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
   inputElementDescs[0].SemanticName = "POSITION";
   inputElementDescs[0].SemanticIndex = 0;
   inputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -620,6 +634,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   inputElementDescs[1].SemanticIndex = 0;
   inputElementDescs[1].Format = DXGI_FORMAT_R32G32_FLOAT;
   inputElementDescs[1].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+  inputElementDescs[2].SemanticName = "NORMAL";
+  inputElementDescs[2].SemanticIndex = 0;
+  inputElementDescs[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
+  inputElementDescs[2].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
   D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{};
   inputLayoutDesc.pInputElementDescs = inputElementDescs;
   inputLayoutDesc.NumElements = _countof(inputElementDescs);
@@ -695,8 +713,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   hr = device->CreateGraphicsPipelineState(
       &graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState));
   assert(SUCCEEDED(hr));
-  /*----------------------------------------  ここまで
-   * --------------------------------------------------*/
+  /*-------------------------  ここまで  ----------------------------------*/
 
   /*VertexResourceを生成
   ---------------------------*/
@@ -742,6 +759,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       sphereVertices[start].texcoord.x = float(lonIndex) / float(kSubdivision);
       sphereVertices[start].texcoord.y =
           1.0f - float(latIndex) / float(kSubdivision);
+      sphereVertices[start].normal.x = sphereVertices[start].position.x;
+      sphereVertices[start].normal.y = sphereVertices[start].position.y;
+      sphereVertices[start].normal.z = sphereVertices[start].position.z;
 
       // B
       uint32_t b = start + 1;
@@ -752,6 +772,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       sphereVertices[b].texcoord.x = float(lonIndex) / float(kSubdivision);
       sphereVertices[b].texcoord.y =
           1.0f - float(latIndex + 1) / float(kSubdivision);
+      sphereVertices[b].normal.x = sphereVertices[b].position.x;
+      sphereVertices[b].normal.y = sphereVertices[b].position.y;
+      sphereVertices[b].normal.z = sphereVertices[b].position.z;
 
       // C
       uint32_t c = start + 2;
@@ -762,6 +785,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       sphereVertices[c].texcoord.x = float(lonIndex + 1) / float(kSubdivision);
       sphereVertices[c].texcoord.y =
           1.0f - float(latIndex) / float(kSubdivision);
+      sphereVertices[c].normal.x = sphereVertices[c].position.x;
+      sphereVertices[c].normal.y = sphereVertices[c].position.y;
+      sphereVertices[c].normal.z = sphereVertices[c].position.z;
 
       // D
       uint32_t d = start + 4;
@@ -774,6 +800,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       sphereVertices[d].texcoord.x = float(lonIndex + 1) / float(kSubdivision);
       sphereVertices[d].texcoord.y =
           1.0f - float(latIndex + 1) / float(kSubdivision);
+      sphereVertices[d].normal.x = sphereVertices[d].position.x;
+      sphereVertices[d].normal.y = sphereVertices[d].position.y;
+      sphereVertices[d].normal.z = sphereVertices[d].position.z;
 
       // B
       uint32_t e = start + 3;
@@ -784,6 +813,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       sphereVertices[e].texcoord.x = float(lonIndex) / float(kSubdivision);
       sphereVertices[e].texcoord.y =
           1.0f - float(latIndex + 1) / float(kSubdivision);
+      sphereVertices[e].normal.x = sphereVertices[e].position.x;
+      sphereVertices[e].normal.y = sphereVertices[e].position.y;
+      sphereVertices[e].normal.z = sphereVertices[e].position.z;
 
       // C
       uint32_t f = start + 5;
@@ -794,6 +826,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       sphereVertices[f].texcoord.x = float(lonIndex + 1) / float(kSubdivision);
       sphereVertices[f].texcoord.y =
           1.0f - float(latIndex) / float(kSubdivision);
+      sphereVertices[f].normal.x = sphereVertices[f].position.x;
+      sphereVertices[f].normal.y = sphereVertices[f].position.y;
+      sphereVertices[f].normal.z = sphereVertices[f].position.z;
     }
   }
 
@@ -821,24 +856,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   -----------------------------------*/
   // マテリアル用のリソースを作る。今回は、color1つ分のサイズを用意する
   ID3D12Resource *materialResource =
-      CreateBufferResource(device, sizeof(Vector4));
+      CreateBufferResource(device, sizeof(Material));
   // マテリアルにデータを書き込む
-  Vector4 *materialData = nullptr;
+  Material *materialData = nullptr;
   // 書き込むためのアドレスを取得
   materialResource->Map(0, nullptr, reinterpret_cast<void **>(&materialData));
   // 今回は赤を書き込んでみる
-  *materialData = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+  *materialData = {Vector4(1.0f, 1.0f, 1.0f, 1.0f), true};
 
   /* TransformationMatrix用のResourceを作る
   -----------------------------------------------------*/
-  // WVP用のリソースを作る。Matrix4x4 1つ分のサイズを用意する
-  ID3D12Resource *wvpResource = CreateBufferResource(device, sizeof(Matrix4x4));
+  UINT transformationMatrixSize = (sizeof(TransformationMatrix) + 255) & ~255;
+  // WVP用のリソースを作る。Matrix4x4 2つ分のサイズを用意する
+  ID3D12Resource *wvpResource =
+      CreateBufferResource(device, transformationMatrixSize);
   // データを描き込む
-  Matrix4x4 *wvpData = nullptr;
+  TransformationMatrix *wvpData = nullptr;
   // 書き込むためのアドレスを取得
   wvpResource->Map(0, nullptr, reinterpret_cast<void **>(&wvpData));
   // 単位行列に書き込んでおく
-  *wvpData = MakeIdentity4x4();
+  *wvpData = {MakeIdentity4x4(), MakeIdentity4x4()};
 
   // Textureを読んで転送する
   DirectX::ScratchImage mipImages = LoadTexture("resources/uvChecker.png");
@@ -920,17 +957,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // 1枚目の三角形
   vertexDataSprite[0].position = {0.0f, 360.0f, 0.0f, 1.0f}; // 左下
   vertexDataSprite[0].texcoord = {0.0f, 1.0f};
+  vertexDataSprite[0].normal = {0.0f, 0.0f, -1.0f};
   vertexDataSprite[1].position = {0.0f, 0.0f, 0.0f, 1.0f}; // 左上
   vertexDataSprite[1].texcoord = {0.0f, 0.0f};
+  vertexDataSprite[1].normal = {0.0f, 0.0f, -1.0f};
   vertexDataSprite[2].position = {640.0f, 360.0f, 0.0f, 1.0f}; // 右下
   vertexDataSprite[2].texcoord = {1.0f, 1.0f};
+  vertexDataSprite[2].normal = {0.0f, 0.0f, -1.0f};
   // ２枚目の三角形
   vertexDataSprite[3].position = {0.0f, 0.0f, 0.0f, 1.0f}; // 左上
   vertexDataSprite[3].texcoord = {0.0f, 0.0f};
+  vertexDataSprite[3].normal = {0.0f, 0.0f, -1.0f};
   vertexDataSprite[4].position = {640.0f, 0.0f, 0.0f, 1.0f}; // 右上
   vertexDataSprite[4].texcoord = {1.0f, 0.0f};
+  vertexDataSprite[4].normal = {0.0f, 0.0f, -1.0f};
   vertexDataSprite[5].position = {640.0f, 360.0f, 0.0f, 1.0f}; // 右下
   vertexDataSprite[5].texcoord = {1.0f, 1.0f};
+  vertexDataSprite[5].normal = {0.0f, 0.0f, -1.0f};
 
   /* Transform周りをつくる
 -------------------------------------*/
@@ -945,6 +988,30 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       0, nullptr, reinterpret_cast<void **>(&transformationMatrixDataSprite));
   // 単位行列を書き込んでおく
   *transformationMatrixDataSprite = MakeIdentity4x4();
+
+  /* Sprite用のマテリアルを作成して利用する
+  --------------------------------------------*/
+  // Sprite用のマテリアルリソースを作る
+  ID3D12Resource *materialResourceSprite =
+      CreateBufferResource(device, sizeof(Material));
+  // マテリアルにデータを書き込む
+  Material *materialDataSprite = nullptr;
+  // 書き込むためのアドレスを取得
+  materialResourceSprite->Map(0, nullptr,
+                              reinterpret_cast<void **>(&materialDataSprite));
+  // 今回は白を書き込んでみる
+  // SpriteはLightingしないのでfalseを設定する
+  *materialDataSprite = {Vector4(1.0f, 1.0f, 1.0f, 0.0f), false};
+
+  /* 平行光源をShaderで使う
+  --------------------------------------*/
+  ID3D12Resource *directionalLightResource =
+      CreateBufferResource(device, sizeof(DirectionalLight));
+  DirectionalLight *directionalLightData = nullptr;
+  // デフォルト値はとりあえず以下のようにしておく
+  directionalLightResource->Map(
+      0, nullptr, reinterpret_cast<void **>(&directionalLightData));
+  *directionalLightData = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, 1.0f};
 
   /*           初期化
   --------------------------------------------*/
@@ -1005,7 +1072,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
     Matrix4x4 worldViewProjectionMatrix =
         Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-    *wvpData = worldViewProjectionMatrix;
+    *wvpData = {worldViewProjectionMatrix,worldMatrix};
 
     /* WVPMatrixを作って書き込む
     ---------------------------------*/
@@ -1093,17 +1160,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // SRVのDescriptorTableの先頭を設定。2は、rootParamater[2]である。
     commandList->SetGraphicsRootDescriptorTable(
         2, useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
+    commandList->SetGraphicsRootConstantBufferView(
+        3, directionalLightResource->GetGPUVirtualAddress());
     /*------------------------------------------------------*/
     // 描画 (DrawCall/ドローコール)。6頂点で1つのインスタンス。
     commandList->DrawInstanced(kSubdivision * kSubdivision * 6, 1, 0, 0);
 
     /* 2D描画コマンドを積む
------------------------------*/
+    -----------------------------*/
     // Spriteの描画。変更が必要なものだけ変更する。
     commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite); // VBVを設定
     // TransformationMatrixCBufferの場所を設定
     commandList->SetGraphicsRootConstantBufferView(
         1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
+    // マテリアルCBufferの場所を特定
+    commandList->SetGraphicsRootConstantBufferView(
+        0, materialResourceSprite->GetGPUVirtualAddress());
     commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
     // 描画（DrawCall/ドローコール）
     commandList->DrawInstanced(6, 1, 0, 0);
@@ -1198,6 +1270,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   vertexResourceSprite->Release();
   transformationMatrixResourceSprite->Release();
   textureResource2->Release();
+  materialResourceSprite->Release();
+  directionalLightResource->Release();
 
   CoUninitialize();
 
