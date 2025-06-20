@@ -867,9 +867,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   /* TransformationMatrix用のResourceを作る
   -----------------------------------------------------*/
-  // WVP用のリソースを作る。Matrix4x4 1つ分のサイズを用意する
+  UINT transformationMatrixSize = (sizeof(TransformationMatrix) + 255) & ~255;
+  assert(transformationMatrixSize / 256 == 1);
+  // WVP用のリソースを作る。Matrix4x4 2つ分のサイズを用意する
   ID3D12Resource *wvpResource =
-      CreateBufferResource(device, sizeof(TransformationMatrix));
+      CreateBufferResource(device, transformationMatrixSize);
   // データを描き込む
   TransformationMatrix *wvpData = nullptr;
   // 書き込むためのアドレスを取得
@@ -1072,7 +1074,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
     Matrix4x4 worldViewProjectionMatrix =
         Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-    *wvpData = {worldViewProjectionMatrix,worldMatrix};
+    *wvpData = {worldViewProjectionMatrix, worldMatrix};
 
     /* WVPMatrixを作って書き込む
     ---------------------------------*/
@@ -1126,7 +1128,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 指定した色で画面全体をクリアする
     float clearColor[] = {
         0.1f,
-        0.25f,
+        0.25f
+
+        ,
         0.5f,
         1.0f,
     }; // 青っぽい色。 RGBAの順
@@ -1178,7 +1182,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         0, materialResourceSprite->GetGPUVirtualAddress());
     commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
     // 描画（DrawCall/ドローコール）
-    commandList->DrawInstanced(6, 1, 0, 0);
+    // commandList->DrawInstanced(6, 1, 0, 0);
 
     /* ImGuiを描画
     -------------------------------*/

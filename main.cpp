@@ -202,6 +202,17 @@ Matrix4x4 MakeOrthographicMatrix(float left, float top, float right,
 /// <returns>変換結果</returns>
 Matrix4x4 Inverse(const Matrix4x4 &m);
 
+float Length(const Vector3 &v) {
+  float result;
+  result = {sqrtf(powf(v.x, 2) + powf(v.y, 2) + powf(v.z, 2))};
+  return result;
+}
+
+Vector3 Normalize(const Vector3 &v) {
+  float len = Length(v);
+  return {v.x / len, v.y / len, v.z / len};
+}
+
 D3D12_CPU_DESCRIPTOR_HANDLE
 GetCPUDescriptorHandle(ID3D12DescriptorHeap *descriptorHeap,
                        uint32_t descriptorSize, uint32_t index);
@@ -867,6 +878,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   /* TransformationMatrix用のResourceを作る
   -----------------------------------------------------*/
   UINT transformationMatrixSize = (sizeof(TransformationMatrix) + 255) & ~255;
+  assert(transformationMatrixSize / 256 == 1);
   // WVP用のリソースを作る。Matrix4x4 2つ分のサイズを用意する
   ID3D12Resource *wvpResource =
       CreateBufferResource(device, transformationMatrixSize);
@@ -980,7 +992,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // Sprite用のTransformationMatrix用のリソースを作る。Matrix4x4
   // 1つ分のサイズを用意する。
   ID3D12Resource *transformationMatrixResourceSprite =
-      CreateBufferResource(device, sizeof(Matrix4x4));
+      CreateBufferResource(device, sizeof(Matrix4x4) + 64);
   // データを書き込む
   Matrix4x4 *transformationMatrixDataSprite = nullptr;
   // 書き込むためのアドレスを取得
@@ -1057,7 +1069,46 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ImGui::
         ShowDemoWindow(); // 開発者用UIの処理。UIを出す場合はここをゲーム固有の処理に置き換える
 
+    ImGui::Begin("Settings");
+
+    // ライトの方向
+    static float lightDir[3] = {directionalLightData->direction.x,
+                                directionalLightData->direction.y,
+                                directionalLightData->direction.z};
+    if (ImGui::SliderFloat3("LightDirection", lightDir, -1.0f, 1.0f)) {
+      Vector3 dir = {lightDir[0], lightDir[1], lightDir[2]};
+      directionalLightData->direction = Normalize(dir);
+    }
+
+    // ライトの色
+    ImGui::ColorEdit3("LightColor",
+                      reinterpret_cast<float *>(&directionalLightData->color));
+
+    // ライトの強さ
+    ImGui::SliderFloat("Intensity", &directionalLightData->intensity, 0.0f,
+                       5.0f);
+
+    // マテリアルの色
+    ImGui::ColorEdit3("Color", reinterpret_cast<float *>(&materialData->color));
+
+    // Lighting 有効化のチェック
+    ImGui::Checkbox("enableLighting",
+                    reinterpret_cast<bool *>(&materialData->enableLighting));
+
+    // カメラの位置
+    ImGui::DragFloat3("CameraTranslate",
+                      reinterpret_cast<float *>(&cameraTransform.translate),
+                      0.01f);
+
+    // カメラの回転
+    ImGui::DragFloat3("CameraRotate",
+                      reinterpret_cast<float *>(&cameraTransform.rotate),
+                      0.01f);
+
+    // テクスチャ選択（例：0=uvChecker, 1=monsterBall）
     ImGui::Checkbox("useMonsterBall", &useMonsterBall);
+
+    ImGui::End();
 
     // ImGuiの内部コマンドを生成する
     ImGui::Render();
@@ -1072,7 +1123,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
     Matrix4x4 worldViewProjectionMatrix =
         Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-    *wvpData = {worldViewProjectionMatrix,worldMatrix};
+    *wvpData = {worldViewProjectionMatrix, worldMatrix};
 
     /* WVPMatrixを作って書き込む
     ---------------------------------*/
@@ -1126,7 +1177,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 指定した色で画面全体をクリアする
     float clearColor[] = {
         0.1f,
-        0.25f,
+        0.25f
+
+        ,
         0.5f,
         1.0f,
     }; // 青っぽい色。 RGBAの順
