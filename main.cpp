@@ -66,6 +66,34 @@ struct ModelData {
   MaterialData material;
 };
 
+// チャンクヘッダ
+struct ChunkHeader {
+  char id[4];   // チャンクごとのID
+  int32_t size; // チャンクサイズ
+};
+
+// RIFFヘッダチャンク
+struct RiffHeader {
+  ChunkHeader chunk; // "RIFF"
+  char type[4];      // "WAVE"
+};
+
+// FMTチャンク
+struct FormatChunk {
+  ChunkHeader chunk; // "fmt"
+  WAVEFORMATEX fmt;  // 波形フォーマット
+};
+
+// 音声データ
+struct SoundData {
+  // 波形フォーマット
+  WAVEFORMATEX wfex;
+  // バッファの先頭アドレス
+  BYTE *pBuffer;
+  // バッファのサイズ
+  unsigned int bufferSize;
+};
+
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
                                                              UINT msg,
                                                              WPARAM wParam,
@@ -274,6 +302,100 @@ struct D3DResourceLeakChecker {
   }
 };
 
+SoundData SoundLoadWave(const char *filename) {
+  // HRESULT result;
+  //  1.ファイルオープン
+  //  ファイル入力ストリームのインスタンス
+  std::ifstream file;
+  // wavファイルをバイナリモードで開く
+  file.open(filename, std::ios_base::binary);
+  // ファイルオープン失敗を検出する
+  assert(file.is_open());
+
+  // 2.wavデータ読み込み
+  // RIFFヘッダーの読み込み
+  RiffHeader riff;
+  file.read((char *)&riff, sizeof(riff));
+  // ファイルがRIFFかチェック
+  if (strncmp(riff.chunk.id, "RIFF", 4) != 0) {
+    assert(0);
+  }
+  // タイプがWAVEかチェック
+  if (strncmp(riff.type, "WAVE", 4) != 0) {
+    assert(0);
+  }
+  // Formatチャンクの読み込み
+  FormatChunk format = {};
+  // チャンクヘッダーの確認
+  file.read((char *)&format, sizeof(ChunkHeader));
+  if (strncmp(format.chunk.id, "fmt ", 4) != 0) {
+    assert(0);
+  }
+  // チャンク本体の読み込み
+  assert(format.chunk.size <= sizeof(format.fmt));
+  file.read((char *)&format.fmt, format.chunk.size);
+  // Dataチャンクの読み込み
+  ChunkHeader data;
+  file.read((char *)&data, sizeof(data));
+  // JUNKチャンクを検出した場合
+  if (strncmp(data.id, "JUNK", 4) == 0) {
+    // 読み取り位置をJUNKチャンクの終わりまで進める
+    file.seekg(data.size, std::ios_base::cur);
+    // 再読み込み
+    file.read((char *)&data, sizeof(data));
+  }
+  if (strncmp(data.id, "data", 4) != 0) {
+    assert(0);
+  }
+  // Dataチャンクのデータ部（波形データ）の読み込み
+  char *pBuffer = new char[data.size];
+  file.read(pBuffer, data.size);
+
+  // 3.ファイルクローズ
+  // Waveファイルを閉じる
+  file.close();
+
+  // 4.読み込んだ音声データを返す
+  // returnするための音声データ
+  SoundData soundData = {};
+  soundData.wfex = format.fmt;
+  soundData.pBuffer = reinterpret_cast<BYTE *>(pBuffer);
+  soundData.bufferSize = data.size;
+
+  return soundData;
+}
+
+// 音声データ開放
+void SoundUnload(SoundData *soundData) {
+  // バッファのメモリを解放
+  delete[] soundData->pBuffer;
+
+  soundData->pBuffer = 0;
+  soundData->bufferSize = 0;
+  soundData->wfex = {};
+}
+
+// 音声再生
+void SoundPlayWave(const Microsoft::WRL::ComPtr<IXAudio2> xAudio2,
+                   const SoundData &soundData) {
+  HRESULT result;
+
+  // 波形フォーマットを元にSourceVoiceの生成
+  IXAudio2SourceVoice *pSourceVoice = nullptr;
+  result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
+  assert(SUCCEEDED(result));
+
+  // 再生する波形データの設定
+  XAUDIO2_BUFFER buf{};
+  buf.pAudioData = soundData.pBuffer;
+  buf.AudioBytes = soundData.bufferSize;
+  buf.Flags = XAUDIO2_END_OF_STREAM;
+
+  // 波形データの再生
+  result = pSourceVoice->SubmitSourceBuffer(&buf);
+  result = pSourceVoice->Start();
+}
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -455,7 +577,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 指定したメッセージの表示を抑制する
     infoQueue->PushStorageFilter(&filter);
     //  解放
-    infoQueue->Release();
+    //infoQueue->Release();
   }
 #endif
 
@@ -539,6 +661,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   hr = swapChain->GetBuffer(1, IID_PPV_ARGS(&swapChainResources[1]));
   assert(SUCCEEDED(hr));
 
+  /* Audio変数の宣言
+  --------------------------*/
+  Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
+  IXAudio2MasteringVoice *masterVoice;
+
+  // XAudioエンジンのインスタンスを生成
+  hr = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
+  // マスターボイスを生成
+  hr = xAudio2->CreateMasteringVoice(&masterVoice);
+
   /* RTVを作る
   -------------------*/
   // RTVの設定
@@ -549,7 +681,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       D3D12_RTV_DIMENSION_TEXTURE2D; // 2dテクスチャとして書き込む
   // ディスクリプタの先頭を取得する
   D3D12_CPU_DESCRIPTOR_HANDLE rtvStartHandle =
-      GetCPUDescriptorHandle(rtvDescriptorHeap, descriptorSizeRTV, 0);
+      GetCPUDescriptorHandle(rtvDescriptorHeap.Get(), descriptorSizeRTV, 0);
   // RTVを2つ作るのでディスクリプタを2つ用意
   D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[2];
   // まず1つを作る。1つ目は最初のところに作る。作る場所をこちらで指定してあげる必要がある
@@ -790,120 +922,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   assert(SUCCEEDED(hr));
   /*-------------------------  ここまで  ----------------------------------*/
 
-  ///*VertexResourceを生成
-  //---------------------------*/
-  //// 実際に頂点リソースを作る
-  // ID3D12Resource *vertexResource =
-  //     CreateBufferResource(device, sizeof(VertexData) * 1536);
-
-  ///*VertexBufferViewを作成
-  //----------------------------*/
-  //// 頂点バッファビューを作成する
-  // D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
-  //// リソースの先頭のアドレスから作成する
-  // vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
-  //// 使用するリソースのサイズは頂点6つ分のサイズ
-  // vertexBufferView.SizeInBytes = sizeof(VertexData) * 1536;
-  //// 1頂点当たりのサイズ
-  // vertexBufferView.StrideInBytes = sizeof(VertexData);
-
-  ///*Resourceにデータを書き込む
-  //-----------------------------*/
-  //// 頂点リソースにデータを書き込む
-  // VertexData *sphereVertices = nullptr;
-  //// 書き込むためのアドレスを取得
-  // vertexResource->Map(0, nullptr, reinterpret_cast<void
-  // **>(&sphereVertices));
-
-  //// Resource作成
-  // ID3D12Resource *indexResource =
-  //     CreateBufferResource(device, sizeof(uint32_t) * 1536);
-  //// View作成
-  // D3D12_INDEX_BUFFER_VIEW indexBufferView{};
-  //// リソースの先頭のアドレスから使う
-  // indexBufferView.BufferLocation = indexResource->GetGPUVirtualAddress();
-  //// 使用するリソースのサイズはインデックス6つ分のサイズ
-  // indexBufferView.SizeInBytes = sizeof(uint32_t) * 1536;
-  //// インデックスはuint32_tとする
-  // indexBufferView.Format = DXGI_FORMAT_R32_UINT;
-  //// インデックスリソースにデータを書き込む
-  // uint32_t *indexData = nullptr;
-  // indexResource->Map(0, nullptr, reinterpret_cast<void **>(&indexData));
-
-  // const uint32_t kSubdivision = 16;
-  // const float kLatEvery =
-  //     static_cast<float>(M_PI) / static_cast<float>(kSubdivision);
-  // const float kLonEvery =
-  //     static_cast<float>(2.0f * M_PI) / static_cast<float>(kSubdivision);
-
-  // for (uint32_t latIndex = 0; latIndex < kSubdivision; ++latIndex) {
-  //   float lat = -static_cast<float>(M_PI) / 2.0f + kLatEvery * latIndex;
-  //   for (uint32_t lonIndex = 0; lonIndex < kSubdivision; ++lonIndex) {
-  //     uint32_t start = (latIndex * kSubdivision + lonIndex) * 6;
-  //     float lon = kLonEvery * lonIndex;
-
-  //    // A
-  //    sphereVertices[start].position.x = cosf(lat) * cosf(lon);
-  //    sphereVertices[start].position.y = sinf(lat);
-  //    sphereVertices[start].position.z = cosf(lat) * sinf(lon);
-  //    sphereVertices[start].position.w = 1.0f;
-  //    sphereVertices[start].texcoord.x = float(lonIndex) /
-  //    float(kSubdivision); sphereVertices[start].texcoord.y =
-  //        1.0f - float(latIndex) / float(kSubdivision);
-  //    sphereVertices[start].normal.x = sphereVertices[start].position.x;
-  //    sphereVertices[start].normal.y = sphereVertices[start].position.y;
-  //    sphereVertices[start].normal.z = sphereVertices[start].position.z;
-
-  //    // B
-  //    uint32_t b = start + 1;
-  //    sphereVertices[b].position.x = cosf(lat + kLatEvery) * cosf(lon);
-  //    sphereVertices[b].position.y = sinf(lat + kLatEvery);
-  //    sphereVertices[b].position.z = cosf(lat + kLatEvery) * sinf(lon);
-  //    sphereVertices[b].position.w = 1.0f;
-  //    sphereVertices[b].texcoord.x = float(lonIndex) / float(kSubdivision);
-  //    sphereVertices[b].texcoord.y =
-  //        1.0f - float(latIndex + 1) / float(kSubdivision);
-  //    sphereVertices[b].normal.x = sphereVertices[b].position.x;
-  //    sphereVertices[b].normal.y = sphereVertices[b].position.y;
-  //    sphereVertices[b].normal.z = sphereVertices[b].position.z;
-
-  //    // C
-  //    uint32_t c = start + 2;
-  //    sphereVertices[c].position.x = cosf(lat) * cosf(lon + kLonEvery);
-  //    sphereVertices[c].position.y = sinf(lat);
-  //    sphereVertices[c].position.z = cosf(lat) * sinf(lon + kLonEvery);
-  //    sphereVertices[c].position.w = 1.0f;
-  //    sphereVertices[c].texcoord.x = float(lonIndex + 1) /
-  //    float(kSubdivision); sphereVertices[c].texcoord.y =
-  //        1.0f - float(latIndex) / float(kSubdivision);
-  //    sphereVertices[c].normal.x = sphereVertices[c].position.x;
-  //    sphereVertices[c].normal.y = sphereVertices[c].position.y;
-  //    sphereVertices[c].normal.z = sphereVertices[c].position.z;
-
-  //    // D
-  //    uint32_t d = start + 3;
-  //    sphereVertices[d].position.x =
-  //        cosf(lat + kLatEvery) * cosf(lon + kLonEvery);
-  //    sphereVertices[d].position.y = sinf(lat + kLatEvery);
-  //    sphereVertices[d].position.z =
-  //        cosf(lat + kLatEvery) * sinf(lon + kLonEvery);
-  //    sphereVertices[d].position.w = 1.0f;
-  //    sphereVertices[d].texcoord.x = float(lonIndex + 1) /
-  //    float(kSubdivision); sphereVertices[d].texcoord.y =
-  //        1.0f - float(latIndex + 1) / float(kSubdivision);
-  //    sphereVertices[d].normal.x = sphereVertices[d].position.x;
-  //    sphereVertices[d].normal.y = sphereVertices[d].position.y;
-  //    sphereVertices[d].normal.z = sphereVertices[d].position.z;
-
-  //    indexData[start] = start;
-  //    indexData[start + 1] = start + 1;
-  //    indexData[start + 2] = start + 2;
-  //    indexData[start + 3] = start + 1;
-  //    indexData[start + 4] = start + 3;
-  //    indexData[start + 5] = start + 2;
-  //  }
-  //}
-
   // モデル読み込み
   ModelData modelData = LoadObjFile("resources", "plane.obj");
   // 頂点リソースを作る
@@ -1008,14 +1026,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   // SRVを作成するDescriptorHeapの場所を決める
   D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU =
-      GetCPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 0);
+      GetCPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 0);
   D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU =
-      GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 0);
+      GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 0);
   // SRVを作成するDescriptorHeapの場所を決める
   D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU2 =
-      GetCPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 2);
+      GetCPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 2);
   D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 =
-      GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 2);
+      GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 2);
   // 先頭はImGuiが使っているのでその次を使う
   textureSrvHandleCPU.ptr += device->GetDescriptorHandleIncrementSize(
       D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -1151,6 +1169,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   bool useMonsterBall = true;
 
+  // 音声読み込み
+  SoundData soundData1 = SoundLoadWave("resources/fanfare.wav");
+
+  // 音声再生
+  SoundPlayWave(xAudio2.Get(), soundData1);
+
   // ImGuiの初期化
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -1159,8 +1183,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   ImGui_ImplDX12_Init(
       device.Get(), swapChainDesc.BufferCount, rtvDesc.Format,
       srvDescriptorHeap.Get(),
-      GetCPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 0),
-      GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 0));
+      GetCPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 0),
+      GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSizeSRV, 0));
 
   // ウィンドウの×ボタンが押されるまでループ
   while (msg.message != WM_QUIT) {
@@ -1306,7 +1330,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     // 描画先のRTVとDSVを設定する
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle =
-        GetCPUDescriptorHandle(dsvDescriptorHeap, descriptorSizeDSV, 0);
+        GetCPUDescriptorHandle(dsvDescriptorHeap.Get(), descriptorSizeDSV, 0);
     commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false,
                                     &dsvHandle);
 
@@ -1445,6 +1469,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   }
   pixelShaderBlob->Release();
   vertexShaderBlob->Release();
+  // XAudio2解放
+  xAudio2.Reset();
+  // 音声データ開放
+  SoundUnload(&soundData1);
 
   CoUninitialize();
 

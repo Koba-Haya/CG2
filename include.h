@@ -1,5 +1,9 @@
 #pragma once
 
+#include "externals/DirectXTex/DirectXTex.h"
+#include "externals/imgui//imgui.h"
+#include "externals/imgui/imgui_impl_dx12.h"
+#include "externals/imgui/imgui_impl_win32.h"
 #include <cassert>
 #include <chrono> //時間を扱うライブラリ
 #include <cstdint>
@@ -12,15 +16,13 @@
 #include <fstream> //ファイルに書いたり読んだりするライブラリ
 #include <sstream>
 #include <string>
-#include "externals/DirectXTex/DirectXTex.h"
-#include "externals/imgui//imgui.h"
-#include "externals/imgui/imgui_impl_dx12.h"
-#include "externals/imgui/imgui_impl_win32.h"
 #define _USE_MATH_DEFINES
-#include <math.h>
 #include "ResourceObject.h"
+#include <math.h>
 #include <wrl.h>
+#include <xaudio2.h>
 #pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "xaudio2.lib")
