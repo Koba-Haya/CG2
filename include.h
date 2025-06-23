@@ -18,6 +18,8 @@
 #include "externals/imgui/imgui_impl_win32.h"
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include "ResourceObject.h"
+#include <wrl.h>
 #pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "d3d12.lib")
