@@ -10,6 +10,7 @@
 #include <filesystem> //ファイルやディレクトリに関する操作を行うライブラリ
 #include <format>
 #include <fstream> //ファイルに書いたり読んだりするライブラリ
+#include <sstream>
 #include <string>
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/imgui//imgui.h"
