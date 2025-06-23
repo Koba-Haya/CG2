@@ -23,6 +23,10 @@ struct Matrix4x4 {
   float m[4][4];
 };
 
+// struct Matrix3x3 {
+//   float m[3][3];
+// };
+
 struct Transform {
   Vector3 scale;
   Vector3 rotate;
@@ -38,6 +42,8 @@ struct VertexData {
 struct Material {
   Vector4 color;
   int32_t enableLighting;
+  float padding[3];
+  Matrix4x4 uvTransform;
 };
 
 struct TransformationMatrix {
@@ -180,6 +186,20 @@ Matrix4x4 MakeRotateYMatrix(float radian);
 /// <param name="radian">ラジアン</param>
 /// <returns>回転後行列</returns>
 Matrix4x4 MakeRotateZMatrix(float radian);
+
+/// <summary>
+/// 平行移動行列
+/// </summary>
+/// <param name="translate">平行移動を行うパラメータ</param>
+/// <returns>変換後の行列</returns>
+Matrix4x4 MakeTranslateMatrix(const Vector3 &translate);
+
+/// <summary>
+/// 拡大縮小行列
+/// </summary>
+/// <param name="scale">拡縮率</param>
+/// <returns>変換後行列</returns>
+Matrix4x4 MakeScaleMatrix(const Vector3 &scale);
 
 /// <summary>
 /// 透視投影行列
@@ -815,7 +835,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       sphereVertices[c].normal.y = sphereVertices[c].position.y;
       sphereVertices[c].normal.z = sphereVertices[c].position.z;
 
-     // D
+      // D
       uint32_t d = start + 3;
       sphereVertices[d].position.x =
           cosf(lat + kLatEvery) * cosf(lon + kLonEvery);
@@ -870,6 +890,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   materialResource->Map(0, nullptr, reinterpret_cast<void **>(&materialData));
   // 今回は赤を書き込んでみる
   *materialData = {Vector4(1.0f, 1.0f, 1.0f, 1.0f), true};
+  materialData->uvTransform = MakeIdentity4x4();
 
   /* TransformationMatrix用のResourceを作る
   -----------------------------------------------------*/
@@ -1004,6 +1025,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // 今回は白を書き込んでみる
   // SpriteはLightingしないのでfalseを設定する
   *materialDataSprite = {Vector4(1.0f, 1.0f, 1.0f, 0.0f), false};
+  materialDataSprite->uvTransform = MakeIdentity4x4();
 
   /* 平行光源をShaderで使う
   --------------------------------------*/
@@ -1051,6 +1073,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Transform cameraTransform{
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -10.0f}};
   Transform transformSprite{
+      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+  Transform uvTransformSprite{
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
 
   bool useMonsterBall = true;
@@ -1122,6 +1146,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                       reinterpret_cast<float *>(&cameraTransform.rotate),
                       0.01f);
 
+    // UV座標
+    ImGui::DragFloat2("UVTranslate", &uvTransformSprite.translate.x, 0.01f,
+                      -10.0f, 10.0f);
+
+    // UVスケール
+    ImGui::DragFloat2("UVScale", &uvTransformSprite.scale.x, 0.01f, -10.0f,
+                      10.0f);
+
+    // UV回転
+    ImGui::SliderAngle("UVRotate", &uvTransformSprite.rotate.z);
+
     // テクスチャ選択（例：0=uvChecker, 1=monsterBall）
     ImGui::Checkbox("useMonsterBall", &useMonsterBall);
 
@@ -1155,6 +1190,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Matrix4x4 worldViewProjectionMatrixSprite = Multiply(
         worldMatrixSprite, Multiply(viewMatrixSprite, projectionMatrixSprite));
     *transformationMatrixDataSprite = worldViewProjectionMatrixSprite;
+
+    Matrix4x4 uvTransformMatrix = MakeScaleMatrix(uvTransformSprite.scale);
+    uvTransformMatrix = Multiply(
+        uvTransformMatrix, (MakeRotateZMatrix(uvTransformSprite.rotate.z)));
+    uvTransformMatrix = Multiply(
+        uvTransformMatrix, MakeTranslateMatrix(uvTransformSprite.translate));
+    materialDataSprite->uvTransform = uvTransformMatrix;
 
     // ゲームの処理終わり
 
@@ -1215,7 +1257,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     commandList->SetGraphicsRootSignature(rootSignature);
     commandList->SetPipelineState(graphicsPipelineState);     // PSOを設定
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView); // VBVを設定
-    commandList->IASetIndexBuffer(&indexBufferView);    // IBVを設定
+    commandList->IASetIndexBuffer(&indexBufferView);          // IBVを設定
     // 形状を設定。PSOに設定しているものとはまた別。同じものを設定すると考えておけばいい
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     /*CBVを設定する
@@ -1792,6 +1834,19 @@ Matrix4x4 MakeRotateZMatrix(float radian) {
             0,
             1};
 
+  return result;
+}
+
+Matrix4x4 MakeTranslateMatrix(const Vector3 &translate) {
+  Matrix4x4 result;
+  result = {1, 0, 0, 0, 0,           1,           0,           0,
+            0, 0, 1, 0, translate.x, translate.y, translate.z, 1};
+  return result;
+}
+
+Matrix4x4 MakeScaleMatrix(const Vector3 &scale) {
+  Matrix4x4 result;
+  result = {scale.x, 0, 0, 0, 0, scale.y, 0, 0, 0, 0, scale.z, 0, 0, 0, 0, 1};
   return result;
 }
 
