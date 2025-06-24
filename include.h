@@ -22,6 +22,10 @@
 #include <wrl.h>
 #include <xaudio2.h>
 #define DIRECTINPUT_VERSION 0x0800
+#include "DebugCamera.h"
+#include "Matrix.h"
+#include "Method.h"
+#include "Vector.h"
 #include <dinput.h>
 #pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "dxguid.lib")
