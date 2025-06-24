@@ -628,6 +628,38 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       reinterpret_cast<IDXGISwapChain1 **>(swapChain.GetAddressOf()));
   assert(SUCCEEDED(hr));
 
+  /* Audio変数の宣言
+  --------------------------*/
+  Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
+  IXAudio2MasteringVoice *masterVoice;
+
+  // XAudioエンジンのインスタンスを生成
+  hr = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
+  // マスターボイスを生成
+  hr = xAudio2->CreateMasteringVoice(&masterVoice);
+
+  /* DirectInputオブジェクトの生成
+  ----------------------------------*/
+  // DirectInputの初期化
+  IDirectInput8 *directInput = nullptr;
+  hr = DirectInput8Create(wc.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
+                          (void **)&directInput, nullptr);
+  assert(SUCCEEDED(hr));
+
+  // キーボードデバイスの生成
+  IDirectInputDevice8 *keyboard = nullptr;
+  hr = directInput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL);
+  assert(SUCCEEDED(hr));
+
+  // 入力データ形式のセット
+  hr = keyboard->SetDataFormat(&c_dfDIKeyboard); // 標準形式
+  assert(SUCCEEDED(hr));
+
+  // 排他制御レベルのセット
+  hr = keyboard->SetCooperativeLevel(
+      hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
+  assert(SUCCEEDED(hr));
+
   /* ディスクリプタヒープの生成
   ------------------------------*/
   Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap =
@@ -660,16 +692,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   assert(SUCCEEDED(hr));
   hr = swapChain->GetBuffer(1, IID_PPV_ARGS(&swapChainResources[1]));
   assert(SUCCEEDED(hr));
-
-  /* Audio変数の宣言
-  --------------------------*/
-  Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
-  IXAudio2MasteringVoice *masterVoice;
-
-  // XAudioエンジンのインスタンスを生成
-  hr = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
-  // マスターボイスを生成
-  hr = xAudio2->CreateMasteringVoice(&masterVoice);
 
   /* RTVを作る
   -------------------*/
@@ -1302,6 +1324,19 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     uvTransformMatrix = Multiply(
         uvTransformMatrix, MakeTranslateMatrix(uvTransformSprite.translate));
     materialDataSprite->uvTransform = uvTransformMatrix;
+
+    /* キーボード情報の取得
+    -----------------------------------*/
+    // キーボード情報の取得開始
+    keyboard->Acquire();
+
+    // 全キーの入力状態を取得する
+    BYTE key[256] = {};
+    keyboard->GetDeviceState(sizeof(key), key);
+
+    if (key[DIK_0]) {
+      OutputDebugStringA("Hit 0\n"); // 出力ウィンドウに「Hit 0」と表示される
+    }
 
     // ゲームの処理終わり
 
