@@ -1182,12 +1182,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ImGui::RadioButton("Lambert", &lightingMode, 1);
     ImGui::RadioButton("Half-Lambert", &lightingMode, 2);
 
-    // カメラの位置
+    // カメラ
+    ImGui::Text("Camera");
     ImGui::DragFloat3("CameraTranslate",
                       reinterpret_cast<float *>(&cameraTransform.translate),
                       0.01f);
-
-    // カメラの回転
     ImGui::DragFloat3("CameraRotate",
                       reinterpret_cast<float *>(&cameraTransform.rotate),
                       0.01f);
