@@ -1380,11 +1380,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 頂点バッファ変更
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView2);
 
+    // WVP行列更新
+    *wvpData = {worldViewProjectionMatrix2, worldMatrix2};
+
     // マテリアル設定（既存のmaterialResourceでOKならそのまま）
     commandList->SetGraphicsRootConstantBufferView(
         0, materialResource->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(
-        1, wvpResource2->GetGPUVirtualAddress());
+        1, wvpResource->GetGPUVirtualAddress());
     commandList->SetGraphicsRootDescriptorTable(
         2, useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
     commandList->SetGraphicsRootConstantBufferView(
