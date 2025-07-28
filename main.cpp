@@ -1095,7 +1095,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   // Transform変数を作る
   Transform transform{
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -10.0f}};
+      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
   Transform cameraTransform{
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -10.0f}};
   Transform transformSprite{
@@ -1103,9 +1103,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Transform uvTransformSprite{
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
   Transform transform2 = {
-      {1.0f, 1.0f, 1.0f},  // scale
-      {0.0f, 0.0f, 0.0f},  // rotate
-      {5.0f, 0.0f, -10.0f} // translate（球の横に表示）
+      {1.0f, 1.0f, 1.0f}, // scale
+      {0.0f, 0.0f, 0.0f}, // rotate
+      {3.0f, 0.0f, 0.0f}  // translate（球の横に表示）
   };
 
   bool useMonsterBall = true;
@@ -1182,15 +1182,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ImGui::RadioButton("Lambert", &lightingMode, 1);
     ImGui::RadioButton("Half-Lambert", &lightingMode, 2);
 
-    //// カメラの位置
-    // ImGui::DragFloat3("CameraTranslate",
-    //                   reinterpret_cast<float *>(&cameraTransform.translate),
-    //                   0.01f);
+    // カメラの位置
+    ImGui::DragFloat3("CameraTranslate",
+                      reinterpret_cast<float *>(&cameraTransform.translate),
+                      0.01f);
 
-    //// カメラの回転
-    // ImGui::DragFloat3("CameraRotate",
-    //                   reinterpret_cast<float *>(&cameraTransform.rotate),
-    //                   0.01f);
+    // カメラの回転
+    ImGui::DragFloat3("CameraRotate",
+                      reinterpret_cast<float *>(&cameraTransform.rotate),
+                      0.01f);
 
     // 球
     ImGui::Text("Sphere");
@@ -1254,7 +1254,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Matrix4x4 cameraMatrix =
         MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate,
                          cameraTransform.translate);
-    Matrix4x4 viewMatrix = debugCamera->GetViewMatrix();
+    Matrix4x4 viewMatrix = Inverse(cameraMatrix);
     Matrix4x4 projectionMatrix =
         MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
     Matrix4x4 worldViewProjectionMatrix =
@@ -1263,7 +1263,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     Matrix4x4 worldMatrix2 = MakeAffineMatrix(
         transform2.scale, transform2.rotate, transform2.translate);
-    Matrix4x4 viewMatrix2 = debugCamera->GetViewMatrix();
+    Matrix4x4 viewMatrix2 = Inverse(cameraMatrix);
     Matrix4x4 projectionMatrix2 =
         MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
     Matrix4x4 worldViewProjectionMatrix2 =
