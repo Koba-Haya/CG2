@@ -53,7 +53,17 @@ PixelShaderOutput main(VertexShaderOutput input)
     }
 
     float3 finalColor = gMaterial.color.rgb * textureColor.rgb * lighting * gDirectionalLight.color.rgb * gDirectionalLight.intensity;
-
+    
+    if (gMaterial.enableLighting == 0)
+    {
+    // 完全にアンリット（照明無視）
+        finalColor = gMaterial.color.rgb * textureColor.rgb;
+    }
+    else
+    {
+        finalColor = gMaterial.color.rgb * textureColor.rgb * lighting * gDirectionalLight.color.rgb * gDirectionalLight.intensity;
+    }
+    
     output.color = float4(finalColor, 1.0f);
     return output;
 }

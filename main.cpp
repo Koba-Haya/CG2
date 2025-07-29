@@ -261,12 +261,18 @@ void SoundUnload(SoundData *soundData) {
 // 音声再生
 void SoundPlayWave(const Microsoft::WRL::ComPtr<IXAudio2> xAudio2,
                    const SoundData &soundData) {
+  static IXAudio2SourceVoice *pSourceVoice = nullptr;
   HRESULT result;
 
-  // 波形フォーマットを元にSourceVoiceの生成
-  IXAudio2SourceVoice *pSourceVoice = nullptr;
-  result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
-  assert(SUCCEEDED(result));
+  if (!pSourceVoice) {
+    // 初回だけ生成
+    result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
+    assert(SUCCEEDED(result));
+  }
+
+  // 再生中なら止めてバッファクリア
+  pSourceVoice->Stop();
+  pSourceVoice->FlushSourceBuffers();
 
   // 再生する波形データの設定
   XAUDIO2_BUFFER buf{};
@@ -274,9 +280,12 @@ void SoundPlayWave(const Microsoft::WRL::ComPtr<IXAudio2> xAudio2,
   buf.AudioBytes = soundData.bufferSize;
   buf.Flags = XAUDIO2_END_OF_STREAM;
 
-  // 波形データの再生
+  // バッファを送って再生開始
   result = pSourceVoice->SubmitSourceBuffer(&buf);
+  assert(SUCCEEDED(result));
+
   result = pSourceVoice->Start();
+  assert(SUCCEEDED(result));
 }
 
 // Windowsアプリでのエントリーポイント(main関数)
@@ -1115,9 +1124,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // 音声読み込み
   SoundData soundData1 = SoundLoadWave("resources/fanfare.wav");
 
-  // 音声再生
-  SoundPlayWave(xAudio2.Get(), soundData1);
-
   DebugCamera *debugCamera = new DebugCamera();
 
   // ImGuiの初期化
@@ -1146,7 +1152,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ImGui::NewFrame();
 
     // ゲームの処理
-    // transform.rotate.y += 0.03f;
 
     // パラメーターを変更 ImGuiの処理
     ImGui::
@@ -1225,8 +1230,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                       10.0f);
     ImGui::SliderAngle("UVRotate", &uvTransformSprite.rotate.z);
 
-    // テクスチャ選択（例：0=uvChecker, 1=monsterBall）
-    // ImGui::Checkbox("useMonsterBall", &useMonsterBall);
+    // サウンド
+    ImGui::Text("Sound");
+    if (ImGui::Button("play")) {
+      // 音声再生
+      SoundPlayWave(xAudio2.Get(), soundData1);
+    }
 
     ImGui::End();
 
@@ -1291,7 +1300,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     materialDataSprite->uvTransform = uvTransformMatrix;
 
     materialData->enableLighting = lightingMode;
-    materialDataSprite->enableLighting = 0;
 
     // ゲームの処理終わり
 

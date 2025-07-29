@@ -4,15 +4,15 @@
 
 | 項目 | 説明 |
 |------|------|
-| 球の描画                | `sphere.obj` を描画し、SRT（スケール・回転・移動）を ImGui で操作可能。            |
-| Lambertian Reflectance | Lambert反射による陰影表現。Directional Light の方向・色・強度を変更可能。          |
-| Half Lambert           | Half Lambert を選択可能で、より柔らかい陰影表現に切り替え可能。                    |
-| UVTransform            | テクスチャのUVオフセット、スケール、回転を ImGui から変更できる。                   |
-| 複数モデルの描画         | `sphere.obj` と `plane.obj` を同時に描画。SRTも個別に変更可能。                  |
-| Lighting方式の変更      | `None`, `Lambert`, `Half Lambert` の3種類から動的に切り替え可能。                |
-| Sound                  | AL3を用いて KamataEngine に音声再生機能を追加。再生確認済み。                      |
-| ドキュメント            | 本READMEに成果と仕組みを整理。加点要素との対応を明記。                             |
-| その他                  | 球を中心に回転できるデバッグカメラを実装。ImGuiでカメラの移動・回転を個別に操作可能。 | 
+| 球の描画                | `sphere.obj` を描画し、SRT（スケール・回転・移動）を ImGui で操作可能。                               |
+| Lambertian Reflectance | Lambert反射による陰影表現。Directional Light の方向・色・強度を変更可能。                              |
+| Half Lambert           | Half Lambert を選択可能で、より柔らかい陰影表現に切り替え可能。                                        |
+| UVTransform            | テクスチャのUVオフセット、スケール、回転を ImGui から変更できる。                                       |
+| 複数モデルの描画         | `sphere.obj` と `plane.obj` を同時に描画。SRTも個別に変更可能。                                      |
+| Lighting方式の変更      | `None`, `Lambert`, `Half Lambert` の3種類から動的に切り替え可能。                                    |
+| Sound                  | ImGuiで「再生」ボタンを押すと音声が再生される機能を追加。多重再生を防ぐため、再生中の音は自動で停止される。 |
+| ドキュメント            | 本READMEに成果と仕組みを整理。加点要素との対応を明記。                                                 |
+| その他                  | 球を中心に回転できるデバッグカメラを実装。ImGuiでカメラの移動・回転を個別に操作可能。                    | 
 
 ---
 
@@ -34,8 +34,9 @@
 - None / Lambert / Half Lambert の3つから動的に切替ができる。
 
 ### サウンド再生
-- AL3 による再生・停止機能を KamataEngine に統合。
-- 将来的に自作エンジンを構築する際の準備としても有効だった。
+- 初期状態で自動再生は行わず、ImGuiの「再生」ボタンを押すことで音声を再生。
+- サウンドが重複して鳴らないよう、再生中の音を `Stop()` → `FlushSourceBuffers()` してから `Play()` するように `SoundPlayWave()` を改修。
+- これにより任意のタイミングで単独再生が可能に。
 
 ### デバッグカメラ（その他）
 - 球モデルを中心に、カメラがピボット回転できるデバッグカメラを実装。
