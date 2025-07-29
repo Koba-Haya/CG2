@@ -1154,8 +1154,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ゲームの処理
 
     // パラメーターを変更 ImGuiの処理
-    ImGui::
-        ShowDemoWindow(); // 開発者用UIの処理。UIを出す場合はここをゲーム固有の処理に置き換える
+    //ImGui::ShowDemoWindow(); // 開発者用UIの処理。UIを出す場合はここをゲーム固有の処理に置き換える
 
     ImGui::Begin("Settings");
 
