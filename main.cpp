@@ -1262,6 +1262,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Matrix4x4 cameraMatrix =
         MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate,
                          cameraTransform.translate);
+
+    // カメラをキー入力ありの物に
     Matrix4x4 viewMatrix = debugCamera->GetViewMatrix();
 
     Matrix4x4 projectionMatrix =
@@ -1272,6 +1274,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     Matrix4x4 worldMatrix2 = MakeAffineMatrix(
         transform2.scale, transform2.rotate, transform2.translate);
+
+    // カメラをキー入力ありの物に
     Matrix4x4 viewMatrix2 = debugCamera->GetViewMatrix();
 
     Matrix4x4 projectionMatrix2 =
