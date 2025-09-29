@@ -1154,7 +1154,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ゲームの処理
 
     // パラメーターを変更 ImGuiの処理
-    //ImGui::ShowDemoWindow(); // 開発者用UIの処理。UIを出す場合はここをゲーム固有の処理に置き換える
+    // ImGui::ShowDemoWindow(); //
+    // 開発者用UIの処理。UIを出す場合はここをゲーム固有の処理に置き換える
 
     ImGui::Begin("Settings");
 
@@ -1261,7 +1262,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Matrix4x4 cameraMatrix =
         MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate,
                          cameraTransform.translate);
-    Matrix4x4 viewMatrix = Inverse(cameraMatrix);
+    Matrix4x4 viewMatrix = debugCamera->GetViewMatrix();
+
     Matrix4x4 projectionMatrix =
         MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
     Matrix4x4 worldViewProjectionMatrix =
@@ -1270,7 +1272,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     Matrix4x4 worldMatrix2 = MakeAffineMatrix(
         transform2.scale, transform2.rotate, transform2.translate);
-    Matrix4x4 viewMatrix2 = Inverse(cameraMatrix);
+    Matrix4x4 viewMatrix2 = debugCamera->GetViewMatrix();
+
     Matrix4x4 projectionMatrix2 =
         MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
     Matrix4x4 worldViewProjectionMatrix2 =
