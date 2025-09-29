@@ -261,12 +261,18 @@ void SoundUnload(SoundData *soundData) {
 // 音声再生
 void SoundPlayWave(const Microsoft::WRL::ComPtr<IXAudio2> xAudio2,
                    const SoundData &soundData) {
+  static IXAudio2SourceVoice *pSourceVoice = nullptr;
   HRESULT result;
 
-  // 波形フォーマットを元にSourceVoiceの生成
-  IXAudio2SourceVoice *pSourceVoice = nullptr;
-  result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
-  assert(SUCCEEDED(result));
+  if (!pSourceVoice) {
+    // 初回だけ生成
+    result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
+    assert(SUCCEEDED(result));
+  }
+
+  // 再生中なら止めてバッファクリア
+  pSourceVoice->Stop();
+  pSourceVoice->FlushSourceBuffers();
 
   // 再生する波形データの設定
   XAUDIO2_BUFFER buf{};
@@ -274,9 +280,12 @@ void SoundPlayWave(const Microsoft::WRL::ComPtr<IXAudio2> xAudio2,
   buf.AudioBytes = soundData.bufferSize;
   buf.Flags = XAUDIO2_END_OF_STREAM;
 
-  // 波形データの再生
+  // バッファを送って再生開始
   result = pSourceVoice->SubmitSourceBuffer(&buf);
+  assert(SUCCEEDED(result));
+
   result = pSourceVoice->Start();
+  assert(SUCCEEDED(result));
 }
 
 // Windowsアプリでのエントリーポイント(main関数)
@@ -828,7 +837,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   /*-------------------------  ここまで  ----------------------------------*/
 
   // モデル読み込み
-  ModelData modelData = LoadObjFile("resources", "axis.obj");
+  ModelData modelData = LoadObjFile("resources", "sphere.obj");
   // 頂点リソースを作る
   Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource = CreateBufferResource(
       device.Get(), sizeof(VertexData) * modelData.vertices.size());
@@ -850,6 +859,31 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   std::memcpy(vertexData, modelData.vertices.data(),
               sizeof(VertexData) *
                   modelData.vertices.size()); // 頂点データをリソースにコピー
+
+  // モデル二つ目
+  ModelData modelData2 = LoadObjFile("resources", "plane.obj");
+  // 頂点リソースを作る
+  Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource2 = CreateBufferResource(
+      device.Get(), sizeof(VertexData) * modelData2.vertices.size());
+
+  // 頂点バッファービューを作成する
+  D3D12_VERTEX_BUFFER_VIEW vertexBufferView2{};
+  vertexBufferView2.BufferLocation =
+      vertexResource2
+          ->GetGPUVirtualAddress(); // リソースの先頭のアドレスから使う
+  vertexBufferView2.SizeInBytes = UINT(
+      sizeof(VertexData) *
+      modelData2.vertices.size()); // 使用するリソースのサイズは頂点のサイズ
+  vertexBufferView2.StrideInBytes = sizeof(VertexData); // 1頂点あたりのサイズ
+
+  // 頂点リソースにデータを書き込む
+  VertexData *vertexData2 = nullptr;
+  vertexResource2->Map(
+      0, nullptr,
+      reinterpret_cast<void **>(&vertexData2)); // 書き込むためのアドレスを取得
+  std::memcpy(vertexData2, modelData2.vertices.data(),
+              sizeof(VertexData) *
+                  modelData2.vertices.size()); // 頂点データをリソースにコピー
 
   /*ViewportとScissor
   -------------------------*/
@@ -897,6 +931,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   wvpResource->Map(0, nullptr, reinterpret_cast<void **>(&wvpData));
   // 単位行列に書き込んでおく
   *wvpData = {MakeIdentity4x4(), MakeIdentity4x4()};
+
+  Microsoft::WRL::ComPtr<ID3D12Resource> wvpResource2 =
+      CreateBufferResource(device.Get(), transformationMatrixSize);
+  TransformationMatrix *wvpData2 = nullptr;
+  wvpResource2->Map(0, nullptr, reinterpret_cast<void **>(&wvpData2));
+  *wvpData2 = {MakeIdentity4x4(), MakeIdentity4x4()};
 
   // Textureを読んで転送する
   DirectX::ScratchImage mipImages = LoadTexture("resources/uvChecker.png");
@@ -1019,7 +1059,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                               reinterpret_cast<void **>(&materialDataSprite));
   // 今回は白を書き込んでみる
   // SpriteはLightingしないのでfalseを設定する
-  *materialDataSprite = {Vector4(1.0f, 1.0f, 1.0f, 0.0f), false};
+  *materialDataSprite = {Vector4(1.0f, 1.0f, 1.0f, 0.0f), 0};
   materialDataSprite->uvTransform = MakeIdentity4x4();
 
   /* 平行光源をShaderで使う
@@ -1071,14 +1111,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
   Transform uvTransformSprite{
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+  Transform transform2 = {
+      {1.0f, 1.0f, 1.0f}, // scale
+      {0.0f, 0.0f, 0.0f}, // rotate
+      {3.0f, 0.0f, 0.0f}  // translate（球の横に表示）
+  };
 
   bool useMonsterBall = true;
 
+  static int lightingMode = 1; // 初期値: Lambert
+
   // 音声読み込み
   SoundData soundData1 = SoundLoadWave("resources/fanfare.wav");
-
-  // 音声再生
-  SoundPlayWave(xAudio2.Get(), soundData1);
 
   DebugCamera *debugCamera = new DebugCamera();
 
@@ -1108,13 +1152,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ImGui::NewFrame();
 
     // ゲームの処理
-    // transform.rotate.y += 0.03f;
 
     // パラメーターを変更 ImGuiの処理
-    ImGui::
-        ShowDemoWindow(); // 開発者用UIの処理。UIを出す場合はここをゲーム固有の処理に置き換える
+    // ImGui::ShowDemoWindow(); //
+    // 開発者用UIの処理。UIを出す場合はここをゲーム固有の処理に置き換える
 
     ImGui::Begin("Settings");
+
+    ImGui::Text("Light");
 
     // ライトの方向
     static float lightDir[3] = {directionalLightData->direction.x,
@@ -1136,41 +1181,61 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // マテリアルの色
     ImGui::ColorEdit3("Color", reinterpret_cast<float *>(&materialData->color));
 
-    // Lighting 有効化のチェック
-    ImGui::Checkbox("enableLighting",
-                    reinterpret_cast<bool *>(&materialData->enableLighting));
+    // Lighting切り替え
+    ImGui::Text("Lighting Mode");
+    ImGui::RadioButton("None", &lightingMode, 0);
+    ImGui::RadioButton("Lambert", &lightingMode, 1);
+    ImGui::RadioButton("Half-Lambert", &lightingMode, 2);
 
-    // カメラの位置
+    // カメラ
+    ImGui::Text("Camera");
     ImGui::DragFloat3("CameraTranslate",
                       reinterpret_cast<float *>(&cameraTransform.translate),
                       0.01f);
-
-    // カメラの回転
     ImGui::DragFloat3("CameraRotate",
                       reinterpret_cast<float *>(&cameraTransform.rotate),
                       0.01f);
 
-    // 球の位置
+    // 球
+    ImGui::Text("Sphere");
+
     ImGui::DragFloat3("SphereTranslate",
                       reinterpret_cast<float *>(&transform.translate), 0.01f);
-
-    // 球の回転
     ImGui::DragFloat3("SphereRotate",
                       reinterpret_cast<float *>(&transform.rotate), 0.01f);
+    ImGui::DragFloat3("SphereScale",
+                      reinterpret_cast<float *>(&transform.scale), 0.01f, 0.0f,
+                      5.0f);
 
-    // UV座標
+    // 平面
+    ImGui::Text("Plane");
+
+    ImGui::DragFloat3("PlaneTranslate", &transform2.translate.x, 0.01f);
+    ImGui::DragFloat3("PlaneRotate", &transform2.rotate.x, 0.01f);
+    ImGui::DragFloat3("PlaneScale", &transform2.scale.x, 0.01f, 0.0f, 5.0f);
+
+    // Sprite
+    ImGui::Text("Sprite");
+
+    ImGui::DragFloat3("SpriteTranslate", &transformSprite.translate.x, 1.0f);
+    ImGui::DragFloat3("SpriteRotate", &transformSprite.rotate.x, 0.01f);
+    ImGui::DragFloat3("SpriteScale", &transformSprite.scale.x, 0.01f);
+
+    // UV
+    ImGui::Text("UV");
+
     ImGui::DragFloat2("UVTranslate", &uvTransformSprite.translate.x, 0.01f,
                       -10.0f, 10.0f);
-
-    // UVスケール
     ImGui::DragFloat2("UVScale", &uvTransformSprite.scale.x, 0.01f, -10.0f,
                       10.0f);
-
-    // UV回転
     ImGui::SliderAngle("UVRotate", &uvTransformSprite.rotate.z);
 
-    // テクスチャ選択（例：0=uvChecker, 1=monsterBall）
-    ImGui::Checkbox("useMonsterBall", &useMonsterBall);
+    // サウンド
+    ImGui::Text("Sound");
+    if (ImGui::Button("play")) {
+      // 音声再生
+      SoundPlayWave(xAudio2.Get(), soundData1);
+    }
 
     ImGui::End();
 
@@ -1197,12 +1262,27 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Matrix4x4 cameraMatrix =
         MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate,
                          cameraTransform.translate);
+
+    // カメラをキー入力ありの物に
     Matrix4x4 viewMatrix = debugCamera->GetViewMatrix();
+
     Matrix4x4 projectionMatrix =
         MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
     Matrix4x4 worldViewProjectionMatrix =
         Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
     *wvpData = {worldViewProjectionMatrix, worldMatrix};
+
+    Matrix4x4 worldMatrix2 = MakeAffineMatrix(
+        transform2.scale, transform2.rotate, transform2.translate);
+
+    // カメラをキー入力ありの物に
+    Matrix4x4 viewMatrix2 = debugCamera->GetViewMatrix();
+
+    Matrix4x4 projectionMatrix2 =
+        MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
+    Matrix4x4 worldViewProjectionMatrix2 =
+        Multiply(worldMatrix2, Multiply(viewMatrix2, projectionMatrix2));
+    *wvpData2 = {worldViewProjectionMatrix2, worldMatrix2};
 
     /* WVPMatrixを作って書き込む
     ---------------------------------*/
@@ -1224,6 +1304,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     uvTransformMatrix = Multiply(
         uvTransformMatrix, MakeTranslateMatrix(uvTransformSprite.translate));
     materialDataSprite->uvTransform = uvTransformMatrix;
+
+    materialData->enableLighting = lightingMode;
 
     // ゲームの処理終わり
 
@@ -1308,6 +1390,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 0,0);
     commandList->DrawInstanced(UINT(modelData.vertices.size()), 1, 0, 0);
 
+    // 頂点バッファ変更
+    commandList->IASetVertexBuffers(0, 1, &vertexBufferView2);
+
+    // マテリアル設定（既存のmaterialResourceでOKならそのまま）
+    commandList->SetGraphicsRootConstantBufferView(
+        0, materialResource->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(
+        1, wvpResource2->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootDescriptorTable(
+        2, useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
+    commandList->SetGraphicsRootConstantBufferView(
+        3, directionalLightResource->GetGPUVirtualAddress());
+
+    // 描画
+    commandList->DrawInstanced(UINT(modelData2.vertices.size()), 1, 0, 0);
+
     /* 2D描画コマンドを積む
     -----------------------------*/
     // Spriteの描画。変更が必要なものだけ変更する。
@@ -1322,7 +1420,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
     // 描画（DrawCall/ドローコール）
     // commandList->DrawInstanced(6, 1, 0, 0);
-    // commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+    commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
     /* ImGuiを描画
     -------------------------------*/
