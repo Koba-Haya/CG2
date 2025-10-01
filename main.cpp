@@ -1,5 +1,4 @@
 #include "include.h"
-#include "Input.h"
 #include <Windows.h>
 
 struct Transform {
@@ -1123,10 +1122,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // ウィンドウの×ボタンが押されるまでループ
   while (msg.message != WM_QUIT) {
     // Windowにメッセージが来ていたら最優先で処理させる
-    if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+    while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
       TranslateMessage(&msg);
       DispatchMessage(&msg);
-      continue;
     }
 
     // ImGuiにフレームが始まることを伝える
@@ -1475,14 +1473,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   CoUninitialize();
 
-  CloseWindow(hwnd);
+  DestroyWindow(hwnd);
+  UnregisterClass(L"CG2WindowClass", GetModuleHandle(nullptr));
 
   return 0;
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
   if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
-    return true;
+    return 1; // ImGuiが処理した
   }
   // メッセージに応じてゲーム固有の処理を行う
   switch (msg) {
