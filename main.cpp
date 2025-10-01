@@ -1,4 +1,5 @@
 #include "include.h"
+#include "Input.h"
 #include <Windows.h>
 
 struct Transform {
@@ -530,27 +531,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // マスターボイスを生成
   hr = xAudio2->CreateMasteringVoice(&masterVoice);
 
-  /* DirectInputオブジェクトの生成
-  ----------------------------------*/
-  // DirectInputの初期化
-  IDirectInput8 *directInput = nullptr;
-  hr = DirectInput8Create(wc.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
-                          (void **)&directInput, nullptr);
-  assert(SUCCEEDED(hr));
+  Input *input = nullptr;
 
-  // キーボードデバイスの生成
-  IDirectInputDevice8 *keyboard = nullptr;
-  hr = directInput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL);
-  assert(SUCCEEDED(hr));
-
-  // 入力データ形式のセット
-  hr = keyboard->SetDataFormat(&c_dfDIKeyboard); // 標準形式
-  assert(SUCCEEDED(hr));
-
-  // 排他制御レベルのセット
-  hr = keyboard->SetCooperativeLevel(
-      hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
-  assert(SUCCEEDED(hr));
+  input = new Input();
+  input->Initialize(wc.hInstance,hwnd);
 
   /* ディスクリプタヒープの生成
   ------------------------------*/
@@ -1494,6 +1478,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // 音声データ開放
   SoundUnload(&soundData1);
   delete debugCamera;
+  delete input;
 
   CoUninitialize();
 
