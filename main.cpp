@@ -1226,20 +1226,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ImGuiの内部コマンドを生成する
     ImGui::Render();
 
-    /* キーボード情報の取得
-    -----------------------------------*/
-    // キーボード情報の取得開始
-    keyboard->Acquire();
+    input->Update();
 
-    // 全キーの入力状態を取得する
-    BYTE key[256] = {};
-    keyboard->GetDeviceState(sizeof(key), key);
+    //if (key[DIK_0]) {
+    //  OutputDebugStringA("Hit 0\n"); // 出力ウィンドウに「Hit 0」と表示される
+    //}
 
-    if (key[DIK_0]) {
-      OutputDebugStringA("Hit 0\n"); // 出力ウィンドウに「Hit 0」と表示される
-    }
-
-    debugCamera->Update(key);
+    //debugCamera->Update(key);
 
     Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate,
                                              transform.translate);
