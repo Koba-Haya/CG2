@@ -531,10 +531,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // マスターボイスを生成
   hr = xAudio2->CreateMasteringVoice(&masterVoice);
 
-  Input *input = nullptr;
+  /* 入力変数の宣言
+  -----------------------------*/
+  Input input;
 
-  input = new Input();
-  input->Initialize(wc.hInstance,hwnd);
+  bool inputOk = input.Initialize(wc.hInstance,hwnd);
+  assert(inputOk);
+  
 
   /* ディスクリプタヒープの生成
   ------------------------------*/
@@ -1226,13 +1229,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ImGuiの内部コマンドを生成する
     ImGui::Render();
 
-    input->Update();
+    input.Update();
 
-    //if (key[DIK_0]) {
-    //  OutputDebugStringA("Hit 0\n"); // 出力ウィンドウに「Hit 0」と表示される
-    //}
+    if (input.WasPressed(DIK_0)) {
+      OutputDebugStringA("Hit 0\n"); // 出力ウィンドウに「Hit 0」と表示される
+    }
 
-    //debugCamera->Update(key);
+    debugCamera->Update(input);
 
     Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate,
                                              transform.translate);
@@ -1471,7 +1474,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // 音声データ開放
   SoundUnload(&soundData1);
   delete debugCamera;
-  delete input;
 
   CoUninitialize();
 

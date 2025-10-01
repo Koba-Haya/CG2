@@ -1,5 +1,6 @@
 #pragma once
 #include "Method.h"
+#include "Input.h"
 #define DIRECTINPUT_VERSION 0x0800
 #include <dinput.h>
 #pragma comment(lib, "dinput8.lib")
@@ -17,7 +18,7 @@ class DebugCamera {
 public:
   void Initialize();
 
-  void Update(BYTE *key);
+  void Update(const Input &input);
 
   Matrix4x4 GetViewMatrix() const { return viewMatrix_; }
 };
