@@ -1,4 +1,5 @@
 #include "include.h"
+#include "Input.h"
 #include <Windows.h>
 
 struct Transform {
@@ -529,28 +530,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   hr = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
   // マスターボイスを生成
   hr = xAudio2->CreateMasteringVoice(&masterVoice);
-
-  /* DirectInputオブジェクトの生成
-  ----------------------------------*/
-  // DirectInputの初期化
-  IDirectInput8 *directInput = nullptr;
-  hr = DirectInput8Create(wc.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
-                          (void **)&directInput, nullptr);
-  assert(SUCCEEDED(hr));
-
-  // キーボードデバイスの生成
-  IDirectInputDevice8 *keyboard = nullptr;
-  hr = directInput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL);
-  assert(SUCCEEDED(hr));
-
-  // 入力データ形式のセット
-  hr = keyboard->SetDataFormat(&c_dfDIKeyboard); // 標準形式
-  assert(SUCCEEDED(hr));
-
-  // 排他制御レベルのセット
-  hr = keyboard->SetCooperativeLevel(
-      hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
-  assert(SUCCEEDED(hr));
 
   /* ディスクリプタヒープの生成
   ------------------------------*/
@@ -1117,6 +1096,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       {3.0f, 0.0f, 0.0f}  // translate（球の横に表示）
   };
 
+  Input keyboard;
+  bool input = keyboard.Initialize(wc.hInstance, hwnd);
+  assert(input);
+
   bool useMonsterBall = true;
 
   static int lightingMode = 1; // 初期値: Lambert
@@ -1242,20 +1225,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ImGuiの内部コマンドを生成する
     ImGui::Render();
 
-    /* キーボード情報の取得
-    -----------------------------------*/
-    // キーボード情報の取得開始
-    keyboard->Acquire();
+    keyboard.Update();
 
-    // 全キーの入力状態を取得する
-    BYTE key[256] = {};
-    keyboard->GetDeviceState(sizeof(key), key);
-
-    if (key[DIK_0]) {
-      OutputDebugStringA("Hit 0\n"); // 出力ウィンドウに「Hit 0」と表示される
+    // 既存のデバッグ出力
+    if (keyboard.WasPressed(DIK_0)) {
+      OutputDebugStringA("Hit 0\n");
     }
 
-    debugCamera->Update(key);
+    // カメラ更新も置き換え
+    debugCamera->Update(keyboard);
 
     Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate,
                                              transform.translate);
