@@ -1096,9 +1096,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
       {3.0f, 0.0f, 0.0f}  // translate（球の横に表示）
   };
 
-  Input keyboard;
-  bool input = keyboard.Initialize(wc.hInstance, hwnd);
-  assert(input);
+  Input input;
+  bool inputOk = input.Initialize(wc.hInstance, hwnd);
+  assert(inputOk);
 
   bool useMonsterBall = true;
 
@@ -1225,15 +1225,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ImGuiの内部コマンドを生成する
     ImGui::Render();
 
-    keyboard.Update();
+    input.Update();
 
     // 既存のデバッグ出力
-    if (keyboard.WasPressed(DIK_0)) {
+    if (input.WasPressed(DIK_0) || input.WasMousePressed(0)) {
       OutputDebugStringA("Hit 0\n");
     }
 
     // カメラ更新も置き換え
-    debugCamera->Update(keyboard);
+    debugCamera->Update(input);
 
     Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate,
                                              transform.translate);
