@@ -5,11 +5,13 @@
 Input::Input() {}
 Input::~Input() { Finalize(); }
 
-bool Input::Initialize(HINSTANCE instanceHandle, HWND windowHandle) {
+bool Input::Initialize(WinApp *winApp, HWND windowHandle) {
+    // 借りてきたwinAppのインスタンスを記録
+    this->winApp_ = winApp;
 
   // DirectInputの初期化
   HRESULT hr = DirectInput8Create(
-      instanceHandle, DIRECTINPUT_VERSION, IID_IDirectInput8,
+        winApp->GetHInstance(), DIRECTINPUT_VERSION, IID_IDirectInput8,
       reinterpret_cast<void **>(directInput_.ReleaseAndGetAddressOf()),
       nullptr);
 

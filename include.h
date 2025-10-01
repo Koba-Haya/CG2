@@ -15,7 +15,6 @@
 #include <format>
 #include <fstream> //ファイルに書いたり読んだりするライブラリ
 #include <sstream>
-#include <string>
 #define _USE_MATH_DEFINES
 #include "ResourceObject.h"
 #include <math.h>

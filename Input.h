@@ -1,4 +1,5 @@
 #pragma once
+#include "WinApp.h"
 #define DIRECTINPUT_VERSION 0x0800
 #include <Windows.h>
 #include <dinput.h>
@@ -16,7 +17,7 @@ public:
   ~Input();
 
   // 初期化と終了
-  bool Initialize(HINSTANCE instanceHandle, HWND windowHandle);
+  bool Initialize(WinApp *winApp, HWND windowHandle);
   void Finalize();
 
   // 毎フレーム更新（Acquire と GetDeviceState を内部で実行）
@@ -37,4 +38,7 @@ private:
   BYTE currentKeys_[256] = {};
   BYTE previousKeys_[256] = {};
   bool isInitialized_ = false;
+
+  private:
+  WinApp *winApp_ = nullptr;
 };
