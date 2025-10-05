@@ -9,7 +9,7 @@ public:
                                      LPARAM lparam);
 
 public:
-  void Initalize();
+  void Initialize();
   void Update();
   void Finalize();
   bool ProcessMessage();

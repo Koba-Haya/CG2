@@ -3,7 +3,7 @@
 // ImGui の Win32 バックエンドを使うためのヘッダ
 // → h ファイルには書かず cpp にだけ書く（依存を最小化するため）
 #include "externals/imgui/imgui.h"
-// #include "externals/imgui/imgui_impl_win32.h"
+ #include "externals/imgui/imgui_impl_win32.h"
 
 // extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
 //                                                              UINT msg,
@@ -132,25 +132,25 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
                                                              WPARAM wParam,
                                                              LPARAM lParam);
 
-LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam,
-                                    LPARAM lparam) {
-  if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
-    return true;
-  }
-  // メッセージに応じてゲーム固有の処理を行う
-  switch (msg) {
-    // ウィンドウが破棄された
-  case WM_DESTROY:
-    // DSに対して、アプリの終了を伝える
-    PostQuitMessage(0);
-    return 0;
+LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+  // まず ImGui に渡す（ここが無いとクリックやキーボードが効かない）
+  if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wp, lp)) {
+    return 1;
   }
 
-  // 標準のメッセージ処理を行う
-  return DefWindowProc(hwnd, msg, wparam, lparam);
+  switch (msg) {
+  case WM_CLOSE:
+    DestroyWindow(hwnd); // 明示的に破棄
+    return 0;
+  case WM_DESTROY:
+    PostQuitMessage(0); // ループを抜けさせる
+    return 0;
+  default:
+    return DefWindowProc(hwnd, msg, wp, lp);
+  }
 }
 
-void WinApp::Initalize() {
+void WinApp::Initialize() {
 
   HRESULT hr = CoInitializeEx(0, COINIT_MULTITHREADED);
   assert(SUCCEEDED(hr));
@@ -212,14 +212,14 @@ void WinApp::Finalize() {
 
 bool WinApp::ProcessMessage() {
   MSG msg{};
-
-  // Windowにメッセージが来ていたら最優先で処理させる
-  while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-    return true;
+  // あるだけ全部処理する
+  while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+    if (msg.message == WM_QUIT) { // アプリ終了
+      return false;
+    }
+    TranslateMessage(&msg);
+    DispatchMessage(&msg);
   }
-
-  TranslateMessage(&msg);
-  DispatchMessage(&msg);
-
-  return false;
+  // まだ動かす
+  return true;
 }
