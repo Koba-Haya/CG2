@@ -1,3 +1,4 @@
+#include "Audio.h"
 #include "DirectXCommon.h"
 #include "WinApp.h"
 #include "include.h"
@@ -60,24 +61,10 @@ struct FormatChunk {
   WAVEFORMATEX fmt;  // 波形フォーマット
 };
 
-// 音声データ
-struct SoundData {
-  // 波形フォーマット
-  WAVEFORMATEX wfex;
-  // バッファの先頭アドレス
-  BYTE *pBuffer;
-  // バッファのサイズ
-  unsigned int bufferSize;
-};
-
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
                                                              UINT msg,
                                                              WPARAM wParam,
                                                              LPARAM lParam);
-#if 0
-// ウィンドウプロシージャ
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-#endif
 
 void Log(const std::string &message) { OutputDebugStringA(message.c_str()); }
 
@@ -106,6 +93,175 @@ IDxcBlob *CompileShader(
 Microsoft::WRL::ComPtr<ID3D12Resource>
 CreateBufferResource(const Microsoft::WRL::ComPtr<ID3D12Device> &device,
                      size_t sizeInBytes);
+
+// ========================================================
+// PSO/RootSignature をまとめて作るヘルパ（まだクラス化しない）
+// ========================================================
+static void
+CreateBasicPSO(ID3D12Device *device, IDxcUtils *dxcUtils,
+               IDxcCompiler3 *dxcCompiler, IDxcIncludeHandler *includeHandler,
+               Microsoft::WRL::ComPtr<ID3D12RootSignature> &outRootSignature,
+               Microsoft::WRL::ComPtr<ID3D12PipelineState> &outPSO) {
+  HRESULT hr = S_OK;
+
+  // --- DescriptorRange (SRV t0) ---
+  D3D12_DESCRIPTOR_RANGE descriptorRange{};
+  descriptorRange.BaseShaderRegister = 0;
+  descriptorRange.NumDescriptors = 1;
+  descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  descriptorRange.OffsetInDescriptorsFromTableStart =
+      D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+  // --- RootSignature ---
+  D3D12_ROOT_SIGNATURE_DESC rootDesc{};
+  rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+  D3D12_STATIC_SAMPLER_DESC staticSampler{};
+  staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+  staticSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  staticSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  staticSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  staticSampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+  staticSampler.MaxLOD = D3D12_FLOAT32_MAX;
+  staticSampler.ShaderRegister = 0;
+  staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+  rootDesc.pStaticSamplers = &staticSampler;
+  rootDesc.NumStaticSamplers = 1;
+
+  D3D12_ROOT_PARAMETER rootParams[4]{};
+  // b0 (PS: Material)
+  rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+  rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+  rootParams[0].Descriptor.ShaderRegister = 0;
+  // b0 (VS: Transform)
+  rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+  rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+  rootParams[1].Descriptor.ShaderRegister = 0;
+  // t0 table (PS: Texture)
+  rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+  rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+  rootParams[2].DescriptorTable.pDescriptorRanges = &descriptorRange;
+  rootParams[2].DescriptorTable.NumDescriptorRanges = 1;
+  // b1 (PS: DirectionalLight)
+  rootParams[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+  rootParams[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+  rootParams[3].Descriptor.ShaderRegister = 1;
+
+  rootDesc.pParameters = rootParams;
+  rootDesc.NumParameters = _countof(rootParams);
+
+  Microsoft::WRL::ComPtr<ID3DBlob> sigBlob, errBlob;
+  hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1,
+                                   sigBlob.GetAddressOf(),
+                                   errBlob.GetAddressOf());
+  if (FAILED(hr)) {
+    OutputDebugStringA(errBlob ? (const char *)errBlob->GetBufferPointer()
+                               : "RS serialize failed\n");
+    assert(false);
+  }
+  hr = device->CreateRootSignature(0, sigBlob->GetBufferPointer(),
+                                   sigBlob->GetBufferSize(),
+                                   IID_PPV_ARGS(&outRootSignature));
+  assert(SUCCEEDED(hr));
+
+  // --- InputLayout ---
+  D3D12_INPUT_ELEMENT_DESC elems[3]{};
+  elems[0] = {"POSITION",
+              0,
+              DXGI_FORMAT_R32G32B32A32_FLOAT,
+              0,
+              D3D12_APPEND_ALIGNED_ELEMENT,
+              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+              0};
+  elems[1] = {"TEXCOORD",
+              0,
+              DXGI_FORMAT_R32G32_FLOAT,
+              0,
+              D3D12_APPEND_ALIGNED_ELEMENT,
+              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+              0};
+  elems[2] = {"NORMAL",
+              0,
+              DXGI_FORMAT_R32G32B32_FLOAT,
+              0,
+              D3D12_APPEND_ALIGNED_ELEMENT,
+              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+              0};
+  D3D12_INPUT_LAYOUT_DESC inputLayout{elems, _countof(elems)};
+
+  // --- Shaders (あなたの CompileShader を利用) ---
+  IDxcBlob *vs = CompileShader(L"Object3D.VS.hlsl", L"vs_6_0", dxcUtils,
+                               dxcCompiler, includeHandler);
+  IDxcBlob *ps = CompileShader(L"Object3D.PS.hlsl", L"ps_6_0", dxcUtils,
+                               dxcCompiler, includeHandler);
+
+  // --- Blend / Rasterizer / Depth ---
+  D3D12_BLEND_DESC blend{};
+  blend.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+  D3D12_RASTERIZER_DESC rast{};
+  rast.CullMode = D3D12_CULL_MODE_BACK;
+  rast.FillMode = D3D12_FILL_MODE_SOLID;
+  D3D12_DEPTH_STENCIL_DESC dsv{};
+  dsv.DepthEnable = TRUE;
+  dsv.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+  dsv.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+
+  // --- PSO ---
+  D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
+  pso.pRootSignature = outRootSignature.Get();
+  pso.InputLayout = inputLayout;
+  pso.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+  pso.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+  pso.BlendState = blend;
+  pso.RasterizerState = rast;
+  pso.NumRenderTargets = 1;
+  pso.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+  pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+  pso.SampleDesc.Count = 1;
+  pso.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+  pso.DepthStencilState = dsv;
+  pso.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+  hr = device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&outPSO));
+  assert(SUCCEEDED(hr));
+}
+
+// SrvAllocator から使うための前方宣言（※定義はこの後ろの方にあります）
+D3D12_CPU_DESCRIPTOR_HANDLE
+GetCPUDescriptorHandle(
+    const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> &descriptorHeap,
+    uint32_t descriptorSize, uint32_t index);
+
+D3D12_GPU_DESCRIPTOR_HANDLE
+GetGPUDescriptorHandle(
+    const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> &descriptorHeap,
+    uint32_t descriptorSize, uint32_t index);
+
+// ========================================================
+// SRV割り当ての小ユーティリティ（ImGui が 0 を使用）
+// ========================================================
+struct SrvAllocator {
+  ID3D12Device *device = nullptr;
+  ID3D12DescriptorHeap *heap = nullptr;
+  UINT inc = 0;
+  UINT next = 1; // 0 は ImGui 用とする
+
+  void Init(ID3D12Device *dev, ID3D12DescriptorHeap *h) {
+    device = dev;
+    heap = h;
+    inc = device->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    next = 1;
+  }
+  UINT Allocate() { return next++; }
+
+  D3D12_CPU_DESCRIPTOR_HANDLE Cpu(UINT index) const {
+    return GetCPUDescriptorHandle(heap, inc, index);
+  }
+  D3D12_GPU_DESCRIPTOR_HANDLE Gpu(UINT index) const {
+    return GetGPUDescriptorHandle(heap, inc, index);
+  }
+};
 
 // 文字列を格納する
 std::string str0{"STRING!!!"};
@@ -187,109 +343,6 @@ struct D3DResourceLeakChecker {
     }
   }
 };
-
-SoundData SoundLoadWave(const char *filename) {
-  // HRESULT result;
-  //  1.ファイルオープン
-  //  ファイル入力ストリームのインスタンス
-  std::ifstream file;
-  // wavファイルをバイナリモードで開く
-  file.open(filename, std::ios_base::binary);
-  // ファイルオープン失敗を検出する
-  assert(file.is_open());
-
-  // 2.wavデータ読み込み
-  // RIFFヘッダーの読み込み
-  RiffHeader riff;
-  file.read((char *)&riff, sizeof(riff));
-  // ファイルがRIFFかチェック
-  if (strncmp(riff.chunk.id, "RIFF", 4) != 0) {
-    assert(0);
-  }
-  // タイプがWAVEかチェック
-  if (strncmp(riff.type, "WAVE", 4) != 0) {
-    assert(0);
-  }
-  // Formatチャンクの読み込み
-  FormatChunk format = {};
-  // チャンクヘッダーの確認
-  file.read((char *)&format, sizeof(ChunkHeader));
-  if (strncmp(format.chunk.id, "fmt ", 4) != 0) {
-    assert(0);
-  }
-  // チャンク本体の読み込み
-  assert(format.chunk.size <= sizeof(format.fmt));
-  file.read((char *)&format.fmt, format.chunk.size);
-  // Dataチャンクの読み込み
-  ChunkHeader data;
-  file.read((char *)&data, sizeof(data));
-  // JUNKチャンクを検出した場合
-  if (strncmp(data.id, "JUNK", 4) == 0) {
-    // 読み取り位置をJUNKチャンクの終わりまで進める
-    file.seekg(data.size, std::ios_base::cur);
-    // 再読み込み
-    file.read((char *)&data, sizeof(data));
-  }
-  if (strncmp(data.id, "data", 4) != 0) {
-    assert(0);
-  }
-  // Dataチャンクのデータ部（波形データ）の読み込み
-  char *pBuffer = new char[data.size];
-  file.read(pBuffer, data.size);
-
-  // 3.ファイルクローズ
-  // Waveファイルを閉じる
-  file.close();
-
-  // 4.読み込んだ音声データを返す
-  // returnするための音声データ
-  SoundData soundData = {};
-  soundData.wfex = format.fmt;
-  soundData.pBuffer = reinterpret_cast<BYTE *>(pBuffer);
-  soundData.bufferSize = data.size;
-
-  return soundData;
-}
-
-// 音声データ開放
-void SoundUnload(SoundData *soundData) {
-  // バッファのメモリを解放
-  delete[] soundData->pBuffer;
-
-  soundData->pBuffer = 0;
-  soundData->bufferSize = 0;
-  soundData->wfex = {};
-}
-
-// 音声再生
-void SoundPlayWave(const Microsoft::WRL::ComPtr<IXAudio2> xAudio2,
-                   const SoundData &soundData) {
-  static IXAudio2SourceVoice *pSourceVoice = nullptr;
-  HRESULT result;
-
-  if (!pSourceVoice) {
-    // 初回だけ生成
-    result = xAudio2->CreateSourceVoice(&pSourceVoice, &soundData.wfex);
-    assert(SUCCEEDED(result));
-  }
-
-  // 再生中なら止めてバッファクリア
-  pSourceVoice->Stop();
-  pSourceVoice->FlushSourceBuffers();
-
-  // 再生する波形データの設定
-  XAUDIO2_BUFFER buf{};
-  buf.pAudioData = soundData.pBuffer;
-  buf.AudioBytes = soundData.bufferSize;
-  buf.Flags = XAUDIO2_END_OF_STREAM;
-
-  // バッファを送って再生開始
-  result = pSourceVoice->SubmitSourceBuffer(&buf);
-  assert(SUCCEEDED(result));
-
-  result = pSourceVoice->Start();
-  assert(SUCCEEDED(result));
-}
 
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -377,192 +430,25 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   /* Audio変数の宣言
   --------------------------*/
-  Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
-  IXAudio2MasteringVoice *masterVoice;
 
-  // XAudioエンジンのインスタンスを生成
-  hr = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
-  // マスターボイスを生成
-  hr = xAudio2->CreateMasteringVoice(&masterVoice);
+  AudioManager audio; // ← WinMain 冒頭で宣言
+  bool audioOk = audio.Initialize();
+  assert(audioOk);
 
   //================================
   //              PSO
   //================================
 
-  /* DescriptorRange
-  ----------------------------*/
-  D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-  descriptorRange[0].BaseShaderRegister = 0; // 0から始まる
-  descriptorRange[0].NumDescriptors = 1;     // 数は1つ
-  descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // SRVを使う
-  descriptorRange[0].OffsetInDescriptorsFromTableStart =
-      D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // Offsetを自動計算
-
-  /*RootSignatureを生成
-  --------------------------*/
-  // RootSignature作成
-  D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
-  descriptionRootSignature.Flags =
-      D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-  /* Samplerの設定
-  --------------------------*/
-  D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
-  staticSamplers[0].Filter =
-      D3D12_FILTER_MIN_MAG_MIP_LINEAR; // バイリニアフィルタ
-  staticSamplers[0].AddressU =
-      D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 0~1の範囲外をリポート
-  staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-  staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-  staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較しない
-  staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX; // ありったけのMipMapを使う
-  staticSamplers[0].ShaderRegister = 0;         // レジスタ番号0を使う
-  staticSamplers[0].ShaderVisibility =
-      D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
-  descriptionRootSignature.pStaticSamplers = staticSamplers;
-  descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
-
-  // RootParameter作成。複数設定できるので配列。今回は結果1つだけなので長さ1の配列
-  D3D12_ROOT_PARAMETER rootParameters[4] = {};
-  rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
-  rootParameters[0].ShaderVisibility =
-      D3D12_SHADER_VISIBILITY_PIXEL;               // PixelShaderで使う
-  rootParameters[0].Descriptor.ShaderRegister = 0; // レジスタ番号0とバインド
-  rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
-  rootParameters[1].ShaderVisibility =
-      D3D12_SHADER_VISIBILITY_VERTEX;              // VertexShaderで使う
-  rootParameters[1].Descriptor.ShaderRegister = 0; // レジスタ番号0とバインド
-  rootParameters[2].ParameterType =
-      D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; // DescriptorTableを使う
-  rootParameters[2].ShaderVisibility =
-      D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
-  rootParameters[2].DescriptorTable.pDescriptorRanges =
-      descriptorRange; // Tableの中身の配列を指定
-  rootParameters[2].DescriptorTable.NumDescriptorRanges =
-      _countof(descriptorRange); // Tableで利用する数
-  rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
-  rootParameters[3].ShaderVisibility =
-      D3D12_SHADER_VISIBILITY_PIXEL;               // PixelShaderで使う
-  rootParameters[3].Descriptor.ShaderRegister = 1; // レジスタ番号1を使う
-  descriptionRootSignature.pParameters =
-      rootParameters; // ルートパラメーター配列へのポインタ
-  descriptionRootSignature.NumParameters =
-      _countof(rootParameters); // 配列の長さ
-
-  // シリアルライズしてバイナリにする
-  ID3DBlob *signatureBlob = nullptr;
-  ID3DBlob *errorBlob = nullptr;
-  hr = D3D12SerializeRootSignature(&descriptionRootSignature,
-                                   D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob,
-                                   &errorBlob);
-  if (FAILED(hr)) {
-    Log(reinterpret_cast<char *>(errorBlob->GetBufferPointer()));
-    assert(false);
-  }
-  // バイナリをもとに生成
-  Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature = nullptr;
-  hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(),
-                                   signatureBlob->GetBufferSize(),
-                                   IID_PPV_ARGS(&rootSignature));
-  assert(SUCCEEDED(hr));
-
-  /*InputLayout
-  --------------------------*/
-  // InputLayout
-  D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
-  inputElementDescs[0].SemanticName = "POSITION";
-  inputElementDescs[0].SemanticIndex = 0;
-  inputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-  inputElementDescs[0].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-  inputElementDescs[1].SemanticName = "TEXCOORD";
-  inputElementDescs[1].SemanticIndex = 0;
-  inputElementDescs[1].Format = DXGI_FORMAT_R32G32_FLOAT;
-  inputElementDescs[1].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-  inputElementDescs[2].SemanticName = "NORMAL";
-  inputElementDescs[2].SemanticIndex = 0;
-  inputElementDescs[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
-  inputElementDescs[2].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-  D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{};
-  inputLayoutDesc.pInputElementDescs = inputElementDescs;
-  inputLayoutDesc.NumElements = _countof(inputElementDescs);
-
-  /*BlendState
-  ---------------------------*/
-  // BlendStateの設定
-  D3D12_BLEND_DESC blendDesc{};
-  // すべての色要素を書き込む
-  blendDesc.RenderTarget[0].RenderTargetWriteMask =
-      D3D12_COLOR_WRITE_ENABLE_ALL;
-
-  /*RasterizerState
-  ---------------------------*/
-  // RasterizerStateの設定
-  D3D12_RASTERIZER_DESC rasterizerDesc{};
-  // 裏面(時計回り)を表示しない
-  rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
-  // 三角形の中を塗りつぶす
-  rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
-
-  /*ShaderをCompile
-  ---------------------------*/
+  // DXC は DirectXCommon から借りる
   auto *dxcUtils = dx.GetDXCUtils();
   auto *dxcCompiler = dx.GetDXCCompiler();
   auto *includeHandler = dx.GetDXCIncludeHandler();
 
-  // Shaderをコンパイルする
-  IDxcBlob *vertexShaderBlob = CompileShader(
-      L"Object3D.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler, includeHandler);
-  IDxcBlob *pixelShaderBlob = CompileShader(
-      L"Object3D.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler, includeHandler);
-  assert(pixelShaderBlob != nullptr);
-
-  /* DepthStencilStateの設定
-  ----------------------------------*/
-  D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
-  // Depthの機能を有効化する
-  depthStencilDesc.DepthEnable = true;
-  // 書き込みをする
-  depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-  // 比較関数はLessEqual。つまり近ければ描画される
-  depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-
-  /*PSO生成
-  ---------------------*/
-  D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc{};
-  graphicsPipelineStateDesc.pRootSignature =
-      rootSignature.Get();                                 // RootSignature
-  graphicsPipelineStateDesc.InputLayout = inputLayoutDesc; // InputLayout
-  graphicsPipelineStateDesc.VS = {
-      vertexShaderBlob->GetBufferPointer(),
-      vertexShaderBlob->GetBufferSize()}; // VertexShader
-  graphicsPipelineStateDesc.PS = {
-      pixelShaderBlob->GetBufferPointer(),
-      pixelShaderBlob->GetBufferSize()};                      // PixelShader
-  graphicsPipelineStateDesc.BlendState = blendDesc;           // BlendState
-  graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // RasterizerState
-
-  // 書き込むRTVの情報
-  graphicsPipelineStateDesc.NumRenderTargets = 1;
-  graphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-
-  // 利用するトポロジ(形状)のタイプ。三角形
-  graphicsPipelineStateDesc.PrimitiveTopologyType =
-      D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-
-  // どのように画面に色を打ち込むかの設定 (気にしなくていい)
-  graphicsPipelineStateDesc.SampleDesc.Count = 1;
-  graphicsPipelineStateDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-
-  // DepthStencilの設定
-  graphicsPipelineStateDesc.DepthStencilState = depthStencilDesc;
-  graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-
-  // 実際に生成
-  Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState = nullptr;
-  hr = device->CreateGraphicsPipelineState(
-      &graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState));
-  assert(SUCCEEDED(hr));
-  /*-------------------------  ここまで  ----------------------------------*/
+  // 関数に丸投げ
+  Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
+  Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState;
+  CreateBasicPSO(device.Get(), dxcUtils, dxcCompiler, includeHandler,
+                 rootSignature, graphicsPipelineState);
 
   // モデル読み込み
   ModelData modelData = LoadObjFile("resources", "sphere.obj");
@@ -697,34 +583,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   srvDesc2.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D; // 2Dテクスチャ
   srvDesc2.Texture2D.MipLevels = UINT(metadata2.mipLevels);
 
-  // SRVを作成するDescriptorHeapの場所を決める
-  D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU =
-      GetCPUDescriptorHandle(srvDescriptorHeap.Get(),
-                             dx.GetDevice()->GetDescriptorHandleIncrementSize(
-                                 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),
-                             1);
-  D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU =
-      GetGPUDescriptorHandle(srvDescriptorHeap.Get(),
-                             dx.GetDevice()->GetDescriptorHandleIncrementSize(
-                                 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),
-                             1);
-  // SRVを作成するDescriptorHeapの場所を決める
-  D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU2 =
-      GetCPUDescriptorHandle(srvDescriptorHeap.Get(),
-                             dx.GetDevice()->GetDescriptorHandleIncrementSize(
-                                 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),
-                             2);
-  D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 =
-      GetGPUDescriptorHandle(srvDescriptorHeap.Get(),
-                             dx.GetDevice()->GetDescriptorHandleIncrementSize(
-                                 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),
-                             2);
-  //  SRVの作成
+  // 1回だけ初期化（srvDescriptorHeap が使えるスコープで）
+  SrvAllocator srvAlloc;
+  srvAlloc.Init(device.Get(), srvDescriptorHeap.Get());
+
+  // --- 1枚目のテクスチャ ---
+  UINT texIdx1 = srvAlloc.Allocate();
   device->CreateShaderResourceView(textureResource.Get(), &srvDesc,
-                                   textureSrvHandleCPU);
-  // SRVの作成
+                                   srvAlloc.Cpu(texIdx1));
+  D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU = srvAlloc.Gpu(texIdx1);
+
+  // --- 2枚目のテクスチャ ---
+  UINT texIdx2 = srvAlloc.Allocate();
   device->CreateShaderResourceView(textureResource2.Get(), &srvDesc2,
-                                   textureSrvHandleCPU2);
+                                   srvAlloc.Cpu(texIdx2));
+  D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 = srvAlloc.Gpu(texIdx2);
 
   /* VertexResourceとVertexBufferViewを用意
   ---------------------------------------------------*/
@@ -850,7 +723,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   static int lightingMode = 1; // 初期値: Lambert
 
   // 音声読み込み
-  SoundData soundData1 = SoundLoadWave("resources/fanfare.wav");
+  bool select =
+      audio.Load("select", L"resources/select.mp3", 1.0f); // mp3等もOK
+  assert(select);
+  static float selectVol = 1.0f;
 
   DebugCamera *debugCamera = new DebugCamera();
 
@@ -859,12 +735,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // ウィンドウの×ボタンが押されるまでループ
   while (app.ProcessMessage()) {
 
+    // ゲームの処理
+    dx.BeginFrame();
+
+    ID3D12DescriptorHeap *heaps[] = {srvDescriptorHeap.Get()};
+    commandList->SetDescriptorHeaps(1, heaps);
+
     // ImGuiにフレームが始まることを伝える
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
-
-    // ゲームの処理
 
     // パラメーターを変更 ImGuiの処理
     // ImGui::ShowDemoWindow(); //
@@ -947,9 +827,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
       // サウンド
       ImGui::Text("Sound");
-      if (ImGui::Button("play")) {
-        // 音声再生
-        SoundPlayWave(xAudio2.Get(), soundData1);
+      ImGui::SliderFloat("Volume", &selectVol, 0.0f, 1.0f);
+      if (ImGui::Button("Play")) {
+        audio.Play("select", /*loop=*/false, selectVol);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Stop")) {
+        audio.Stop("select");
       }
 
       ImGui::End();
@@ -961,7 +845,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     input.Update();
 
     // 既存のデバッグ出力
-    if (input.WasPressed(DIK_0) || input.WasMousePressed(0) || input.WasPadPressed(XINPUT_GAMEPAD_A)) {
+    if (input.WasPressed(DIK_0) || input.WasMousePressed(0) ||
+        input.WasPadPressed(XINPUT_GAMEPAD_A)) {
       OutputDebugStringA("Hit 0\n");
     }
 
@@ -1019,11 +904,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     materialData->enableLighting = lightingMode;
 
     // ゲームの処理終わり
-
-    dx.BeginFrame();
-
-    ID3D12DescriptorHeap *heaps[] = {srvDescriptorHeap.Get()};
-    commandList->SetDescriptorHeaps(1, heaps);
 
     // 描画先のRTVとDSVを設定する
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle =
@@ -1120,54 +1000,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 実際のcommandListのImGuiの描画コマンドを積む
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList.Get());
 
-    /*コマンドをキックする
-    ----------------------------*/
-    // GPUにコマンドリストの実行を行わせる
-    ID3D12CommandList *commandLists[] = {commandList.Get()};
-
     dx.EndFrame();
   }
 
   /*解放処理
   --------------------*/
-
-  signatureBlob->Release();
-  if (errorBlob) {
-    errorBlob->Release();
-  }
-  pixelShaderBlob->Release();
-  vertexShaderBlob->Release();
-  // XAudio2解放
-  xAudio2.Reset();
   // 音声データ開放
-  SoundUnload(&soundData1);
+  audio.Shutdown();
   delete debugCamera;
   input.Finalize();
   app.Finalize();
 
   CoUninitialize();
 
-  DestroyWindow(hwnd);
-  UnregisterClass(L"CG2WindowClass", GetModuleHandle(nullptr));
-
   return 0;
-}
-
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-  if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
-    return 1; // ImGuiが処理した
-  }
-  // メッセージに応じてゲーム固有の処理を行う
-  switch (msg) {
-    // ウィンドウが破棄された
-  case WM_DESTROY:
-    // DSに対して、アプリの終了を伝える
-    PostQuitMessage(0);
-    return 0;
-  }
-
-  // 標準のメッセージ処理を行う
-  return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
 std::wstring ConvertString(const std::string &str) {
