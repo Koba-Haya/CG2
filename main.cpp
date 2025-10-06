@@ -1,5 +1,6 @@
 #include "Audio.h"
 #include "DirectXCommon.h"
+#include "UnifiedPipeline.h"
 #include "WinApp.h"
 #include "include.h"
 #include <Windows.h>
@@ -93,138 +94,6 @@ IDxcBlob *CompileShader(
 Microsoft::WRL::ComPtr<ID3D12Resource>
 CreateBufferResource(const Microsoft::WRL::ComPtr<ID3D12Device> &device,
                      size_t sizeInBytes);
-
-// ========================================================
-// PSO/RootSignature をまとめて作るヘルパ（まだクラス化しない）
-// ========================================================
-static void
-CreateBasicPSO(ID3D12Device *device, IDxcUtils *dxcUtils,
-               IDxcCompiler3 *dxcCompiler, IDxcIncludeHandler *includeHandler,
-               Microsoft::WRL::ComPtr<ID3D12RootSignature> &outRootSignature,
-               Microsoft::WRL::ComPtr<ID3D12PipelineState> &outPSO) {
-  HRESULT hr = S_OK;
-
-  // --- DescriptorRange (SRV t0) ---
-  D3D12_DESCRIPTOR_RANGE descriptorRange{};
-  descriptorRange.BaseShaderRegister = 0;
-  descriptorRange.NumDescriptors = 1;
-  descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-  descriptorRange.OffsetInDescriptorsFromTableStart =
-      D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-  // --- RootSignature ---
-  D3D12_ROOT_SIGNATURE_DESC rootDesc{};
-  rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-  D3D12_STATIC_SAMPLER_DESC staticSampler{};
-  staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-  staticSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-  staticSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-  staticSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-  staticSampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-  staticSampler.MaxLOD = D3D12_FLOAT32_MAX;
-  staticSampler.ShaderRegister = 0;
-  staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-  rootDesc.pStaticSamplers = &staticSampler;
-  rootDesc.NumStaticSamplers = 1;
-
-  D3D12_ROOT_PARAMETER rootParams[4]{};
-  // b0 (PS: Material)
-  rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-  rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-  rootParams[0].Descriptor.ShaderRegister = 0;
-  // b0 (VS: Transform)
-  rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-  rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-  rootParams[1].Descriptor.ShaderRegister = 0;
-  // t0 table (PS: Texture)
-  rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-  rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-  rootParams[2].DescriptorTable.pDescriptorRanges = &descriptorRange;
-  rootParams[2].DescriptorTable.NumDescriptorRanges = 1;
-  // b1 (PS: DirectionalLight)
-  rootParams[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-  rootParams[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-  rootParams[3].Descriptor.ShaderRegister = 1;
-
-  rootDesc.pParameters = rootParams;
-  rootDesc.NumParameters = _countof(rootParams);
-
-  Microsoft::WRL::ComPtr<ID3DBlob> sigBlob, errBlob;
-  hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-                                   sigBlob.GetAddressOf(),
-                                   errBlob.GetAddressOf());
-  if (FAILED(hr)) {
-    OutputDebugStringA(errBlob ? (const char *)errBlob->GetBufferPointer()
-                               : "RS serialize failed\n");
-    assert(false);
-  }
-  hr = device->CreateRootSignature(0, sigBlob->GetBufferPointer(),
-                                   sigBlob->GetBufferSize(),
-                                   IID_PPV_ARGS(&outRootSignature));
-  assert(SUCCEEDED(hr));
-
-  // --- InputLayout ---
-  D3D12_INPUT_ELEMENT_DESC elems[3]{};
-  elems[0] = {"POSITION",
-              0,
-              DXGI_FORMAT_R32G32B32A32_FLOAT,
-              0,
-              D3D12_APPEND_ALIGNED_ELEMENT,
-              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-              0};
-  elems[1] = {"TEXCOORD",
-              0,
-              DXGI_FORMAT_R32G32_FLOAT,
-              0,
-              D3D12_APPEND_ALIGNED_ELEMENT,
-              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-              0};
-  elems[2] = {"NORMAL",
-              0,
-              DXGI_FORMAT_R32G32B32_FLOAT,
-              0,
-              D3D12_APPEND_ALIGNED_ELEMENT,
-              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-              0};
-  D3D12_INPUT_LAYOUT_DESC inputLayout{elems, _countof(elems)};
-
-  // --- Shaders (あなたの CompileShader を利用) ---
-  IDxcBlob *vs = CompileShader(L"Object3D.VS.hlsl", L"vs_6_0", dxcUtils,
-                               dxcCompiler, includeHandler);
-  IDxcBlob *ps = CompileShader(L"Object3D.PS.hlsl", L"ps_6_0", dxcUtils,
-                               dxcCompiler, includeHandler);
-
-  // --- Blend / Rasterizer / Depth ---
-  D3D12_BLEND_DESC blend{};
-  blend.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-  D3D12_RASTERIZER_DESC rast{};
-  rast.CullMode = D3D12_CULL_MODE_BACK;
-  rast.FillMode = D3D12_FILL_MODE_SOLID;
-  D3D12_DEPTH_STENCIL_DESC dsv{};
-  dsv.DepthEnable = TRUE;
-  dsv.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-  dsv.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-
-  // --- PSO ---
-  D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
-  pso.pRootSignature = outRootSignature.Get();
-  pso.InputLayout = inputLayout;
-  pso.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
-  pso.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
-  pso.BlendState = blend;
-  pso.RasterizerState = rast;
-  pso.NumRenderTargets = 1;
-  pso.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-  pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-  pso.SampleDesc.Count = 1;
-  pso.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-  pso.DepthStencilState = dsv;
-  pso.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-
-  hr = device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&outPSO));
-  assert(SUCCEEDED(hr));
-}
 
 // SrvAllocator から使うための前方宣言（※定義はこの後ろの方にあります）
 D3D12_CPU_DESCRIPTOR_HANDLE
@@ -444,11 +313,32 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   auto *dxcCompiler = dx.GetDXCCompiler();
   auto *includeHandler = dx.GetDXCIncludeHandler();
 
+  UnifiedPipeline objPipeline;
+  auto objDesc =
+      UnifiedPipeline::MakeObject3DDesc();
+  bool ok = objPipeline.Initialize(device.Get(), dxcUtils, dxcCompiler,
+                                   includeHandler, objDesc);
+  assert(ok);
+
+  UnifiedPipeline spritePipeline;
+  auto sprDesc =
+      UnifiedPipeline::MakeSpriteDesc(); // Sprite.VS/PS.hlslがある場合
+  sprDesc.vsPath = L"Object3D.VS.hlsl";
+  sprDesc.psPath = L"Object3D.PS.hlsl";
+  bool ok2 = spritePipeline.Initialize(device.Get(), dxcUtils, dxcCompiler,
+                                       includeHandler, sprDesc);
+  assert(ok2);
+
   // 関数に丸投げ
-  Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
+  /*Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
   Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState;
   CreateBasicPSO(device.Get(), dxcUtils, dxcCompiler, includeHandler,
-                 rootSignature, graphicsPipelineState);
+                 rootSignature, graphicsPipelineState);*/
+
+  auto rootSignature = Microsoft::WRL::ComPtr<ID3D12RootSignature>(
+      objPipeline.GetRootSignature());
+  auto graphicsPipelineState = Microsoft::WRL::ComPtr<ID3D12PipelineState>(
+      objPipeline.GetPipelineState());
 
   // モデル読み込み
   ModelData modelData = LoadObjFile("resources", "sphere.obj");
@@ -936,8 +826,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     commandList->RSSetViewports(1, &viewport);       // viewportを設定
     commandList->RSSetScissorRects(1, &scissorRect); // Scissorを設定
     // RootSignatureを設定。PSOに設定しているけど別途設定が必要
-    commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetPipelineState(graphicsPipelineState.Get()); // PSOを設定
+    commandList->SetGraphicsRootSignature(objPipeline.GetRootSignature());
+    commandList->SetPipelineState(objPipeline.GetPipelineState()); // PSOを設定
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView);   // VBVを設定
     // commandList->IASetIndexBuffer(&indexBufferView);          // IBVを設定
     //  形状を設定。PSOに設定しているものとはまた別。同じものを設定すると考えておけばいい
@@ -981,6 +871,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     /* 2D描画コマンドを積む
     -----------------------------*/
+    commandList->SetGraphicsRootSignature(spritePipeline.GetRootSignature());
+    commandList->SetPipelineState(spritePipeline.GetPipelineState());
     // Spriteの描画。変更が必要なものだけ変更する。
     commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite); // VBVを設定
     commandList->IASetIndexBuffer(&indexBufferViewSprite); // IBVを設定
