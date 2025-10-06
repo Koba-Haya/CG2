@@ -106,6 +106,7 @@ copy "$(windowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="Input.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Method.cpp" />
+    <ClCompile Include="Model.cpp" />
     <ClCompile Include="UnifiedPipeline.cpp" />
     <ClCompile Include="WinApp.cpp" />
   </ItemGroup>
@@ -139,6 +140,7 @@ copy "$(windowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Input.h" />
     <ClInclude Include="Matrix.h" />
     <ClInclude Include="Method.h" />
+    <ClInclude Include="Model.h" />
     <ClInclude Include="ResourceObject.h" />
     <ClInclude Include="UnifiedPipeline.h" />
     <ClInclude Include="Vector.h" />
