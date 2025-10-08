@@ -8,6 +8,18 @@ struct IDxcUtils;
 struct IDxcCompiler3;
 struct IDxcIncludeHandler;
 
+// 既存の簡易 SRV 割当器を外から渡す（0はImGui予約想定）
+struct SrvAllocator {
+  void Init(ID3D12Device *dev, ID3D12DescriptorHeap *heap);
+  UINT Allocate();
+  D3D12_CPU_DESCRIPTOR_HANDLE Cpu(UINT index) const;
+  D3D12_GPU_DESCRIPTOR_HANDLE Gpu(UINT index) const;
+  ID3D12Device *device = nullptr;
+  ID3D12DescriptorHeap *heap = nullptr;
+  UINT inc = 0;
+  UINT next = 1;
+};
+
 class DirectXCommon {
 public:
   // namespace省略

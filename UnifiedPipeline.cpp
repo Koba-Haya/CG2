@@ -92,6 +92,8 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
     assert(false);
     return false;
   }
+  OutputDebugStringW(
+      (L"CreatePSO: " + desc.vsPath + L" / " + desc.psPath + L"\n").c_str());
   hr = device->CreateRootSignature(0, sig->GetBufferPointer(),
                                    sig->GetBufferSize(),
                                    IID_PPV_ARGS(&rootSignature_));
@@ -173,50 +175,58 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
   return d;
 }
 
-//PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
-//  PipelineDesc d{};
-//  // Sprite想定：POSITION(float3) / TEXCOORD(float2)
-//  d.inputElements = {
-//      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
-//       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-//       0},
-//      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
-//       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-//  };
-//
-//  // ここはあなたのスプライト用 HLSL に合わせて変更
-//  d.vsPath = L"Sprite.VS.hlsl";
-//  d.psPath = L"Sprite.PS.hlsl";
-//  d.usePSMaterial_b0 = true;          // 色やUV操作用のCBVがあるなら
-//  d.useVSTransform_b0 = true;         // 2D行列でもVS:b0でOK
-//  d.usePSTextureTable_t0 = true;      // テクスチャ読む
-//  d.usePSDirectionalLight_b1 = false; // ライティング不要
-//  d.enableDepth = false;              // 2Dなら基本オフ
-//  d.alphaBlend = true;                // 透過前提
-//  d.cullMode = D3D12_CULL_MODE_NONE;
-//  return d;
-//}
 PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
   PipelineDesc d{};
+  // Sprite想定：POSITION(float3) / TEXCOORD(float2)
   d.inputElements = {
-      {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
        D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
        0},
       {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-      {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
-       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-       0},
   };
 
-  d.vsPath = L"Object3D.VS.hlsl";
-  d.psPath = L"Object3D.PS.hlsl";
-  d.usePSMaterial_b0 = true;
-  d.useVSTransform_b0 = true;
-  d.usePSTextureTable_t0 = true;
-  d.usePSDirectionalLight_b1 = true;
-  d.enableDepth = false;
-  d.alphaBlend = true;
+  // ここはあなたのスプライト用 HLSL に合わせて変更
+  d.vsPath = L"Sprite.VS.hlsl";
+  d.psPath = L"Sprite.PS.hlsl";
+  d.usePSMaterial_b0 = true;          // 色やUV操作用のCBVがあるなら
+  d.useVSTransform_b0 = true;         // 2D行列でもVS:b0でOK
+  d.usePSTextureTable_t0 = true;      // テクスチャ読む
+  d.usePSDirectionalLight_b1 = false; // ライティング不要
+  d.enableDepth = false;              // 2Dなら基本オフ
+  d.alphaBlend = true;                // 透過前提
   d.cullMode = D3D12_CULL_MODE_NONE;
   return d;
 }
+
+// PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
+//   PipelineDesc d{};
+//   // 3Dと同じ：POSITION(float4) / TEXCOORD(float2) / NORMAL(float3)
+//   d.inputElements = {
+//       {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+//        D3D12_APPEND_ALIGNED_ELEMENT,
+//        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+//       {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
+//       D3D12_APPEND_ALIGNED_ELEMENT,
+//        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+//       {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+//        D3D12_APPEND_ALIGNED_ELEMENT,
+//        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+//   };
+//
+//   // Object3D の HLSL をそのまま使う
+//   d.vsPath = L"Object3D.VS.hlsl";
+//   d.psPath = L"Object3D.PS.hlsl";
+//
+//   // ルートパラメータも 3D と同じ並びにする（PS:b0, VS:b0, PS:t0, PS:b1）
+//   d.usePSMaterial_b0 = true;
+//   d.useVSTransform_b0 = true;
+//   d.usePSTextureTable_t0 = true;
+//   d.usePSDirectionalLight_b1 = true; // ※必須（cbuffer 宣言があるため）
+//
+//   // 2D らしい設定
+//   d.enableDepth = false;
+//   d.alphaBlend = true;
+//   d.cullMode = D3D12_CULL_MODE_NONE;
+//   return d;
+// }

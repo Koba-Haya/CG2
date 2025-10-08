@@ -10,6 +10,8 @@ extern void
 UploadTextureData(const Microsoft::WRL::ComPtr<ID3D12Resource> &texture,
                   const DirectX::ScratchImage &mipImages);
 
+constexpr UINT Align256(UINT n) { return (n + 255) & ~255; }
+
 // ===== SrvAllocator 実装（mainと同一の挙動） =====
 void SrvAllocator::Init(ID3D12Device *dev, ID3D12DescriptorHeap *h) {
   device = dev;
@@ -53,7 +55,7 @@ bool Model::Initialize(const CreateInfo &ci) {
 
   // Material CB (PS: b0) — シェーダ側のレイアウトに一致
   // color / enableLighting / uvTransform。:contentReference[oaicite:4]{index=4}
-  cbMaterial_ = CreateUploadBuffer(sizeof(Material));
+  cbMaterial_ = CreateUploadBuffer(Align256(sizeof(Material)));
   cbMaterial_->Map(0, nullptr, reinterpret_cast<void **>(&cbMatMapped_));
   *cbMatMapped_ = {};
   cbMatMapped_->color = ci.baseColor;
@@ -61,7 +63,8 @@ bool Model::Initialize(const CreateInfo &ci) {
   cbMatMapped_->uvTransform = MakeIdentity4x4();
 
   // Transform CB (VS: b0) — WVP & World。:contentReference[oaicite:5]{index=5}
-  cbTransform_ = CreateUploadBuffer(sizeof(Transformation));
+
+  cbTransform_ = CreateUploadBuffer(Align256(sizeof(Transformation)));
   cbTransform_->Map(0, nullptr, reinterpret_cast<void **>(&cbTransMapped_));
   *cbTransMapped_ = {MakeIdentity4x4(), MakeIdentity4x4()};
 

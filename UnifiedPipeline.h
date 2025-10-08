@@ -1,9 +1,9 @@
 #pragma once
 #include <d3d12.h>
+#include <dxcapi.h>
 #include <string>
 #include <vector>
 #include <wrl.h>
-#include <dxcapi.h>
 
 // DXC 前方宣言（main.cpp の CompileShader を使う）
 struct IDxcUtils;
