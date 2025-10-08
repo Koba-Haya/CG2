@@ -605,9 +605,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     // UV 変換も反映
     Matrix4x4 uvMat =
-        Multiply(MakeScaleMatrix(uvTransformSprite.scale),
-                 Multiply(MakeRotateZMatrix(uvTransformSprite.rotate.z),
-                          MakeTranslateMatrix(uvTransformSprite.translate)));
+        Multiply(Multiply(MakeScaleMatrix(uvTransformSprite.scale),
+                          MakeRotateZMatrix(uvTransformSprite.rotate.z)),
+                 MakeTranslateMatrix(uvTransformSprite.translate));
     sprite.SetUVTransform(uvMat);
 
     // ゲームの処理終わり

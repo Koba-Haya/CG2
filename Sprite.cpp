@@ -11,9 +11,7 @@ struct SpriteVertex {
 
 struct SpriteMaterial {
   Vector4 color;
-  int enableLighting; // 0:Unlit
-  float pad[3];       // 16byte アライン用
-  Matrix4x4 uvTransform;
+  Matrix4x4 uvTransform; // 余計な int/pad は入れない
 };
 
 struct SpriteTransform {
@@ -144,10 +142,6 @@ bool Sprite::Initialize(const CreateInfo &info) {
   SpriteMaterial *mData = nullptr;
   materialBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mData));
   mData->color = color_;
-  mData->enableLighting = 0; // スプライトはアンリット
-  mData->pad[0] = 0;
-  mData->pad[1] = 0;
-  mData->pad[2] = 0;
   mData->uvTransform = uvMatrix_;
 
   // Transform
