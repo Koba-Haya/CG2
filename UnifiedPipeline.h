@@ -10,6 +10,7 @@ struct IDxcUtils;
 struct IDxcCompiler3;
 struct IDxcIncludeHandler;
 struct IDxcBlob;
+class ShaderCompiler;
 
 struct PipelineDesc {
   // 入力レイアウト
@@ -43,9 +44,8 @@ public:
   template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 public:
-  bool Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
-                  IDxcCompiler3 *dxcCompiler,
-                  IDxcIncludeHandler *includeHandler, const PipelineDesc &desc);
+  bool Initialize(ID3D12Device *device, ShaderCompiler *shaderCompiler,
+                  const PipelineDesc &desc);
 
   ID3D12RootSignature *GetRootSignature() const { return rootSignature_.Get(); }
   ID3D12PipelineState *GetPipelineState() const { return pso_.Get(); }
@@ -58,4 +58,6 @@ public:
 private:
   ComPtr<ID3D12RootSignature> rootSignature_;
   ComPtr<ID3D12PipelineState> pso_;
+
+  ShaderCompiler *shaderCompiler_ = nullptr;
 };

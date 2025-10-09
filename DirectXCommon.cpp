@@ -1,30 +1,19 @@
 #include "DirectXCommon.h"
+#include "ResourceManager.h"
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include <cassert>
 #include <dxcapi.h>
 
-// 既存プロジェクトのヘルパを利用（実装はあなたのプロジェクト側に既にあります）
-Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>
-CreateDescriptorHeap(const Microsoft::WRL::ComPtr<ID3D12Device> &device,
-                     D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors,
-                     bool shaderVisible);
-Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(
-    const Microsoft::WRL::ComPtr<ID3D12Device> &device, INT32 width,
-    INT32 height);
-D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(
-    const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> &descriptorHeap,
-    uint32_t descriptorSize, uint32_t index);
-D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(
-    const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> &descriptorHeap,
-    uint32_t descriptorSize, uint32_t index);
+using Microsoft::WRL::ComPtr;
 
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #endif
 
 DirectXCommon::DirectXCommon() {}
+
 DirectXCommon::~DirectXCommon() {
   if (fenceEvent_) {
     CloseHandle(fenceEvent_);
@@ -57,7 +46,7 @@ void DirectXCommon::Initialize(const InitParams &params) {
   clientHeight_ = params.clientHeight;
 
 #ifdef _DEBUG
-  Microsoft::WRL::ComPtr<ID3D12Debug1> debugController;
+  ComPtr<ID3D12Debug1> debugController;
   if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
     debugController->EnableDebugLayer();
     debugController->SetEnableGPUBasedValidation(TRUE);
@@ -88,7 +77,8 @@ void DirectXCommon::BeginFrame() {
   commandList_->ResourceBarrier(1, &barrier);
 
   D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle =
-      GetCPUDescriptorHandle(dsvDescriptorHeap_.Get(), descriptorSizeDSV_, 0);
+      ResourceManager::GetCPUDescriptorHandle(dsvDescriptorHeap_.Get(),
+                                              descriptorSizeDSV_, 0);
   commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex], FALSE,
                                    &dsvHandle);
 }
@@ -160,7 +150,7 @@ void DirectXCommon::ChooseAdapter_() {
   assert(device_ != nullptr);
 
 #ifdef _DEBUG
-  Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue;
+  ComPtr<ID3D12InfoQueue> infoQueue;
   if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
     infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
     infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
@@ -218,11 +208,11 @@ void DirectXCommon::CreateSwapChain_() {
 }
 
 void DirectXCommon::CreateDescriptorHeaps_() {
-  rtvDescriptorHeap_ = CreateDescriptorHeap(
+  rtvDescriptorHeap_ = ResourceManager::CreateDescriptorHeap(
       device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2, false);
-  srvDescriptorHeap_ = CreateDescriptorHeap(
+  srvDescriptorHeap_ = ResourceManager::CreateDescriptorHeap(
       device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
-  dsvDescriptorHeap_ = CreateDescriptorHeap(
+  dsvDescriptorHeap_ = ResourceManager::CreateDescriptorHeap(
       device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, false);
 
   descriptorSizeRTV_ =
@@ -239,7 +229,8 @@ void DirectXCommon::CreateRTVs_() {
   rtvDesc_.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
   D3D12_CPU_DESCRIPTOR_HANDLE rtvStart =
-      GetCPUDescriptorHandle(rtvDescriptorHeap_.Get(), descriptorSizeRTV_, 0);
+      ResourceManager::GetCPUDescriptorHandle(rtvDescriptorHeap_.Get(),
+                                              descriptorSizeRTV_, 0);
 
   rtvHandles_[0] = rtvStart;
   device_->CreateRenderTargetView(swapChainResources_[0].Get(), &rtvDesc_,
@@ -251,7 +242,7 @@ void DirectXCommon::CreateRTVs_() {
 }
 
 void DirectXCommon::CreateDepthStencil_() {
-  depthStencilResource_ = CreateDepthStencilTextureResource(
+  depthStencilResource_ = ResourceManager::CreateDepthStencilTextureResource(
       device_.Get(), clientWidth_, clientHeight_);
 
   D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
@@ -302,11 +293,12 @@ void DirectXCommon::InitImGui_() {
   ImGui::StyleColorsDark();
 
   ImGui_ImplWin32_Init(hwnd_);
-  ImGui_ImplDX12_Init(
-      device_.Get(), swapChainDesc_.BufferCount, rtvDesc_.Format,
-      srvDescriptorHeap_.Get(),
-      GetCPUDescriptorHandle(srvDescriptorHeap_.Get(), descriptorSizeSRV_, 0),
-      GetGPUDescriptorHandle(srvDescriptorHeap_.Get(), descriptorSizeSRV_, 0));
+  ImGui_ImplDX12_Init(device_.Get(), swapChainDesc_.BufferCount,
+                      rtvDesc_.Format, srvDescriptorHeap_.Get(),
+                      ResourceManager::GetCPUDescriptorHandle(
+                          srvDescriptorHeap_.Get(), descriptorSizeSRV_, 0),
+                      ResourceManager::GetGPUDescriptorHandle(
+                          srvDescriptorHeap_.Get(), descriptorSizeSRV_, 0));
 }
 
 void DirectXCommon::TransitionBackBufferToRenderTarget_() {

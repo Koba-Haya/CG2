@@ -1,12 +1,8 @@
 #include "UnifiedPipeline.h"
+#include "ShaderCompiler.h"
 #include <cassert>
 #include <d3d12.h>
 #include <d3dcompiler.h> // D3D12SerializeRootSignature
-
-// main.cpp の関数を参照
-IDxcBlob *CompileShader(const std::wstring &filePath, const wchar_t *profile,
-                        IDxcUtils *dxcUtils, IDxcCompiler3 *dxcCompiler,
-                        IDxcIncludeHandler *includeHandler);
 
 static D3D12_BLEND_DESC MakeBlendDesc(bool alphaBlend) {
   D3D12_BLEND_DESC b{};
@@ -23,11 +19,12 @@ static D3D12_BLEND_DESC MakeBlendDesc(bool alphaBlend) {
   return b;
 }
 
-bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
-                                 IDxcCompiler3 *dxcCompiler,
-                                 IDxcIncludeHandler *includeHandler,
+bool UnifiedPipeline::Initialize(ID3D12Device *device,
+                                 ShaderCompiler *shaderCompiler,
                                  const PipelineDesc &desc) {
   HRESULT hr = S_OK;
+
+  shaderCompiler_ = shaderCompiler;
 
   // --- DescriptorRange (SRV t0) ---
   D3D12_DESCRIPTOR_RANGE srvRange{};
@@ -106,10 +103,10 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   layout.NumElements = (UINT)desc.inputElements.size();
 
   // --- Shaders ---
-  IDxcBlob *vs = CompileShader(desc.vsPath, desc.vsProfile, dxcUtils,
-                               dxcCompiler, includeHandler);
-  IDxcBlob *ps = CompileShader(desc.psPath, desc.psProfile, dxcUtils,
-                               dxcCompiler, includeHandler);
+  auto vs =
+      shaderCompiler_->Compile(desc.vsPath, desc.vsProfile); // ComPtr<IDxcBlob>
+  auto ps =
+      shaderCompiler_->Compile(desc.psPath, desc.psProfile); // ComPtr<IDxcBlob>
 
   // --- Raster / Blend / Depth ---
   D3D12_RASTERIZER_DESC rast{};
@@ -198,35 +195,3 @@ PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
   d.cullMode = D3D12_CULL_MODE_NONE;
   return d;
 }
-
-// PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
-//   PipelineDesc d{};
-//   // 3Dと同じ：POSITION(float4) / TEXCOORD(float2) / NORMAL(float3)
-//   d.inputElements = {
-//       {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
-//        D3D12_APPEND_ALIGNED_ELEMENT,
-//        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-//       {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
-//       D3D12_APPEND_ALIGNED_ELEMENT,
-//        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-//       {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
-//        D3D12_APPEND_ALIGNED_ELEMENT,
-//        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-//   };
-//
-//   // Object3D の HLSL をそのまま使う
-//   d.vsPath = L"Object3D.VS.hlsl";
-//   d.psPath = L"Object3D.PS.hlsl";
-//
-//   // ルートパラメータも 3D と同じ並びにする（PS:b0, VS:b0, PS:t0, PS:b1）
-//   d.usePSMaterial_b0 = true;
-//   d.useVSTransform_b0 = true;
-//   d.usePSTextureTable_t0 = true;
-//   d.usePSDirectionalLight_b1 = true; // ※必須（cbuffer 宣言があるため）
-//
-//   // 2D らしい設定
-//   d.enableDepth = false;
-//   d.alphaBlend = true;
-//   d.cullMode = D3D12_CULL_MODE_NONE;
-//   return d;
-// }

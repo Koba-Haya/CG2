@@ -1,14 +1,9 @@
 #include "Model.h"
+#include "ResourceManager.h"
 #include "externals/DirectXTex/DirectXTex.h"
 
 // 既存のヘルパ（あなたの環境にある実装を使用）
 extern DirectX::ScratchImage LoadTexture(const std::string &filePath);
-extern Microsoft::WRL::ComPtr<ID3D12Resource>
-CreateTextureResource(const Microsoft::WRL::ComPtr<ID3D12Device> &device,
-                      const DirectX::TexMetadata &metadata);
-extern void
-UploadTextureData(const Microsoft::WRL::ComPtr<ID3D12Resource> &texture,
-                  const DirectX::ScratchImage &mipImages);
 
 constexpr UINT Align256(UINT n) { return (n + 255) & ~255; }
 
@@ -92,6 +87,9 @@ void Model::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
                  ID3D12Resource *directionalLightCB) {
   ID3D12GraphicsCommandList *cmd = dx_->GetCommandList();
 
+  assert(tex_ != 0);      // GPUハンドルが空じゃない
+  assert(dx_->GetSRVHeap() != nullptr); // ヒープがある
+
   // PSO / RootSig
   cmd->SetPipelineState(pipeline_->GetPipelineState());
   cmd->SetGraphicsRootSignature(pipeline_->GetRootSignature());
@@ -161,8 +159,8 @@ void Model::CreateTextureFromFile(const std::string &path) {
 
   DirectX::ScratchImage mip = LoadTexture(path);
   const DirectX::TexMetadata &meta = mip.GetMetadata();
-  tex_ = CreateTextureResource(device, meta);
-  UploadTextureData(tex_, mip);
+  tex_ = ResourceManager::CreateTextureResource(device, meta);
+  ResourceManager::UploadTextureData(tex_.Get(), mip);
 
   // SRV
   D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
