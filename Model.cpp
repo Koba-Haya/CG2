@@ -1,9 +1,14 @@
 #include "Model.h"
-#include "ResourceManager.h"
 #include "externals/DirectXTex/DirectXTex.h"
 
 // 既存のヘルパ（あなたの環境にある実装を使用）
 extern DirectX::ScratchImage LoadTexture(const std::string &filePath);
+extern Microsoft::WRL::ComPtr<ID3D12Resource>
+CreateTextureResource(const Microsoft::WRL::ComPtr<ID3D12Device> &device,
+                      const DirectX::TexMetadata &metadata);
+extern void
+UploadTextureData(const Microsoft::WRL::ComPtr<ID3D12Resource> &texture,
+                  const DirectX::ScratchImage &mipImages);
 
 constexpr UINT Align256(UINT n) { return (n + 255) & ~255; }
 
@@ -28,51 +33,44 @@ D3D12_GPU_DESCRIPTOR_HANDLE SrvAllocator::Gpu(UINT index) const {
 }
 
 // ===== Model 実装 =====
-bool Model::Initialize(const CreateInfo &info) {
-  assert(info.dx && info.pipeline && info.resourceManager);
-  dx_ = info.dx;
-  pipeline_ = info.pipeline;
-  resourceManager_ = info.resourceManager;
+bool Model::Initialize(const CreateInfo &ci) {
+  assert(ci.dx && ci.pipeline && ci.srvAlloc);
+  dx_ = ci.dx;
+  pipeline_ = ci.pipeline;
+  srvAlloc_ = ci.srvAlloc;
 
   ID3D12Device *device = dx_->GetDevice();
   ID3D12GraphicsCommandList *cmd = dx_->GetCommandList();
 
   // 頂点バッファ
-  vb_ = CreateUploadBuffer(sizeof(VertexData) * info.modelData.vertices.size());
+  vb_ = CreateUploadBuffer(sizeof(VertexData) * ci.modelData.vertices.size());
   vbv_.BufferLocation = vb_->GetGPUVirtualAddress();
   vbv_.StrideInBytes = sizeof(VertexData);
-  vbv_.SizeInBytes = UINT(sizeof(VertexData) * info.modelData.vertices.size());
+  vbv_.SizeInBytes = UINT(sizeof(VertexData) * ci.modelData.vertices.size());
   {
     void *ptr = nullptr;
     vb_->Map(0, nullptr, &ptr);
-    std::memcpy(ptr, info.modelData.vertices.data(), vbv_.SizeInBytes);
+    std::memcpy(ptr, ci.modelData.vertices.data(), vbv_.SizeInBytes);
   }
 
   // Material CB (PS: b0) — シェーダ側のレイアウトに一致
-  // color / enableLighting /
-  // uvTransform。:contentReference[oaiinfote:4]{index=4}
+  // color / enableLighting / uvTransform。:contentReference[oaicite:4]{index=4}
   cbMaterial_ = CreateUploadBuffer(Align256(sizeof(Material)));
   cbMaterial_->Map(0, nullptr, reinterpret_cast<void **>(&cbMatMapped_));
   *cbMatMapped_ = {};
-  cbMatMapped_->color = info.baseColor;
-  cbMatMapped_->enableLighting = info.lightingMode;
+  cbMatMapped_->color = ci.baseColor;
+  cbMatMapped_->enableLighting = ci.lightingMode;
   cbMatMapped_->uvTransform = MakeIdentity4x4();
 
-  // Transform CB (VS: b0) — WVP &
-  // World。:contentReference[oaiinfote:5]{index=5}
+  // Transform CB (VS: b0) — WVP & World。:contentReference[oaicite:5]{index=5}
 
   cbTransform_ = CreateUploadBuffer(Align256(sizeof(Transformation)));
   cbTransform_->Map(0, nullptr, reinterpret_cast<void **>(&cbTransMapped_));
   *cbTransMapped_ = {MakeIdentity4x4(), MakeIdentity4x4()};
 
   // Texture (PS: t0)
-  if (!info.modelData.material.textureFilePath.empty()) {
-    tex_ =
-        resourceManager_->LoadTexture(info.modelData.material.textureFilePath);
-    // GPUハンドル取得
-    // ResourceManager内部でキャッシュしてるindexを利用する（戻り値でもOK）
-    // ※仮。実際はResourceManager側で返却対応
-    texHandleGPU_ = resourceManager_->GetGPUHandle(1);
+  if (!ci.modelData.material.textureFilePath.empty()) {
+    CreateTextureFromFile(ci.modelData.material.textureFilePath);
   } else {
     // 空なら白1x1などを用意しても良い
   }
@@ -93,9 +91,6 @@ void Model::SetWorldTransform(const Matrix4x4 &world) { world_ = world; }
 void Model::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
                  ID3D12Resource *directionalLightCB) {
   ID3D12GraphicsCommandList *cmd = dx_->GetCommandList();
-
-  assert(tex_ != 0);                    // GPUハンドルが空じゃない
-  assert(dx_->GetSRVHeap() != nullptr); // ヒープがある
 
   // PSO / RootSig
   cmd->SetPipelineState(pipeline_->GetPipelineState());
@@ -123,7 +118,7 @@ void Model::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
   // テクスチャ（PS: t0）
   ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
   cmd->SetDescriptorHeaps(1, heaps);
-  cmd->SetGraphicsRootDescriptorTable(2, texHandleGPU_);
+  cmd->SetGraphicsRootDescriptorTable(2, texSrvHandleGPU_);
 
   // 平行光（PS:b1）
   if (directionalLightCB) {
@@ -159,4 +154,25 @@ Microsoft::WRL::ComPtr<ID3D12Resource> Model::CreateUploadBuffer(size_t size) {
       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&res));
   assert(SUCCEEDED(hr));
   return res;
+}
+
+void Model::CreateTextureFromFile(const std::string &path) {
+  ID3D12Device *device = dx_->GetDevice();
+
+  DirectX::ScratchImage mip = LoadTexture(path);
+  const DirectX::TexMetadata &meta = mip.GetMetadata();
+  tex_ = CreateTextureResource(device, meta);
+  UploadTextureData(tex_, mip);
+
+  // SRV
+  D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+  srv.Format = meta.format;
+  srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+  srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+  srv.Texture2D.MipLevels = UINT(meta.mipLevels);
+
+  texSrvIndex_ = srvAlloc_->Allocate();
+  device->CreateShaderResourceView(tex_.Get(), &srv,
+                                   srvAlloc_->Cpu(texSrvIndex_));
+  texSrvHandleGPU_ = srvAlloc_->Gpu(texSrvIndex_);
 }

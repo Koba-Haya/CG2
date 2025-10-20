@@ -1,8 +1,7 @@
 #pragma once
-#include "DirectXCommon.h" // デバイス/コマンド/ヒープ類
-#include "Matrix.h"        // Matrix4x4 用
-#include "Method.h"        // 行列計算関数（MakeAffineMatrixなど）
-#include "ResourceManager.h"
+#include "DirectXCommon.h"   // デバイス/コマンド/ヒープ類
+#include "Matrix.h"          // Matrix4x4 用
+#include "Method.h"          // 行列計算関数（MakeAffineMatrixなど）
 #include "UnifiedPipeline.h" // RootSig / PSO
 #include "Vector.h"          // Vector2, Vector3, Vector4 用
 #include <assert.h>
@@ -51,14 +50,14 @@ public:
   struct CreateInfo {
     DirectXCommon *dx = nullptr; // デバイス/コマンド/ヒープへのアクセス
     UnifiedPipeline *pipeline = nullptr; // 使用するPSO（Object3D用）
-    ResourceManager *resourceManager = nullptr;
+    SrvAllocator *srvAlloc = nullptr;    // SRV割当器（ImGuiと共用）
     ModelData modelData; // 頂点配列 & マテリアル（テクスチャパス等）
     Vector4 baseColor{1, 1, 1, 1}; // デフォルト色
     int32_t lightingMode = 1;      // 0/1/2（PSの分岐と一致）
   };
 
 public:
-  bool Initialize(const CreateInfo &info);
+  bool Initialize(const CreateInfo &ci);
   void SetColor(const Vector4 &color);
   void SetLightingMode(int32_t mode); // 0=Unlit, 1=Lambert, 2=HalfLambert
   void SetUVTransform(const Matrix4x4 &uv);
@@ -74,12 +73,13 @@ private:
 
   // ヘルパ
   ComPtr<ID3D12Resource> CreateUploadBuffer(size_t size);
+  void CreateTextureFromFile(const std::string &path);
 
 private:
   // 参照
   DirectXCommon *dx_ = nullptr;
   UnifiedPipeline *pipeline_ = nullptr;
-  ResourceManager *resourceManager_ = nullptr;
+  SrvAllocator *srvAlloc_ = nullptr;
 
   // リソース
   ComPtr<ID3D12Resource> vb_;
@@ -89,7 +89,8 @@ private:
   ComPtr<ID3D12Resource> cbTransform_;
   Transformation *cbTransMapped_ = nullptr;
   ComPtr<ID3D12Resource> tex_;
-  D3D12_GPU_DESCRIPTOR_HANDLE texHandleGPU_{};
+  UINT texSrvIndex_ = 0;
+  D3D12_GPU_DESCRIPTOR_HANDLE texSrvHandleGPU_{};
 
   // 行列
   Matrix4x4 world_ = MakeIdentity4x4();

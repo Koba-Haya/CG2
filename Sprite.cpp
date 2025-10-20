@@ -90,7 +90,7 @@ void UploadTextureData(ID3D12Resource *tex,
 bool Sprite::Initialize(const CreateInfo &info) {
   dx_ = info.dx;
   pipeline_ = info.pipeline;
-  resourceManager_ = info.resourceManager;
+  srvAlloc_ = info.srvAlloc;
   color_ = info.color;
 
   // テクスチャ読み込み
@@ -150,7 +150,7 @@ bool Sprite::Initialize(const CreateInfo &info) {
   SpriteTransform *tData = nullptr;
   transformBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&tData));
   tData->WVP = MakeIdentity4x4();
-  tData->World = worldMatrix_; 
+  tData->World = worldMatrix_;
 
   return true;
 }
@@ -191,7 +191,7 @@ void Sprite::Draw(const Matrix4x4 &view, const Matrix4x4 &proj) {
       0, materialBuffer_->GetGPUVirtualAddress()); // PS:b0
   cmd->SetGraphicsRootConstantBufferView(
       1, transformBuffer_->GetGPUVirtualAddress()); // VS:b0
-  cmd->SetGraphicsRootDescriptorTable(1, textureHandle_);
+  cmd->SetGraphicsRootDescriptorTable(2, textureHandle_);
 
   cmd->DrawIndexedInstanced(6, 1, 0, 0, 0);
 }

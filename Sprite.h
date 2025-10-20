@@ -10,7 +10,6 @@
 #include "DirectXCommon.h"
 #include "Matrix.h" // Matrix4x4 用
 #include "Method.h" // 行列計算関数（MakeAffineMatrixなど）
-#include "ResourceManager.h"
 #include "UnifiedPipeline.h"
 #include "Vector.h" // Vector2, Vector3, Vector4 用
 
@@ -19,7 +18,7 @@ public:
   struct CreateInfo {
     DirectXCommon *dx = nullptr;
     UnifiedPipeline *pipeline = nullptr;
-    ResourceManager *resourceManager = nullptr;
+    SrvAllocator *srvAlloc = nullptr;
     std::string texturePath;
     Vector2 size = {640, 360};
     Vector4 color = {1, 1, 1, 1};
@@ -42,7 +41,7 @@ private:
 
   DirectXCommon *dx_ = nullptr;
   UnifiedPipeline *pipeline_ = nullptr;
-  ResourceManager *resourceManager_ = nullptr;
+  SrvAllocator *srvAlloc_ = nullptr;
 
   ComPtr<ID3D12Resource> vertexBuffer_;
   D3D12_VERTEX_BUFFER_VIEW vbView_{};
