@@ -174,11 +174,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   //              モデル
   //================================
 
-  // SRV割り当てヘルパ（既存のヒープを流用）
-  SrvAllocator srvAlloc;
-  srvAlloc.Init(dx->GetDevice(),
-                dx->GetSRVHeap()); // DirectXCommonのSRVヒープを使用
-
   // 各種パイプラインやモデル初期化
   UnifiedPipeline objPipeline;
   objPipeline.Initialize(dx->GetDevice(), shaderCompiler,
@@ -188,7 +183,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Model::CreateInfo ci{};
   ci.dx = dx;
   ci.pipeline = &objPipeline;
-  ci.srvAlloc = &srvAlloc;
+  ci.resourceManager = engine.GetResourceManager();
   ci.modelData = assets->LoadObj("resources", "sphere.obj");
   ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
   ci.lightingMode = 1; // 0:Unlit 1:Lambert 2:HalfLambert
@@ -200,7 +195,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Model::CreateInfo ci2{};
   ci2.dx = dx;
   ci2.pipeline = &objPipeline;
-  ci2.srvAlloc = &srvAlloc;
+  ci2.resourceManager = engine.GetResourceManager();
   ci2.modelData = assets->LoadObj("resources", "plane.obj");
   ci2.baseColor = {1.0f, 1.0f, 1.0f, 1.0f}; // 色だけ変えるなど
   ci2.lightingMode = 1;
@@ -219,7 +214,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Sprite::CreateInfo sprInfo{};
   sprInfo.dx = dx;
   sprInfo.pipeline = &spritePipeline; // ✅ Spriteパイプラインを渡す！
-  sprInfo.srvAlloc = &srvAlloc;
+  sprInfo.resourceManager = engine.GetResourceManager();
   sprInfo.texturePath = "resources/uvChecker.png";
   sprInfo.size = {640.0f, 360.0f};
   sprInfo.color = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -307,7 +302,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmdList =
         dx->GetCommandList();
 
-    ID3D12DescriptorHeap *heaps[] = {dx->GetSRVHeap()};
+    ID3D12DescriptorHeap *heaps[] = {engine.GetResourceManager()->GetSRVHeap()};
     cmdList->SetDescriptorHeaps(1, heaps);
 
     // ImGuiにフレームが始まることを伝える

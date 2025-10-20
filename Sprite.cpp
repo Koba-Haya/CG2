@@ -90,7 +90,7 @@ void UploadTextureData(ID3D12Resource *tex,
 bool Sprite::Initialize(const CreateInfo &info) {
   dx_ = info.dx;
   pipeline_ = info.pipeline;
-  srvAlloc_ = info.srvAlloc;
+  resourceManager_ = info.resourceManager;
   color_ = info.color;
 
   // テクスチャ読み込み
@@ -191,7 +191,7 @@ void Sprite::Draw(const Matrix4x4 &view, const Matrix4x4 &proj) {
       0, materialBuffer_->GetGPUVirtualAddress()); // PS:b0
   cmd->SetGraphicsRootConstantBufferView(
       1, transformBuffer_->GetGPUVirtualAddress()); // VS:b0
-  cmd->SetGraphicsRootDescriptorTable(2, textureHandle_);
+  cmd->SetGraphicsRootDescriptorTable(1, textureHandle_);
 
   cmd->DrawIndexedInstanced(6, 1, 0, 0, 0);
 }

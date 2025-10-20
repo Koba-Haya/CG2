@@ -1,48 +1,48 @@
 #pragma once
-// DirectXTex（TextureUtilsで既に使ってる想定）
 #include "externals/DirectXTex/DirectXTex.h"
-#include <cstdint>
+#include "TextureUtils.h" // DirectX::ScratchImage 等
 #include <d3d12.h>
+#include <string>
+#include <unordered_map>
 #include <wrl.h>
 
 class ResourceManager {
 public:
-  template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
+  ResourceManager() = default;
+  ~ResourceManager() = default;
 
-  // ★ 追加: 初期化（デバイス保持）
-  void Initialize(ID3D12Device *device);
+  // 初期化（SRVヒープ作成もここで行う）
+  void Initialize(ID3D12Device *device, UINT descriptorCount = 256);
 
-  // ★ 追加: UploadHeap のバッファ生成（汎用）
-  ComPtr<ID3D12Resource> CreateUploadBuffer(size_t sizeInBytes) const;
+  // テクスチャのロード（キャッシュ付き）
+  ID3D12Resource *LoadTexture(const std::string &filePath);
 
-  // ===== DescriptorHeap =====
-  static ComPtr<ID3D12DescriptorHeap>
-  CreateDescriptorHeap(ID3D12Device *device,
-                       D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors,
-                       bool shaderVisible);
+  // 任意のアップロードバッファ作成
+  Microsoft::WRL::ComPtr<ID3D12Resource> CreateUploadBuffer(size_t size);
 
-  // ===== Texture =====
-  static ComPtr<ID3D12Resource>
-  CreateTextureResource(ID3D12Device *device,
-                        const DirectX::TexMetadata &metadata);
+  // SRV作成（外部から呼ぶ場合用）
+  UINT CreateSRV(ID3D12Resource *resource,
+                 const D3D12_SHADER_RESOURCE_VIEW_DESC *desc);
 
-  static void UploadTextureData(ID3D12Resource *texture,
-                                const DirectX::ScratchImage &mipImages);
+  // GPUハンドル取得
+  D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(UINT index) const;
 
-  // ===== DepthStencil =====
-  static ComPtr<ID3D12Resource>
-  CreateDepthStencilTextureResource(ID3D12Device *device, INT32 width,
-                                    INT32 height);
+  // SRVヒープ取得
+  ID3D12DescriptorHeap *GetSRVHeap() const { return srvHeap_.Get(); }
 
-  // ===== Descriptor Handle helper =====
-  static D3D12_CPU_DESCRIPTOR_HANDLE
-  GetCPUDescriptorHandle(ID3D12DescriptorHeap *descriptorHeap,
-                         uint32_t descriptorSize, uint32_t index);
-
-  static D3D12_GPU_DESCRIPTOR_HANDLE
-  GetGPUDescriptorHandle(ID3D12DescriptorHeap *descriptorHeap,
-                         uint32_t descriptorSize, uint32_t index);
+  std::pair<ID3D12Resource *, D3D12_GPU_DESCRIPTOR_HANDLE>
+  LoadTextureWithHandle(const std::string &filePath);
 
 private:
+  struct TextureInfo {
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    UINT srvIndex = 0;
+  };
+
   ID3D12Device *device_ = nullptr;
+  Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap_;
+  UINT descriptorSize_ = 0;
+  UINT nextIndex_ = 1; // 0はImGui予約
+
+  std::unordered_map<std::string, TextureInfo> textureCache_;
 };
