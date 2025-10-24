@@ -1,4 +1,4 @@
-#include "Audio.h"
+#include "audio/Audio.h"
 #include "DirectXCommon.h"
 #include "Model.h"
 #include "Sprite.h"
@@ -283,7 +283,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   ci.dx = &dx;
   ci.pipeline = &objPipeline; // ← 生成済みの 3D用パイプライン
   ci.srvAlloc = &srvAlloc;
-  ci.modelData = LoadObjFile("resources", "sphere.obj");
+  ci.modelData = LoadObjFile("resources/sphere", "sphere.obj");
   ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
   ci.lightingMode = 1; // 0:Unlit 1:Lambert 2:HalfLambert
 
@@ -295,7 +295,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   ci2.dx = &dx;
   ci2.pipeline = &objPipeline;
   ci2.srvAlloc = &srvAlloc;
-  ci2.modelData = LoadObjFile("resources", "plane.obj");
+  ci2.modelData = LoadObjFile("resources/plane", "plane.obj");
   ci2.baseColor = {1.0f, 1.0f, 1.0f, 1.0f}; // 色だけ変えるなど
   ci2.lightingMode = 1;
   planeModel.Initialize(ci2);
@@ -309,7 +309,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   sprInfo.dx = &dx;
   sprInfo.pipeline = &spritePipeline; // ✅ Spriteパイプラインを渡す！
   sprInfo.srvAlloc = &srvAlloc;
-  sprInfo.texturePath = "Resources/uvChecker.png";
+  sprInfo.texturePath = "resources/uvChecker.png";
   sprInfo.size = {640.0f, 360.0f};
   sprInfo.color = {1.0f, 1.0f, 1.0f, 1.0f};
   sprite.Initialize(sprInfo);
@@ -432,7 +432,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   // 音声読み込み
   bool select =
-      audio.Load("select", L"resources/select.mp3", 1.0f); // mp3等もOK
+      audio.Load("select", L"resources/sound/select.mp3", 1.0f); // mp3等もOK
   assert(select);
   static float selectVol = 1.0f;
 
