@@ -42,3 +42,5 @@
 - 球モデルを中心に、カメラがピボット回転できるデバッグカメラを実装。
 - ImGui 上からカメラの移動・X/Y/Z 各軸の回転を個別にリアルタイム操作可能。
 - 視点の変化による描画検証がしやすく、デバッグ用途としても有効。
+
+- [![DebugBuild](https://github.com/Koba-Haya/CG2/actions/workflows/DebugBuild.yml/badge.svg)](https://github.com/Koba-Haya/CG2/actions/workflows/DebugBuild.yml)
