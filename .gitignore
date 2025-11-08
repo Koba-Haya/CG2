@@ -320,3 +320,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# ===== Exclude logs and imgui settings =====
+project/logs/
+project/imgui.ini
