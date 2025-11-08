@@ -102,7 +102,7 @@ std::string logFilePath = std::string("logs/") + dateString + ".log";
 // ファイルを作って書き込み準備
 std::ofstream lobStream(logFilePath);
 
-/* DescriptorHeapの作成関数
+/* DescriptorHeapの作成関数　
 ------------------------------------------*/
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>
 CreateDescriptorHeap(const Microsoft::WRL::ComPtr<ID3D12Device> &device,
