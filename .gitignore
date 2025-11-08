@@ -320,3 +320,18 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Build output directories
+x64/
+[Dd]ebug/
+[Rr]elease/
+[Dd]evelopment/
+
+# DirectXTex build output
+DirectXTex/Bin/
+DirectXTex/x64/
+
+# Application output and logs
+Dumps/
+logs/
+imgui.ini
