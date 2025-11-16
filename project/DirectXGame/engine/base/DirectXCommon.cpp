@@ -4,6 +4,7 @@
 #include "externals/imgui/imgui_impl_win32.h"
 #include <cassert>
 #include <dxcapi.h>
+#include <thread>
 
 // 既存プロジェクトのヘルパを利用（実装はあなたのプロジェクト側に既にあります）
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>
@@ -55,6 +56,9 @@ void DirectXCommon::Initialize(const InitParams &params) {
   hwnd_ = params.hwnd;
   clientWidth_ = params.clientWidth;
   clientHeight_ = params.clientHeight;
+
+  // FPS固定初期化
+  InitializeFixFPS();
 
 #ifdef _DEBUG
   Microsoft::WRL::ComPtr<ID3D12Debug1> debugController;
@@ -118,6 +122,9 @@ void DirectXCommon::EndFrame() {
     fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
     WaitForSingleObject(fenceEvent_, INFINITE);
   }
+
+  // FPS固定（1フレーム分の時間になるまで待つ）
+  UpdateFixFPS();
 
   hr = commandAllocator_->Reset();
   assert(SUCCEEDED(hr));
@@ -327,4 +334,46 @@ void DirectXCommon::TransitionBackBufferToPresent_() {
   b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
   b.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
   commandList_->ResourceBarrier(1, &b);
+}
+
+void DirectXCommon::InitializeFixFPS() {
+  // 起動時の現在時刻を記録
+  fixFpsPrevTime_ = std::chrono::steady_clock::now();
+}
+
+void DirectXCommon::UpdateFixFPS() {
+  using namespace std::chrono;
+
+  // 目標フレーム時間（60FPS → 約16.666ms）
+  constexpr double kTargetFrameSec = 1.0 / 60.0;
+
+  // 今の時間
+  auto now = steady_clock::now();
+  // 前フレームからの経過時間（秒）
+  double elapsedSec = duration<double>(now - fixFpsPrevTime_).count();
+
+  // まだフレーム時間に達していないなら待つ
+  if (elapsedSec < kTargetFrameSec) {
+    double sleepSec = kTargetFrameSec - elapsedSec;
+
+    // 大まかにSleep（ミリ秒単位）
+    auto sleepMs = duration_cast<milliseconds>(duration<double>(sleepSec));
+    if (sleepMs.count() > 0) {
+      std::this_thread::sleep_for(sleepMs);
+    }
+
+    // 残りのわずかな誤差を busy-wait で埋める（任意）
+    while (duration<double>(steady_clock::now() - fixFpsPrevTime_).count() <
+           kTargetFrameSec) {
+      // 何もしない
+    }
+
+    now = steady_clock::now();
+  } else {
+    // 処理が重くて16.6msを超えた場合は、そのまま now を基準にする
+    now = steady_clock::now();
+  }
+
+  // 次のフレームの基準時刻を更新
+  fixFpsPrevTime_ = now;
 }

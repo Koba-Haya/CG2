@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <dxgi1_6.h>
 #include <wrl.h>
+#include <chrono>
 
 struct IDxcUtils;
 struct IDxcCompiler3;
@@ -84,6 +85,11 @@ private:
   void TransitionBackBufferToRenderTarget_();
   void TransitionBackBufferToPresent_();
 
+  // FPS固定初期化
+  void InitializeFixFPS();
+  // FPS固定更新
+  void UpdateFixFPS();
+
 private:
   // 初期化入力
   HINSTANCE hInstance_ = nullptr;
@@ -134,4 +140,7 @@ private:
   // 一時
   DXGI_SWAP_CHAIN_DESC1 swapChainDesc_{};
   D3D12_RENDER_TARGET_VIEW_DESC rtvDesc_{};
+
+  // FPS固定用の前フレーム時刻
+  std::chrono::steady_clock::time_point fixFpsPrevTime_{};
 };

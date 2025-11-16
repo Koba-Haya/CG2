@@ -464,6 +464,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     if (settingsOpen) {
       ImGui::Begin("Settings", &settingsOpen);
 
+      float fps = ImGui::GetIO().Framerate;              // 現在のFPS
+      ImGui::Text("FPS : %.1f", fps);                    // FPS表示
+      ImGui::Text("FrameTime : %.3f ms", 1000.0f / fps); // 1フレームの時間(ms)
+
       ImGui::Text("Light");
 
       // ライトの方向
