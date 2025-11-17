@@ -323,7 +323,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   ci.dx = &dx;
   ci.pipeline = &objPipeline; // ← 生成済みの 3D用パイプライン
   ci.srvAlloc = &srvAlloc;
-  ci.modelData = LoadObjFile("resources/sphere", "sphere.obj");
+  ci.modelData = LoadObjFile("resources/fence", "fence.obj");
   ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
   ci.lightingMode = 1; // 0:Unlit 1:Lambert 2:HalfLambert
 

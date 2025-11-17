@@ -24,6 +24,7 @@ struct PixelShaderOutput
     float4 color : SV_TARGET0;
 };
 
+
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
@@ -36,6 +37,16 @@ PixelShaderOutput main(VertexShaderOutput input)
     float NdotL = dot(normal, lightDir);
     float lighting = 1.0f;
 
+    if (textureColor.a <= 0.5)
+    {
+        discard;
+    }
+    
+    if (output.color.a == 0.0)
+    {
+        discard;
+    }
+    
     if (gMaterial.enableLighting == 1)
     {
         // Lambert
