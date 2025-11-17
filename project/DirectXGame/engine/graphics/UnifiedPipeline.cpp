@@ -8,18 +8,67 @@ IDxcBlob *CompileShader(const std::wstring &filePath, const wchar_t *profile,
                         IDxcUtils *dxcUtils, IDxcCompiler3 *dxcCompiler,
                         IDxcIncludeHandler *includeHandler);
 
-static D3D12_BLEND_DESC MakeBlendDesc(bool alphaBlend) {
+static D3D12_BLEND_DESC MakeBlendDesc(const PipelineDesc &desc) {
   D3D12_BLEND_DESC b{};
   b.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-  if (alphaBlend) {
-    b.RenderTarget[0].BlendEnable = TRUE;
-    b.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    b.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-    b.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-    b.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-    b.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-    b.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+
+  if (!desc.alphaBlend) {
+    // ブレンドなし（Opaque）
+    return b;
   }
+
+  auto &rt = b.RenderTarget[0];
+  rt.BlendEnable = TRUE;
+
+  switch (desc.blendMode) {
+  case BlendMode::Alpha: // 通常アルファ
+  default:
+    rt.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    rt.BlendOp = D3D12_BLEND_OP_ADD;
+    rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+    rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+    rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    break;
+
+  case BlendMode::Add: // 加算：dst + src * a
+    rt.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    rt.DestBlend = D3D12_BLEND_ONE;
+    rt.BlendOp = D3D12_BLEND_OP_ADD;
+    rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+    rt.DestBlendAlpha = D3D12_BLEND_ONE;
+    rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    break;
+
+  case BlendMode::Subtract: // 減算：dst - src * a
+    rt.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    rt.DestBlend = D3D12_BLEND_ONE;
+    rt.BlendOp = D3D12_BLEND_OP_REV_SUBTRACT; // dst - src
+    rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+    rt.DestBlendAlpha = D3D12_BLEND_ONE;
+    rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    break;
+
+  case BlendMode::Multiply: // 乗算：dst * src
+    rt.SrcBlend = D3D12_BLEND_ZERO;
+    rt.DestBlend = D3D12_BLEND_SRC_COLOR;
+    rt.BlendOp = D3D12_BLEND_OP_ADD;
+    rt.SrcBlendAlpha = D3D12_BLEND_ZERO;
+    rt.DestBlendAlpha = D3D12_BLEND_SRC_ALPHA;
+    rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    break;
+
+  case BlendMode::Screen: // スクリーンっぽい近似
+    // 1 - (1-s) * (1-d) ≒ s + d - s*d
+    rt.SrcBlend = D3D12_BLEND_INV_DEST_COLOR;
+    rt.DestBlend = D3D12_BLEND_ONE;
+    rt.BlendOp = D3D12_BLEND_OP_ADD;
+    rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+    rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+    rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    break;
+  }
+
   return b;
 }
 
@@ -116,7 +165,7 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   rast.CullMode = desc.cullMode;
   rast.FillMode = D3D12_FILL_MODE_SOLID;
 
-  D3D12_BLEND_DESC blend = MakeBlendDesc(desc.alphaBlend);
+  D3D12_BLEND_DESC blend = MakeBlendDesc(desc);
 
   D3D12_DEPTH_STENCIL_DESC depth{};
   depth.DepthEnable = desc.enableDepth ? TRUE : FALSE;
@@ -186,47 +235,18 @@ PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
 
-  // ここはあなたのスプライト用 HLSL に合わせて変更
   d.vsPath = L"resources/shaders/Sprite.VS.hlsl";
   d.psPath = L"resources/shaders/Sprite.PS.hlsl";
-  d.usePSMaterial_b0 = true;          // 色やUV操作用のCBVがあるなら
-  d.useVSTransform_b0 = true;         // 2D行列でもVS:b0でOK
-  d.usePSTextureTable_t0 = true;      // テクスチャ読む
-  d.usePSDirectionalLight_b1 = false; // ライティング不要
-  d.enableDepth = false;              // 2Dなら基本オフ
-  d.alphaBlend = true;                // 透過前提
+  d.usePSMaterial_b0 = true;
+  d.useVSTransform_b0 = true;
+  d.usePSTextureTable_t0 = true;
+  d.usePSDirectionalLight_b1 = false;
+  d.enableDepth = false;
+  d.alphaBlend = true;
   d.cullMode = D3D12_CULL_MODE_NONE;
+
+  // ★ Sprite のデフォルトは Alpha ブレンド
+  d.blendMode = BlendMode::Alpha;
+
   return d;
 }
-
-// PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
-//   PipelineDesc d{};
-//   // 3Dと同じ：POSITION(float4) / TEXCOORD(float2) / NORMAL(float3)
-//   d.inputElements = {
-//       {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
-//        D3D12_APPEND_ALIGNED_ELEMENT,
-//        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-//       {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
-//       D3D12_APPEND_ALIGNED_ELEMENT,
-//        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-//       {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
-//        D3D12_APPEND_ALIGNED_ELEMENT,
-//        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-//   };
-//
-//   // Object3D の HLSL をそのまま使う
-//   d.vsPath = L"Object3D.VS.hlsl";
-//   d.psPath = L"Object3D.PS.hlsl";
-//
-//   // ルートパラメータも 3D と同じ並びにする（PS:b0, VS:b0, PS:t0, PS:b1）
-//   d.usePSMaterial_b0 = true;
-//   d.useVSTransform_b0 = true;
-//   d.usePSTextureTable_t0 = true;
-//   d.usePSDirectionalLight_b1 = true; // ※必須（cbuffer 宣言があるため）
-//
-//   // 2D らしい設定
-//   d.enableDepth = false;
-//   d.alphaBlend = true;
-//   d.cullMode = D3D12_CULL_MODE_NONE;
-//   return d;
-// }

@@ -1,10 +1,10 @@
-#include "audio/Audio.h"
 #include "DirectXCommon.h"
 #include "Model.h"
 #include "Sprite.h"
 #include "TextureUtils.h"
 #include "UnifiedPipeline.h"
 #include "WinApp.h"
+#include "audio/Audio.h"
 #include "include.h"
 #include <Windows.h>
 
@@ -262,22 +262,51 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                                    includeHandler, objDesc);
   assert(ok);
 
-  UnifiedPipeline spritePipeline;
-  auto sprDesc = UnifiedPipeline::MakeSpriteDesc();
-  bool ok2 = spritePipeline.Initialize(dx.GetDevice(), dxcUtils, dxcCompiler,
-                                       includeHandler, sprDesc);
-  assert(ok2);
+  UnifiedPipeline spritePipelineAlpha;
+  UnifiedPipeline spritePipelineAdd;
+  UnifiedPipeline spritePipelineSub;
+  UnifiedPipeline spritePipelineMul;
+  UnifiedPipeline spritePipelineScreen;
 
-  D3D12_BLEND_DESC blendDesc = {};
-  blendDesc.RenderTarget[0].RenderTargetWriteMask =
-      D3D12_COLOR_WRITE_ENABLE_ALL;
-  blendDesc.RenderTarget[0].BlendEnable = TRUE;
-  blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-  blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-  blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-  blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-  blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-  blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+  // ベースとなる Sprite 設定
+  PipelineDesc sprBase = UnifiedPipeline::MakeSpriteDesc();
+
+  // Alpha
+  PipelineDesc sprAlpha = sprBase;
+  sprAlpha.blendMode = BlendMode::Alpha;
+  bool okSprAlpha = spritePipelineAlpha.Initialize(
+      dx.GetDevice(), dxcUtils, dxcCompiler, includeHandler, sprAlpha);
+  assert(okSprAlpha);
+
+  // Add
+  PipelineDesc sprAdd = sprBase;
+  sprAdd.blendMode = BlendMode::Add;
+  bool okSprAdd = spritePipelineAdd.Initialize(
+      dx.GetDevice(), dxcUtils, dxcCompiler, includeHandler, sprAdd);
+  assert(okSprAdd);
+
+  // Subtract
+  PipelineDesc sprSub = sprBase;
+  sprSub.blendMode = BlendMode::Subtract;
+  bool okSprSub = spritePipelineSub.Initialize(
+      dx.GetDevice(), dxcUtils, dxcCompiler, includeHandler, sprSub);
+  assert(okSprSub);
+
+  // Multiply
+  PipelineDesc sprMul = sprBase;
+  sprMul.blendMode = BlendMode::Multiply;
+  bool okSprMul = spritePipelineMul.Initialize(
+      dx.GetDevice(), dxcUtils, dxcCompiler, includeHandler, sprMul);
+  assert(okSprMul);
+
+  // Screen
+  PipelineDesc sprScr = sprBase;
+  sprScr.blendMode = BlendMode::Screen;
+  bool okSprScr = spritePipelineScreen.Initialize(
+      dx.GetDevice(), dxcUtils, dxcCompiler, includeHandler, sprScr);
+  assert(okSprScr);
+
+  static int spriteBlendMode = 0; // 0=Alpha,1=Add,2=Sub,3=Mul,4=Screen
 
   //================================
   //              モデル
@@ -318,7 +347,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Sprite sprite;
   Sprite::CreateInfo sprInfo{};
   sprInfo.dx = &dx;
-  sprInfo.pipeline = &spritePipeline; // ✅ Spriteパイプラインを渡す！
+  sprInfo.pipeline = &spritePipelineAlpha; // ✅ Spriteパイプラインを渡す！
   sprInfo.srvAlloc = &srvAlloc;
   sprInfo.texturePath = "resources/plane/uvChecker.png";
   sprInfo.size = {640.0f, 360.0f};
@@ -328,10 +357,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // ===================== 3Dオブジェクト用 =====================
   auto rootSignature3D = objPipeline.GetRootSignature();
   auto pso3D = objPipeline.GetPipelineState();
-
-  // ===================== スプライト用 =====================
-  auto rootSignature2D = spritePipeline.GetRootSignature();
-  auto pso2D = spritePipeline.GetPipelineState();
 
   /*ViewportとScissor
   -------------------------*/
@@ -450,11 +475,25 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         planeModel.SetColor({color[0], color[1], color[2], 1.0f});
       }
 
+      static float spriteColor[3] = {1.0f, 1.0f, 1.0f};
+      if (ImGui::ColorEdit3("SpriteColor", spriteColor)) {
+        sprite.SetColor(
+            {spriteColor[0], spriteColor[1], spriteColor[2], 1.0f});
+      }
+
       // Lighting切り替え
       ImGui::Text("Lighting Mode");
       ImGui::RadioButton("None", &lightingMode, 0);
       ImGui::RadioButton("Lambert", &lightingMode, 1);
       ImGui::RadioButton("Half-Lambert", &lightingMode, 2);
+
+      const char *blendModeItems[] = {
+          "Alpha (通常)",    "Add (加算)",          "Subtract (減算)",
+          "Multiply (乗算)", "Screen (スクリーン)",
+      };
+
+      ImGui::Combo("Sprite Blend", &spriteBlendMode, blendModeItems,
+                   IM_ARRAYSIZE(blendModeItems));
 
       // カメラ
       ImGui::Text("Camera");
@@ -611,17 +650,32 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     /* 2D描画コマンドを積む
     -----------------------------*/
-    // Sprite 描画（内部でPSO/RS/VB/IB/CBV/SRVすべて設定）
-    cmdList->SetGraphicsRootSignature(
-        spritePipeline.GetRootSignature()); // ✅ Sprite用RootSig
-    cmdList->SetPipelineState(
-        spritePipeline.GetPipelineState()); // ✅ Sprite用PSO
-    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
     Matrix4x4 view = MakeIdentity4x4();
     Matrix4x4 proj = MakeOrthographicMatrix(
         0.0f, 0.0f, static_cast<float>(app.kClientWidth),
         static_cast<float>(app.kClientHeight), 0.0f, 1.0f);
+
+    // ===== Sprite の BlendMode を選択 =====
+    UnifiedPipeline *currentSpritePipeline = &spritePipelineAlpha;
+    switch (spriteBlendMode) {
+    case 0:
+      currentSpritePipeline = &spritePipelineAlpha;
+      break; // Alpha
+    case 1:
+      currentSpritePipeline = &spritePipelineAdd;
+      break; // Add
+    case 2:
+      currentSpritePipeline = &spritePipelineSub;
+      break; // Sub
+    case 3:
+      currentSpritePipeline = &spritePipelineMul;
+      break; // Mul
+    case 4:
+      currentSpritePipeline = &spritePipelineScreen;
+      break; // Screen
+    }
+
+    sprite.SetPipeline(currentSpritePipeline);
 
     sprite.Draw(view, proj);
 
@@ -688,9 +742,9 @@ IDxcBlob *CompileShader(
   // 実際にShaderをコンパイルする
   IDxcResult *shaderResult = nullptr;
   hr = dxcCompiler->Compile(&shaderSourceBuffer, // 読み込んだファイル
-                            arguments, // コンパイルオプション
+                            arguments,           // コンパイルオプション
                             _countof(arguments), // コンパイルオプションの数
-                            includeHandler, // includeが含まれた諸々
+                            includeHandler,      // includeが含まれた諸々
                             IID_PPV_ARGS(&shaderResult) // コンパイル結果
   );
   // コンパイルエラーではなく、dxcが起動できないなど致命的な状況
@@ -825,9 +879,9 @@ void UploadTextureData(const Microsoft::WRL::ComPtr<ID3D12Resource> &texture,
     // Textureに転送
     HRESULT hr =
         texture->WriteToSubresource(UINT(mipLevel), nullptr, // 全領域へコピー
-                                    img->pixels, // 元データアドレス
-                                    UINT(img->rowPitch),  // 1ラインサイズ
-                                    UINT(img->slicePitch) // 1枚サイズ
+                                    img->pixels,             // 元データアドレス
+                                    UINT(img->rowPitch),     // 1ラインサイズ
+                                    UINT(img->slicePitch)    // 1枚サイズ
         );
     assert(SUCCEEDED(hr));
   }
@@ -867,7 +921,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(
       &resourceDesc,                    // Resourceの設定
       D3D12_RESOURCE_STATE_DEPTH_WRITE, // 深度値を書き込む状態にしておく
       &depthClearValue,                 // Clear最適地
-      IID_PPV_ARGS(&resource) // 作成するResourceポインタへのポインタ
+      IID_PPV_ARGS(&resource)           // 作成するResourceポインタへのポインタ
   );
   assert(SUCCEEDED(hr));
   return resource;
@@ -900,7 +954,7 @@ ModelData LoadObjFile(const std::string &directoryPath,
   std::vector<Vector4> positions; // 位置
   std::vector<Vector3> normals;   // 法線
   std::vector<Vector2> texcoords; // テクスチャ座標
-  std::string line; // ファイルから読んだ1行を格納するもの
+  std::string line;               // ファイルから読んだ1行を格納するもの
 
   // 2.ファイルを開く
   std::ifstream file(directoryPath + "/" + filename); // ファイルを開く
@@ -974,7 +1028,7 @@ MaterialData LoadMaterialTemplateFile(const std::string &directoryPath,
                                       const std::string &filename) {
   // 1.中で必要となる変数の宣言
   MaterialData materialData; // 構築するMaterialData
-  std::string line; // ファイルから読んだ1行を格納するもの
+  std::string line;          // ファイルから読んだ1行を格納するもの
 
   // 2.ファイルを開く
   std::ifstream file(directoryPath + "/" + filename); // ファイルを開く

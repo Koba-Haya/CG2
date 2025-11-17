@@ -24,13 +24,16 @@ public:
     Vector4 color = {1, 1, 1, 1};
   };
 
-  bool Initialize(const CreateInfo &info);
-  void SetPosition(const Vector3 &pos);
-  void SetScale(const Vector3 &scale);
-  void SetRotation(const Vector3 &rot);
-  void SetUVTransform(const Matrix4x4 &uv);
-  void SetColor(const Vector4 &color);
-  void Draw(const Matrix4x4 &view, const Matrix4x4 &proj);
+  bool Initialize(const CreateInfo &info);  // 初期化
+  void SetPosition(const Vector3 &pos);     // 位置設定
+  void SetScale(const Vector3 &scale);      // スケール設定
+  void SetRotation(const Vector3 &rot);     // 回転設定
+  void SetUVTransform(const Matrix4x4 &uv); // UV変換行列設定
+  void SetColor(const Vector4 &color);      // 色設定
+  void SetPipeline(UnifiedPipeline *pipeline) {
+    pipeline_ = pipeline;
+  } // パイプライン設定
+  void Draw(const Matrix4x4 &view, const Matrix4x4 &proj); // 描画
 
 private:
   // 省略しない ComPtr エイリアス
