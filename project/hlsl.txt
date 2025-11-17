@@ -1,3 +1,16 @@
+// Object3d.hlsli
+
+struct VertexShaderOutput
+{
+    float4 position : SV_POSITION;
+    float2 texcoord : TEXCOORD0;
+    float3 normal : NORMAL0;
+};
+
+
+
+// Object3d.PS.hlsl
+
 #include "object3d.hlsli"
 
 struct Material
@@ -24,7 +37,6 @@ struct PixelShaderOutput
     float4 color : SV_TARGET0;
 };
 
-
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
@@ -37,16 +49,6 @@ PixelShaderOutput main(VertexShaderOutput input)
     float NdotL = dot(normal, lightDir);
     float lighting = 1.0f;
 
-    if (textureColor.a <= 0.5)
-    {
-        discard;
-    }
-    
-    if (output.color.a == 0.0)
-    {
-        discard;
-    }
-    
     if (gMaterial.enableLighting == 1)
     {
         // Lambert
@@ -77,4 +79,90 @@ PixelShaderOutput main(VertexShaderOutput input)
     
     output.color = float4(finalColor, 1.0f);
     return output;
+}
+
+
+
+// Object3d.VS.hlsl
+
+#include "object3d.hlsli"
+
+struct TransformationMatrix
+{
+    float4x4 WVP;
+    float4x4 World;
+};
+
+ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
+
+struct VertexShaderInput
+{
+    float4 position : POSITION0;
+    float2 texcoord : TEXCOORD0;
+    float3 normal : NORMAL0;
+};
+
+VertexShaderOutput main(VertexShaderInput input)
+{
+    VertexShaderOutput output;
+    output.position = mul(input.position, gTransformationMatrix.WVP);
+    output.texcoord = input.texcoord;
+    output.normal = normalize(mul(input.normal, (float3x3) gTransformationMatrix.World));
+    return output;
+}
+
+
+
+// Sprite.hlsli
+
+struct VSIn
+{
+    float3 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+struct VSOut
+{
+    float4 svpos : SV_POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+
+
+// Sprite.Ps.hlsl
+
+#include "Sprite.hlsli"
+
+// C++側の並びと完全一致させる（colorの直後に行列）
+cbuffer MaterialPS : register(b0)
+{
+    float4 gColor;
+    row_major float4x4 gUV; // 行優先でCPUの行列と一致
+}
+
+Texture2D gTex : register(t0);
+SamplerState gSamp : register(s0);
+
+float4 main(VSOut pin) : SV_TARGET
+{
+    float4 uvh = mul(float4(pin.uv, 0, 1), gUV);
+    return gTex.Sample(gSamp, uvh.xy) * gColor;
+}
+
+
+
+// Sprite.VS.hlsl
+
+#include "Sprite.hlsli"
+
+cbuffer TransformVS : register(b0)
+{
+    row_major float4x4 gWVP;
+}
+
+VSOut main(VSIn vin)
+{
+    VSOut o;
+    o.svpos = mul(float4(vin.pos, 1), gWVP);
+    o.uv = vin.uv;
+    return o;
 }

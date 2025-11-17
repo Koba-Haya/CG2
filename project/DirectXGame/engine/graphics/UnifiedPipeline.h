@@ -11,6 +11,15 @@ struct IDxcCompiler3;
 struct IDxcIncludeHandler;
 struct IDxcBlob;
 
+enum class BlendMode {
+  Opaque = 0, // ブレンドなし
+  Alpha,      // 通常のアルファブレンド
+  Add,        // 加算
+  Subtract,   // 減算
+  Multiply,   // 乗算
+  Screen,     // スクリーン
+};
+
 struct PipelineDesc {
   // 入力レイアウト
   std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements;
@@ -31,6 +40,9 @@ struct PipelineDesc {
   bool enableDepth = true;
   bool alphaBlend = false;
   D3D12_CULL_MODE cullMode = D3D12_CULL_MODE_BACK;
+
+  // ブレンドモード
+  BlendMode blendMode = BlendMode::Opaque;
 
   // 出力フォーマット
   DXGI_FORMAT rtvFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
