@@ -268,6 +268,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                                        includeHandler, sprDesc);
   assert(ok2);
 
+  D3D12_BLEND_DESC blendDesc = {};
+  blendDesc.RenderTarget[0].RenderTargetWriteMask =
+      D3D12_COLOR_WRITE_ENABLE_ALL;
+  blendDesc.RenderTarget[0].BlendEnable = TRUE;
+  blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+  blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+  blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+  blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+  blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+  blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+
   //================================
   //              モデル
   //================================
@@ -321,62 +332,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   // ===================== スプライト用 =====================
   auto rootSignature2D = spritePipeline.GetRootSignature();
   auto pso2D = spritePipeline.GetPipelineState();
-
-  //// モデル読み込み
-  // ModelData modelData = LoadObjFile("resources", "sphere.obj");
-  //// 頂点リソースを作る
-  // Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource =
-  // CreateBufferResource(
-  //     device.Get(), sizeof(VertexData) * modelData.vertices.size());
-  //// 頂点バッファービューを作成する
-  // D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
-  // vertexBufferView.BufferLocation =
-  //     vertexResource
-  //         ->GetGPUVirtualAddress(); // リソースの先頭のアドレスから使う
-  // vertexBufferView.SizeInBytes =
-  //     UINT(sizeof(VertexData) *
-  //          modelData.vertices.size()); //
-  //          使用するリソースのサイズは頂点のサイズ
-  // vertexBufferView.StrideInBytes = sizeof(VertexData); // 1頂点あたりのサイズ
-
-  //// 頂点リソースにデータを書き込む
-  // VertexData *vertexData = nullptr;
-  // vertexResource->Map(
-  //     0, nullptr,
-  //     reinterpret_cast<void **>(&vertexData)); //
-  //     書き込むためのアドレスを取得
-  // std::memcpy(vertexData, modelData.vertices.data(),
-  //             sizeof(VertexData) *
-  //                 modelData.vertices.size()); // 頂点データをリソースにコピー
-
-  //// モデル二つ目
-  // ModelData modelData2 = LoadObjFile("resources", "plane.obj");
-  //// 頂点リソースを作る
-  // Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource2 =
-  // CreateBufferResource(
-  //     device.Get(), sizeof(VertexData) * modelData2.vertices.size());
-
-  //// 頂点バッファービューを作成する
-  // D3D12_VERTEX_BUFFER_VIEW vertexBufferView2{};
-  // vertexBufferView2.BufferLocation =
-  //     vertexResource2
-  //         ->GetGPUVirtualAddress(); // リソースの先頭のアドレスから使う
-  // vertexBufferView2.SizeInBytes = UINT(
-  //     sizeof(VertexData) *
-  //     modelData2.vertices.size()); // 使用するリソースのサイズは頂点のサイズ
-  // vertexBufferView2.StrideInBytes = sizeof(VertexData); //
-  // 1頂点あたりのサイズ
-
-  //// 頂点リソースにデータを書き込む
-  // VertexData *vertexData2 = nullptr;
-  // vertexResource2->Map(
-  //     0, nullptr,
-  //     reinterpret_cast<void **>(&vertexData2)); //
-  //     書き込むためのアドレスを取得
-  // std::memcpy(vertexData2, modelData2.vertices.data(),
-  //             sizeof(VertexData) *
-  //                 modelData2.vertices.size()); //
-  //                 頂点データをリソースにコピー
 
   /*ViewportとScissor
   -------------------------*/
