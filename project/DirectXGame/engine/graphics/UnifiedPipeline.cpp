@@ -78,16 +78,24 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
                                  const PipelineDesc &desc) {
   HRESULT hr = S_OK;
 
-  // --- DescriptorRange (SRV t0) ---
-  D3D12_DESCRIPTOR_RANGE srvRange{};
-  srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-  srvRange.BaseShaderRegister = 0;
-  srvRange.NumDescriptors = 1;
-  srvRange.OffsetInDescriptorsFromTableStart =
+  // SRV range (PS: texture t0)
+  D3D12_DESCRIPTOR_RANGE srvRangeTex{};
+  srvRangeTex.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  srvRangeTex.BaseShaderRegister = 0;
+  srvRangeTex.NumDescriptors = 1;
+  srvRangeTex.OffsetInDescriptorsFromTableStart =
+      D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+  // SRV range (VS: instancing matrices t1)
+  D3D12_DESCRIPTOR_RANGE srvRangeInst{};
+  srvRangeInst.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  srvRangeInst.BaseShaderRegister = 1; // t1
+  srvRangeInst.NumDescriptors = 1;
+  srvRangeInst.OffsetInDescriptorsFromTableStart =
       D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
   // --- Root Parameters（フラグに応じて詰める） ---
-  D3D12_ROOT_PARAMETER params[4]{};
+  D3D12_ROOT_PARAMETER params[5]{};
   UINT numParams = 0;
 
   if (desc.usePSMaterial_b0) {
@@ -106,8 +114,15 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
     auto &p = params[numParams++];
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    p.DescriptorTable.pDescriptorRanges = &srvRange;
+    p.DescriptorTable.pDescriptorRanges = &srvRangeTex;
     p.DescriptorTable.NumDescriptorRanges = 1; // t0
+  }
+  if (desc.useVSInstancingTable_t1) {
+    auto &p = params[numParams++];
+    p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    p.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    p.DescriptorTable.pDescriptorRanges = &srvRangeInst;
+    p.DescriptorTable.NumDescriptorRanges = 1;
   }
   if (desc.usePSDirectionalLight_b1) {
     auto &p = params[numParams++];
@@ -226,21 +241,17 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
 
 PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
   PipelineDesc d{};
-  // Sprite想定：POSITION(float3) / TEXCOORD(float2)
   d.inputElements = {
       {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
-       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-       0},
-      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
-       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
-
   d.vsPath = L"resources/shaders/Sprite.VS.hlsl";
   d.psPath = L"resources/shaders/Sprite.PS.hlsl";
   d.usePSMaterial_b0 = true;
   d.useVSTransform_b0 = true;
   d.usePSTextureTable_t0 = true;
-  d.usePSDirectionalLight_b1 = false;
   d.enableDepth = false;
   d.alphaBlend = true;
   d.cullMode = D3D12_CULL_MODE_NONE;
@@ -248,5 +259,30 @@ PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
   // ★ Sprite のデフォルトは Alpha ブレンド
   d.blendMode = BlendMode::Alpha;
 
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeParticleDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+  };
+  d.vsPath = L"resources/shaders/Particle.VS.hlsl";
+  d.psPath = L"resources/shaders/Particle.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  d.useVSTransform_b0 = false;      // Instancingなので単一CB不要
+  d.usePSTextureTable_t0 = true;    // テクスチャ SRV (t0)
+  d.useVSInstancingTable_t1 = true; // 行列 StructuredBuffer SRV (t1)
+  d.usePSDirectionalLight_b1 = false;
+  d.enableDepth = true;
+  d.alphaBlend = false;
+  d.cullMode = D3D12_CULL_MODE_NONE; // 両面表示したいなら
   return d;
 }

@@ -67,6 +67,10 @@ public:
   void Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
             ID3D12Resource *directionalLightCB);
 
+  D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const { return texSrvHandleGPU_; }
+  ID3D12Resource* GetMaterialCB() const { return cbMaterial_.Get(); }
+  D3D12_VERTEX_BUFFER_VIEW GetVBV() const { return vbv_; }
+
 private:
   // 省略しない ComPtr エイリアス
   template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
