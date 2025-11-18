@@ -35,6 +35,8 @@ struct PipelineDesc {
   bool useVSTransform_b0 = true;         // VS: b0
   bool usePSTextureTable_t0 = true;      // PS: t0 (SRVテーブル)
   bool usePSDirectionalLight_b1 = false; // PS: b1（Spriteは通常不要）
+  bool useVSInstancingTable_t1 =
+      false; // VS: t1 (SRVテーブル、インスタンシング用)
 
   // ラスタ/ブレンド/深度
   bool enableDepth = true;
@@ -66,6 +68,7 @@ public:
   static PipelineDesc MakeObject3DDesc(); // 3D（ライティングあり）
   static PipelineDesc
   MakeSpriteDesc(); // 2D（アルファブレンド、ライティングなし）
+  static PipelineDesc MakeParticleDesc();
 
 private:
   ComPtr<ID3D12RootSignature> rootSignature_;
