@@ -5,13 +5,13 @@
 
 #include "Audio.h"
 #include "DirectXCommon.h"
-#include "WinApp.h"
 #include "Input.h"
 #include "Model.h"
 #include "ShaderCompiler.h"
 #include "Sprite.h"
 #include "UnifiedPipeline.h"
 #include "Vector.h"
+#include "WinApp.h"
 #include "include.h" // Transform で Vector3/Matrix4x4 使うので
 
 // Transform は main.cpp と同じ定義をここに寄せたい
@@ -107,6 +107,10 @@ private:
     Matrix4x4 World;
   };
   TransformationMatrix *particleMatrices_ = nullptr;
+
+  // 平行光用 CB
+  ComPtr<ID3D12Resource> directionalLightCB_;
+  DirectionalLight *directionalLightData_ = nullptr;
 
   // Transform / カメラ
   Transform transform_;       // 球
