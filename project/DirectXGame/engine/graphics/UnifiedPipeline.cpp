@@ -2,11 +2,7 @@
 #include <cassert>
 #include <d3d12.h>
 #include <d3dcompiler.h> // D3D12SerializeRootSignature
-
-// main.cpp の関数を参照
-IDxcBlob *CompileShader(const std::wstring &filePath, const wchar_t *profile,
-                        IDxcUtils *dxcUtils, IDxcCompiler3 *dxcCompiler,
-                        IDxcIncludeHandler *includeHandler);
+#include "ShaderCompilerUtils.h"
 
 static D3D12_BLEND_DESC MakeBlendDesc(const PipelineDesc &desc) {
   D3D12_BLEND_DESC b{};
