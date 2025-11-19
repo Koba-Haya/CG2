@@ -1,14 +1,6 @@
 #include "Model.h"
+#include "TextureUtils.h"
 #include "externals/DirectXTex/DirectXTex.h"
-
-// 既存のヘルパ（あなたの環境にある実装を使用）
-extern DirectX::ScratchImage LoadTexture(const std::string &filePath);
-extern Microsoft::WRL::ComPtr<ID3D12Resource>
-CreateTextureResource(const Microsoft::WRL::ComPtr<ID3D12Device> &device,
-                      const DirectX::TexMetadata &metadata);
-extern void
-UploadTextureData(const Microsoft::WRL::ComPtr<ID3D12Resource> &texture,
-                  const DirectX::ScratchImage &mipImages);
 
 constexpr UINT Align256(UINT n) { return (n + 255) & ~255; }
 

@@ -5,7 +5,6 @@
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include <cassert>
-#include <chrono> //時間を扱うライブラリ
 #include <cstdint>
 #include <d3d12.h>
 #include <dxcapi.h>

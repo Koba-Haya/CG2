@@ -1,9 +1,8 @@
 #include "ShaderCompiler.h"
-#include "TextureUtils.h" // ConvertString, ログ用  :contentReference[oaicite:2]{index=2}
+#include "TextureUtils.h" // ConvertString を使うなら
+
 #include <cassert>
 #include <format>
-
-using Microsoft::WRL::ComPtr;
 
 void ShaderCompiler::Initialize(IDxcUtils *utils, IDxcCompiler3 *compiler,
                                 IDxcIncludeHandler *include) {
@@ -12,51 +11,50 @@ void ShaderCompiler::Initialize(IDxcUtils *utils, IDxcCompiler3 *compiler,
   include_ = include;
 }
 
-ComPtr<IDxcBlob>
+ShaderCompiler::ComPtr<IDxcBlob>
 ShaderCompiler::Compile(const std::wstring &path, const wchar_t *profile,
                         const std::vector<LPCWSTR> &extraArgs) {
-  // ソース読み込み
-  ComPtr<IDxcBlobEncoding> source;
-  HRESULT hr = utils_->LoadFile(path.c_str(), nullptr, &source);
-  assert(SUCCEEDED(hr) && "DXC: LoadFile failed");
+  assert(utils_ && compiler_ && include_);
 
-  DxcBuffer buf{};
-  buf.Ptr = source->GetBufferPointer();
-  buf.Size = source->GetBufferSize();
-  buf.Encoding = DXC_CP_UTF8;
+  IDxcBlobEncoding *shaderSource = nullptr;
+  HRESULT hr = utils_->LoadFile(path.c_str(), nullptr, &shaderSource);
+  assert(SUCCEEDED(hr));
 
-  // 引数
-  std::vector<LPCWSTR> args{
-      path.c_str(), L"-E",
-      L"main",      L"-T",
-      profile,
-#ifdef _DEBUG
-      L"-Zi",       L"-Qembed_debug",
-      L"-Od",
-#else
-      L"-O3",
-#endif
-      L"-Zpr" // 行優先
-  };
+  DxcBuffer shaderSourceBuffer;
+  shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
+  shaderSourceBuffer.Size = shaderSource->GetBufferSize();
+  shaderSourceBuffer.Encoding = DXC_CP_UTF8;
+
+  std::vector<LPCWSTR> args{path.c_str(), L"-E",  L"main",          L"-T",
+                            profile,      L"-Zi", L"-Qembed_debug", L"-Od",
+                            L"-Zpr"};
   args.insert(args.end(), extraArgs.begin(), extraArgs.end());
 
-  // コンパイル
-  ComPtr<IDxcResult> result;
-  hr = compiler_->Compile(&buf, args.data(), (UINT)args.size(), include_.Get(),
-                          IID_PPV_ARGS(&result));
-  assert(SUCCEEDED(hr) && "DXC: Compile failed");
+  ComPtr<IDxcResult> shaderResult;
+  hr = compiler_->Compile(&shaderSourceBuffer, args.data(), (UINT)args.size(),
+                          include_.Get(), IID_PPV_ARGS(&shaderResult));
+  assert(SUCCEEDED(hr));
 
-  // エラー出力
-  ComPtr<IDxcBlobUtf8> errors;
-  result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr);
-  if (errors && errors->GetStringLength() > 0) {
-    OutputDebugStringA(errors->GetStringPointer());
-    // 必要なら assert(false);
+  ComPtr<IDxcBlobUtf8> shaderError;
+  shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
+  if (shaderError && shaderError->GetStringLength() != 0) {
+    OutputDebugStringA(shaderError->GetStringPointer());
+    assert(false);
   }
 
-  // オブジェクト取得
-  ComPtr<IDxcBlob> blob;
-  hr = result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&blob), nullptr);
-  assert(SUCCEEDED(hr) && "DXC: Get DXIL failed");
-  return blob;
+  ComPtr<IDxcBlob> shaderBlob;
+  hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob),
+                               nullptr);
+  assert(SUCCEEDED(hr));
+
+  shaderSource->Release();
+  return shaderBlob;
+}
+
+IDxcBlob *ShaderCompiler::CompileRaw(const std::wstring &path,
+                                     const wchar_t *profile,
+                                     const std::vector<LPCWSTR> &extraArgs) {
+  auto blob = Compile(path, profile, extraArgs);
+  blob->AddRef(); // 呼び出し側で Release する前提
+  return blob.Get();
 }
