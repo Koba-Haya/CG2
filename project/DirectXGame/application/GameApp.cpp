@@ -1,13 +1,30 @@
+#define NOMINMAX
 #include "GameApp.h"
-#include "ModelUtils.h"
-#include "DirectXResourceUtils.h"
 #include "DebugCamera.h"
+#include "DirectXResourceUtils.h"
+#include "ModelUtils.h"
 
 #include <cassert>
 #include <chrono>
 #include <filesystem>
 #include <format>
 #include <objbase.h> // CoInitializeEx, CoUninitialize
+#include <random>
+
+// ファイル先頭の方（名前空間外）に追加
+namespace {
+std::mt19937 &GetRNG() {
+  static std::mt19937 rng{std::random_device{}()};
+  return rng;
+}
+float Rand01() {
+  static std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+  return dist(GetRNG());
+}
+float RandRange(float minV, float maxV) {
+  return minV + (maxV - minV) * Rand01();
+}
+} // namespace
 
 GameApp::GameApp()
     : winApp_(), dx_(), input_(), audio_(), transform_{}, cameraTransform_{},
@@ -204,21 +221,78 @@ void GameApp::Update() {
       audio_.Stop("select");
     }
 
+    ImGui::Separator();
+
+    // ===== Particles =====
+    ImGui::Text("Particles");
+
+    ImGui::SliderInt("Count", reinterpret_cast<int *>(&particleCountUI_), 0,
+                     static_cast<int>(kParticleCount_));
+
+    ImGui::DragFloat3("Spawn Center",
+                      reinterpret_cast<float *>(&particleSpawnCenter_), 0.1f);
+    ImGui::DragFloat3("Spawn Extent",
+                      reinterpret_cast<float *>(&particleSpawnExtent_), 0.1f,
+                      0.0f, 100.0f);
+
+    ImGui::DragFloat3("Base Dir", reinterpret_cast<float *>(&particleBaseDir_),
+                      0.01f, -1.0f, 1.0f);
+    ImGui::SliderFloat("Dir Random", &particleDirRandomness_, 0.0f, 1.0f);
+
+    ImGui::SliderFloat("Speed Min", &particleSpeedMin_, 0.0f, 10.0f);
+    ImGui::SliderFloat("Speed Max", &particleSpeedMax_, 0.0f, 10.0f);
+    if (particleSpeedMin_ > particleSpeedMax_)
+      particleSpeedMin_ = particleSpeedMax_;
+
+    ImGui::SliderFloat("Life Min", &particleLifeMin_, 0.1f, 10.0f);
+    ImGui::SliderFloat("Life Max", &particleLifeMax_, 0.1f, 10.0f);
+    if (particleLifeMin_ > particleLifeMax_)
+      particleLifeMin_ = particleLifeMax_;
+
     ImGui::End();
   }
 
   // ===== パーティクル行列更新 =====
   if (particleMatrices_) {
-    // カメラ行列（今は固定カメラと同じでOK。後で DebugCamera に差し替え）
+    // deltaTime（ちゃんと測るなら前フレーム時刻を記憶する）
+    float deltaTime = 1.0f / 60.0f;
+
+    // カメラ行列（後で DebugCamera に差し替え）
     Matrix4x4 viewMatrix = Inverse(MakeAffineMatrix(
         {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -10.0f}));
     Matrix4x4 projMatrix = MakePerspectiveFovMatrix(
         0.45f, float(WinApp::kClientWidth) / float(WinApp::kClientHeight), 0.1f,
         100.0f);
 
-    for (uint32_t i = 0; i < kParticleCount_; ++i) {
-      const auto &t = particles_[i].transform;
-      Matrix4x4 world = MakeAffineMatrix(t.scale, t.rotate, t.translate);
+    uint32_t activeCount = std::min(particleCountUI_, kParticleCount_);
+
+    for (uint32_t i = 0; i < activeCount; ++i) {
+      Particle &p = particles_[i];
+
+      // 時間経過
+      p.age += deltaTime;
+      if (p.age >= p.lifetime) {
+        // 寿命を超えたら再スポーン
+        RespawnParticle_(p);
+      }
+
+      // 位置更新
+      p.transform.translate.x += p.velocity.x * deltaTime;
+      p.transform.translate.y += p.velocity.y * deltaTime;
+      p.transform.translate.z += p.velocity.z * deltaTime;
+
+      // フェードアウト (age/lifetime で 1→0)
+      float t = p.age / p.lifetime;
+      float alpha = std::clamp(1.0f - t, 0.0f, 1.0f);
+
+      // パーティクル用マテリアルの alpha に反映
+      if (particleMaterialData_) {
+        particleMaterialData_->color.w = alpha;
+      }
+
+      // 行列計算
+      Matrix4x4 world = MakeAffineMatrix(p.transform.scale, p.transform.rotate,
+                                         p.transform.translate);
       Matrix4x4 wvp = Multiply(world, Multiply(viewMatrix, projMatrix));
       particleMatrices_[i].World = world;
       particleMatrices_[i].WVP = wvp;
@@ -266,7 +340,7 @@ void GameApp::Draw() {
       0.45f, float(WinApp::kClientWidth) / float(WinApp::kClientHeight), 0.1f,
       100.0f);
 
-    // ワールド行列を更新
+  // ワールド行列を更新
   Matrix4x4 worldSphere = MakeAffineMatrix(transform_.scale, transform_.rotate,
                                            transform_.translate);
   model_.SetWorldTransform(worldSphere);
@@ -286,40 +360,37 @@ void GameApp::Draw() {
     cmdList->SetPipelineState(objPipeline_.GetPipelineState());
 
     // モデル描画
-    model_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get());
-    planeModel_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get());
-  } 
-  
-   // ==============================
+    // model_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get());
+    // planeModel_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get());
+  }
+
+  // ==============================
   // パーティクル描画（instancing）
   // ==============================
   {
-    // パイプライン・ルートシグネチャ
     cmdList->SetGraphicsRootSignature(particlePipeline_.GetRootSignature());
     cmdList->SetPipelineState(particlePipeline_.GetPipelineState());
 
-    // IA：頂点データ（とりあえず model_ を粒として流用）
     D3D12_VERTEX_BUFFER_VIEW vbv = model_.GetVBV();
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     cmdList->IASetVertexBuffers(0, 1, &vbv);
 
-    // SRV ヒープ（Model / パーティクル共通）
     ID3D12DescriptorHeap *heaps[] = {dx_.GetSRVHeap()};
     cmdList->SetDescriptorHeaps(1, heaps);
 
-    // RootParameter の構成（MakeParticleDesc による）
+    // RootParameter:
     // 0: PS b0 (Material)
-    // 1: PS t0 (Texture SRV table)
-    // 2: VS t1 (Instancing matrices SRV table)
+    // 1: PS t0 (Texture)
+    // 2: VS t1 (Instancing matrices)
 
-    // Material（PS:b0）
+    // パーティクル用 Material（PS:b0）
     cmdList->SetGraphicsRootConstantBufferView(
-        0, model_.GetMaterialCB()->GetGPUVirtualAddress());
+        0, particleMaterialCB_->GetGPUVirtualAddress());
 
-    // Texture（PS:t0）
+    // Texture（PS:t0）: 今は model_ と同じテクスチャを使う
     cmdList->SetGraphicsRootDescriptorTable(1, model_.GetTextureHandle());
 
-    // Instancing 行列（VS:t1）
+    // Instancing（VS:t1）
     cmdList->SetGraphicsRootDescriptorTable(2, particleMatricesSrvGPU_);
 
     // ビューポート / シザー
@@ -328,7 +399,8 @@ void GameApp::Draw() {
 
     // DrawInstanced
     UINT vertexCount = vbv.SizeInBytes / vbv.StrideInBytes;
-    cmdList->DrawInstanced(vertexCount, kParticleCount_, 0, 0);
+    UINT instanceCount = std::min(particleCountUI_, kParticleCount_);
+    cmdList->DrawInstanced(vertexCount, instanceCount, 0, 0);
   }
 
   // ==============================
@@ -380,7 +452,7 @@ void GameApp::Draw() {
   cmdList->SetDescriptorHeaps(1, heaps);
 
   // Sprite 描画
-  sprite_.Draw(view2D, proj2D);
+  // sprite_.Draw(view2D, proj2D);
 
   // ===== ImGui 描画 =====
   ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmdList);
@@ -521,10 +593,38 @@ void GameApp::InitResources_() {
 
   // パーティクル Transform 初期化
   for (uint32_t i = 0; i < kParticleCount_; ++i) {
-    particles_[i].transform.scale = {0.5f, 0.5f, 0.5f};
-    particles_[i].transform.rotate = {0.0f, 0.0f, 0.0f};
-    particles_[i].transform.translate = {0.0f + i * 0.1f, 0.0f + i * 0.1f,
-                                         0.0f + i * 0.1f};
+    RespawnParticle_(particles_[i]);
+  }
+
+  // ===== Particle Material CB (PS:b0) =====
+  {
+    D3D12_HEAP_PROPERTIES heapProps{};
+    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+    D3D12_RESOURCE_DESC resDesc{};
+    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resDesc.Width = sizeof(ParticleMaterialData);
+    resDesc.Height = 1;
+    resDesc.DepthOrArraySize = 1;
+    resDesc.MipLevels = 1;
+    resDesc.SampleDesc.Count = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+    HRESULT hr = device->CreateCommittedResource(
+        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        IID_PPV_ARGS(&particleMaterialCB_));
+    assert(SUCCEEDED(hr));
+
+    particleMaterialCB_->Map(0, nullptr,
+                             reinterpret_cast<void **>(&particleMaterialData_));
+
+    // 初期値: 白＋アルファ1、ライティング無効、UV=単位行列
+    particleMaterialData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
+    particleMaterialData_->enableLighting = 0;
+    particleMaterialData_->pad[0] = particleMaterialData_->pad[1] =
+        particleMaterialData_->pad[2] = 0.0f;
+    particleMaterialData_->uvTransform = MakeIdentity4x4();
   }
 
   // ===== DirectionalLight 用 CB (PS:b1) =====
@@ -577,4 +677,45 @@ void GameApp::InitCamera_() {
 
   // DebugCamera 生成（クラス定義に合わせて後で include & new）
   debugCamera_ = new DebugCamera();
+}
+
+// GameApp のプライベートメンバ関数として追加してOK
+void GameApp::RespawnParticle_(Particle &p) {
+  // 位置: 生成中心 ± Extent * ランダム[-1,1]
+  auto rndSigned = []() { return Rand01() * 2.0f - 1.0f; };
+
+  Vector3 offset{
+      rndSigned() * particleSpawnExtent_.x,
+      rndSigned() * particleSpawnExtent_.y,
+      rndSigned() * particleSpawnExtent_.z,
+  };
+  p.transform.translate = {
+      particleSpawnCenter_.x + offset.x,
+      particleSpawnCenter_.y + offset.y,
+      particleSpawnCenter_.z + offset.z,
+  };
+
+  // スケール（ここはとりあえず固定。ImGui
+  // から調整したければ後でパラメータ追加）
+  p.transform.scale = {0.5f, 0.5f, 0.5f};
+  p.transform.rotate = {0.0f, 0.0f, 0.0f};
+
+  // 方向: BaseDir ± ランダムなノイズ
+  Vector3 dir = particleBaseDir_;
+  dir.x += (Rand01() * 2.0f - 1.0f) * particleDirRandomness_;
+  dir.y += (Rand01() * 2.0f - 1.0f) * particleDirRandomness_;
+  dir.z += (Rand01() * 2.0f - 1.0f) * particleDirRandomness_;
+  if (Length(dir) > 0.0001f) {
+    dir = Normalize(dir);
+  } else {
+    dir = {0.0f, 1.0f, 0.0f}; // デフォルト上向き
+  }
+
+  // 速度
+  float speed = RandRange(particleSpeedMin_, particleSpeedMax_);
+  p.velocity = {dir.x * speed, dir.y * speed, dir.z * speed};
+
+  // 寿命と年齢
+  p.lifetime = RandRange(particleLifeMin_, particleLifeMax_);
+  p.age = 0.0f;
 }
