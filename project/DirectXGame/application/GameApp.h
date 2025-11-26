@@ -96,7 +96,11 @@ private:
   UnifiedPipeline spritePipelineSub_;
   UnifiedPipeline spritePipelineMul_;
   UnifiedPipeline spritePipelineScreen_;
-  UnifiedPipeline particlePipeline_;
+  UnifiedPipeline particlePipelineAlpha_;
+  UnifiedPipeline particlePipelineAdd_;
+  UnifiedPipeline particlePipelineSub_;
+  UnifiedPipeline particlePipelineMul_;
+  UnifiedPipeline particlePipelineScreen_;
 
   // SRV 割り当てヘルパ（DirectXCommon の SRV ヒープを利用）
   SrvAllocator srvAlloc_;
@@ -107,7 +111,7 @@ private:
   Sprite sprite_;
 
   // パーティクル関連
-  static constexpr uint32_t kParticleCount_ = 10;
+  static constexpr uint32_t kParticleCount_ = 20;
   Particle particles_[kParticleCount_];
 
   ComPtr<ID3D12Resource> particleInstanceBuffer_;
@@ -156,12 +160,16 @@ private:
   Transform uvTransformSprite_;
   Transform transform2_; // 平面
 
+  Matrix4x4 view3D_;
+  Matrix4x4 proj3D_;
+
   // DebugCamera は後で unique_ptr にする想定
   class DebugCamera *debugCamera_ = nullptr;
 
   // ライティング・ブレンドモード
   int lightingMode_ = 1;
   int spriteBlendMode_ = 0;
+  int particleBlendMode_ = 0;
   bool useMonsterBall_ = true;
   float selectVol_ = 1.0f;
 
