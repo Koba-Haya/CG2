@@ -1,26 +1,27 @@
-#include "object3d.hlsli"
+#include "Particle.hlsli"
 
-struct TransformationMatrix
+struct ParticleForGPU
 {
     float4x4 WVP;
     float4x4 World;
+    float4 color;
 };
 
-// Vertex側で t1 を使う
-StructuredBuffer<TransformationMatrix> gTransformationMatrices : register(t1);
+StructuredBuffer<ParticleForGPU> gParticle : register(t1);
 
 struct VertexShaderInput
 {
-    float4 position : POSITION0;
+    float3 position : POSITION0;
     float2 texcoord : TEXCOORD0;
-    float3 normal : NORMAL0;
+    // billboard 板ポリ用。NORMAL/COLOR は使わない
 };
 
 VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID)
 {
     VertexShaderOutput output;
-    output.position = mul(input.position, gTransformationMatrices[instanceId].WVP);
+    float4 pos = float4(input.position, 1.0f);
+    output.position = mul(pos, gParticle[instanceId].WVP);
     output.texcoord = input.texcoord;
-    output.normal = normalize(mul(input.normal, (float3x3) gTransformationMatrices[instanceId].World));
+    output.color = gParticle[instanceId].color;
     return output;
 }

@@ -1,13 +1,31 @@
+#define NOMINMAX
 #include "GameApp.h"
-#include "ModelUtils.h"
-#include "DirectXResourceUtils.h"
 #include "DebugCamera.h"
+#include "DirectXResourceUtils.h"
+#include "ModelUtils.h"
+#include "TextureUtils.h"
 
 #include <cassert>
 #include <chrono>
 #include <filesystem>
 #include <format>
 #include <objbase.h> // CoInitializeEx, CoUninitialize
+#include <random>
+
+// ファイル先頭の方（名前空間外）に追加
+namespace {
+std::mt19937 &GetRNG() {
+  static std::mt19937 rng{std::random_device{}()};
+  return rng;
+}
+float Rand01() {
+  static std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+  return dist(GetRNG());
+}
+float RandRange(float minV, float maxV) {
+  return minV + (maxV - minV) * Rand01();
+}
+} // namespace
 
 GameApp::GameApp()
     : winApp_(), dx_(), input_(), audio_(), transform_{}, cameraTransform_{},
@@ -139,46 +157,6 @@ void GameApp::Update() {
                          5.0f);
     }
 
-    // Sphere
-    ImGui::Text("Sphere");
-    ImGui::DragFloat3("SphereTranslate",
-                      reinterpret_cast<float *>(&transform_.translate), 0.01f);
-    ImGui::DragFloat3("SphereRotate",
-                      reinterpret_cast<float *>(&transform_.rotate), 0.01f);
-    ImGui::DragFloat3("SphereScale",
-                      reinterpret_cast<float *>(&transform_.scale), 0.01f, 0.0f,
-                      5.0f);
-
-    // Plane
-    ImGui::Text("Plane");
-    ImGui::DragFloat3("PlaneTranslate",
-                      reinterpret_cast<float *>(&transform2_.translate), 0.01f);
-    ImGui::DragFloat3("PlaneRotate",
-                      reinterpret_cast<float *>(&transform2_.rotate), 0.01f);
-    ImGui::DragFloat3("PlaneScale",
-                      reinterpret_cast<float *>(&transform2_.scale), 0.01f,
-                      0.0f, 5.0f);
-
-    // Sprite
-    ImGui::Text("Sprite");
-    ImGui::DragFloat3("SpriteTranslate",
-                      reinterpret_cast<float *>(&transformSprite_.translate),
-                      1.0f);
-    ImGui::DragFloat3("SpriteRotate",
-                      reinterpret_cast<float *>(&transformSprite_.rotate),
-                      0.01f);
-    ImGui::DragFloat3("SpriteScale",
-                      reinterpret_cast<float *>(&transformSprite_.scale),
-                      0.01f);
-
-    // UV
-    ImGui::Text("UV");
-    ImGui::DragFloat2("UVTranslate", &uvTransformSprite_.translate.x, 0.01f,
-                      -10.0f, 10.0f);
-    ImGui::DragFloat2("UVScale", &uvTransformSprite_.scale.x, 0.01f, -10.0f,
-                      10.0f);
-    ImGui::SliderAngle("UVRotate", &uvTransformSprite_.rotate.z);
-
     // Lighting mode
     ImGui::Text("Lighting Mode");
     ImGui::RadioButton("None", &lightingMode_, 0);
@@ -193,35 +171,81 @@ void GameApp::Update() {
     ImGui::Combo("Sprite Blend", &spriteBlendMode_, blendModeItems,
                  IM_ARRAYSIZE(blendModeItems));
 
-    // Sound
-    ImGui::Text("Sound");
-    ImGui::SliderFloat("Volume", &selectVol_, 0.0f, 1.0f);
-    if (ImGui::Button("Play")) {
-      audio_.Play("select", false, selectVol_);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Stop")) {
-      audio_.Stop("select");
-    }
+    // ===== Particles =====
+    ImGui::Text("Particles");
+
+    ImGui::SliderInt("Count", reinterpret_cast<int *>(&particleCountUI_), 0,
+                     static_cast<int>(kParticleCount_));
+
+    ImGui::DragFloat3("Spawn Center",
+                      reinterpret_cast<float *>(&particleSpawnCenter_), 0.1f);
+    ImGui::DragFloat3("Spawn Extent",
+                      reinterpret_cast<float *>(&particleSpawnExtent_), 0.1f,
+                      0.0f, 100.0f);
+
+    ImGui::DragFloat3("Base Dir", reinterpret_cast<float *>(&particleBaseDir_),
+                      0.01f, -1.0f, 1.0f);
+    ImGui::SliderFloat("Dir Random", &particleDirRandomness_, 0.0f, 1.0f);
+
+    ImGui::SliderFloat("Speed Min", &particleSpeedMin_, 0.0f, 10.0f);
+    ImGui::SliderFloat("Speed Max", &particleSpeedMax_, 0.0f, 10.0f);
+    if (particleSpeedMin_ > particleSpeedMax_)
+      particleSpeedMin_ = particleSpeedMax_;
+
+    ImGui::SliderFloat("Life Min", &particleLifeMin_, 0.1f, 10.0f);
+    ImGui::SliderFloat("Life Max", &particleLifeMax_, 0.1f, 10.0f);
+    if (particleLifeMin_ > particleLifeMax_)
+      particleLifeMin_ = particleLifeMax_;
 
     ImGui::End();
   }
 
   // ===== パーティクル行列更新 =====
   if (particleMatrices_) {
-    // カメラ行列（今は固定カメラと同じでOK。後で DebugCamera に差し替え）
+    // deltaTime（ちゃんと測るなら前フレーム時刻を記憶する）
+    float deltaTime = 1.0f / 60.0f;
+
+    // カメラ行列（後で DebugCamera に差し替え）
     Matrix4x4 viewMatrix = Inverse(MakeAffineMatrix(
         {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -10.0f}));
     Matrix4x4 projMatrix = MakePerspectiveFovMatrix(
         0.45f, float(WinApp::kClientWidth) / float(WinApp::kClientHeight), 0.1f,
         100.0f);
 
-    for (uint32_t i = 0; i < kParticleCount_; ++i) {
-      const auto &t = particles_[i].transform;
-      Matrix4x4 world = MakeAffineMatrix(t.scale, t.rotate, t.translate);
+    uint32_t activeCount = std::min(particleCountUI_, kParticleCount_);
+
+    for (uint32_t i = 0; i < activeCount; ++i) {
+      Particle &p = particles_[i];
+
+      // 時間経過
+      p.age += deltaTime;
+      if (p.age >= p.lifetime) {
+        // 寿命を超えたら再スポーン（色もランダムに変わる）
+        RespawnParticle_(p);
+      }
+
+      // 位置更新
+      p.transform.translate.x += p.velocity.x * deltaTime;
+      p.transform.translate.y += p.velocity.y * deltaTime;
+      p.transform.translate.z += p.velocity.z * deltaTime;
+
+      // フェードアウト (age/lifetime で 1→0)
+      float t = p.age / p.lifetime;
+      float alpha = std::clamp(1.0f - t, 0.0f, 1.0f);
+
+      // 行列計算
+      Matrix4x4 world = MakeBillboardMatrix(p.transform.scale,
+                                            p.transform.translate, viewMatrix);
       Matrix4x4 wvp = Multiply(world, Multiply(viewMatrix, projMatrix));
+
       particleMatrices_[i].World = world;
       particleMatrices_[i].WVP = wvp;
+
+      // ★ 色 × アルファをインスタンスバッファに書き込む
+      particleMatrices_[i].color = {
+          p.color.x, p.color.y, p.color.z,
+          alpha // ここにフェード用アルファ
+      };
     }
   }
 
@@ -266,7 +290,7 @@ void GameApp::Draw() {
       0.45f, float(WinApp::kClientWidth) / float(WinApp::kClientHeight), 0.1f,
       100.0f);
 
-    // ワールド行列を更新
+  // ワールド行列を更新
   Matrix4x4 worldSphere = MakeAffineMatrix(transform_.scale, transform_.rotate,
                                            transform_.translate);
   model_.SetWorldTransform(worldSphere);
@@ -286,49 +310,33 @@ void GameApp::Draw() {
     cmdList->SetPipelineState(objPipeline_.GetPipelineState());
 
     // モデル描画
-    model_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get());
-    planeModel_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get());
-  } 
-  
-   // ==============================
+    // model_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get());
+    // planeModel_.Draw(viewMatrix, projectionMatrix,
+    // directionalLightCB_.Get());
+  }
+
+  // ==============================
   // パーティクル描画（instancing）
   // ==============================
   {
-    // パイプライン・ルートシグネチャ
     cmdList->SetGraphicsRootSignature(particlePipeline_.GetRootSignature());
     cmdList->SetPipelineState(particlePipeline_.GetPipelineState());
 
-    // IA：頂点データ（とりあえず model_ を粒として流用）
-    D3D12_VERTEX_BUFFER_VIEW vbv = model_.GetVBV();
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    cmdList->IASetVertexBuffers(0, 1, &vbv);
+    cmdList->IASetVertexBuffers(0, 1, &particleVBView_);
+    cmdList->IASetIndexBuffer(&particleIBView_);
 
-    // SRV ヒープ（Model / パーティクル共通）
     ID3D12DescriptorHeap *heaps[] = {dx_.GetSRVHeap()};
     cmdList->SetDescriptorHeaps(1, heaps);
 
-    // RootParameter の構成（MakeParticleDesc による）
-    // 0: PS b0 (Material)
-    // 1: PS t0 (Texture SRV table)
-    // 2: VS t1 (Instancing matrices SRV table)
-
-    // Material（PS:b0）
     cmdList->SetGraphicsRootConstantBufferView(
-        0, model_.GetMaterialCB()->GetGPUVirtualAddress());
-
-    // Texture（PS:t0）
-    cmdList->SetGraphicsRootDescriptorTable(1, model_.GetTextureHandle());
-
-    // Instancing 行列（VS:t1）
+        0, particleMaterialCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, particleTextureHandle_);
     cmdList->SetGraphicsRootDescriptorTable(2, particleMatricesSrvGPU_);
 
-    // ビューポート / シザー
-    cmdList->RSSetViewports(1, &dx_.GetViewport());
-    cmdList->RSSetScissorRects(1, &dx_.GetScissorRect());
-
-    // DrawInstanced
-    UINT vertexCount = vbv.SizeInBytes / vbv.StrideInBytes;
-    cmdList->DrawInstanced(vertexCount, kParticleCount_, 0, 0);
+    UINT indexCount = 6;
+    UINT instanceCount = std::min(particleCountUI_, kParticleCount_);
+    cmdList->DrawIndexedInstanced(indexCount, instanceCount, 0, 0, 0);
   }
 
   // ==============================
@@ -380,7 +388,7 @@ void GameApp::Draw() {
   cmdList->SetDescriptorHeaps(1, heaps);
 
   // Sprite 描画
-  sprite_.Draw(view2D, proj2D);
+  // sprite_.Draw(view2D, proj2D);
 
   // ===== ImGui 描画 =====
   ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmdList);
@@ -494,13 +502,14 @@ void GameApp::InitResources_() {
     const uint32_t kParticleInstanceCount = kParticleCount_;
 
     particleInstanceBuffer_ = CreateBufferResource(
-        device, sizeof(TransformationMatrix) * kParticleInstanceCount);
+        device, sizeof(ParticleForGPU) * kParticleInstanceCount);
 
     particleInstanceBuffer_->Map(0, nullptr,
                                  reinterpret_cast<void **>(&particleMatrices_));
     for (uint32_t i = 0; i < kParticleInstanceCount; ++i) {
       particleMatrices_[i].WVP = MakeIdentity4x4();
       particleMatrices_[i].World = MakeIdentity4x4();
+      particleMatrices_[i].color = particles_[i].color;
     }
 
     // SRV 作成（VS:t1 用 StructuredBuffer）
@@ -510,7 +519,7 @@ void GameApp::InitResources_() {
     desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     desc.Buffer.FirstElement = 0;
     desc.Buffer.NumElements = kParticleInstanceCount;
-    desc.Buffer.StructureByteStride = sizeof(TransformationMatrix);
+    desc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
     desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
     UINT index = srvAlloc_.Allocate();
@@ -521,10 +530,64 @@ void GameApp::InitResources_() {
 
   // パーティクル Transform 初期化
   for (uint32_t i = 0; i < kParticleCount_; ++i) {
-    particles_[i].transform.scale = {0.5f, 0.5f, 0.5f};
-    particles_[i].transform.rotate = {0.0f, 0.0f, 0.0f};
-    particles_[i].transform.translate = {0.0f + i * 0.1f, 0.0f + i * 0.1f,
-                                         0.0f + i * 0.1f};
+    RespawnParticle_(particles_[i]);
+  }
+
+  // ===== Particle Material CB (PS:b0) =====
+  {
+    D3D12_HEAP_PROPERTIES heapProps{};
+    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+    D3D12_RESOURCE_DESC resDesc{};
+    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resDesc.Width = sizeof(ParticleMaterialData);
+    resDesc.Height = 1;
+    resDesc.DepthOrArraySize = 1;
+    resDesc.MipLevels = 1;
+    resDesc.SampleDesc.Count = 1;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+    HRESULT hr = device->CreateCommittedResource(
+        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        IID_PPV_ARGS(&particleMaterialCB_));
+    assert(SUCCEEDED(hr));
+
+    particleMaterialCB_->Map(0, nullptr,
+                             reinterpret_cast<void **>(&particleMaterialData_));
+
+    // 初期値: 白＋アルファ1、ライティング無効、UV=単位行列
+    particleMaterialData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
+    particleMaterialData_->enableLighting = 0;
+    particleMaterialData_->pad[0] = particleMaterialData_->pad[1] =
+        particleMaterialData_->pad[2] = 0.0f;
+    particleMaterialData_->uvTransform = MakeIdentity4x4();
+  }
+
+  // ===== パーティクル専用テクスチャ読み込み =====
+  {
+    // 1) 画像を読み込んで mip 生成
+    DirectX::ScratchImage mipImages =
+        LoadTexture("resources/particle/circle.png");
+    const DirectX::TexMetadata &meta = mipImages.GetMetadata();
+
+    // 2) GPU テクスチャリソースを作成
+    particleTexture_ = CreateTextureResource(device, meta);
+    UploadTextureData(particleTexture_, mipImages);
+
+    // 3) SRV を作成して SRV ヒープに登録
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    srvDesc.Format = meta.format;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = static_cast<UINT>(meta.mipLevels);
+
+    UINT texIndex = srvAlloc_.Allocate();
+    device->CreateShaderResourceView(particleTexture_.Get(), &srvDesc,
+                                     srvAlloc_.Cpu(texIndex));
+
+    // 4) GPU ハンドルを保持（描画時に使う）
+    particleTextureHandle_ = srvAlloc_.Gpu(texIndex);
   }
 
   // ===== DirectionalLight 用 CB (PS:b1) =====
@@ -558,6 +621,71 @@ void GameApp::InitResources_() {
   bool select = audio_.Load("select", L"resources/sound/select.mp3", 1.0f);
   assert(select);
   selectVol_ = 1.0f;
+
+  // 2x2 の単位板ポリ（テクスチャは 0..1）
+  struct Vtx {
+    float px, py, pz;
+    float u, v;
+  };
+  Vtx quad[4] = {
+      {-0.5f, 0.5f, 0.0f, 0.0f, 0.0f},
+      {0.5f, 0.5f, 0.0f, 1.0f, 0.0f},
+      {-0.5f, -0.5f, 0.0f, 0.0f, 1.0f},
+      {0.5f, -0.5f, 0.0f, 1.0f, 1.0f},
+  };
+  uint16_t idx[6] = {0, 1, 2, 2, 1, 3};
+
+  // VB
+  ComPtr<ID3D12Resource> particleVB, particleIB;
+  {
+    auto vbSize = sizeof(quad);
+    D3D12_HEAP_PROPERTIES heap{D3D12_HEAP_TYPE_UPLOAD};
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width = vbSize;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    HRESULT hr = device->CreateCommittedResource(
+        &heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr, IID_PPV_ARGS(&particleVB));
+    assert(SUCCEEDED(hr));
+    void *mapped = nullptr;
+    particleVB->Map(0, nullptr, &mapped);
+    memcpy(mapped, quad, vbSize);
+    particleVB->Unmap(0, nullptr);
+    particleVBView_.BufferLocation = particleVB->GetGPUVirtualAddress();
+    particleVBView_.StrideInBytes = sizeof(Vtx);
+    particleVBView_.SizeInBytes = static_cast<UINT>(vbSize);
+    particleVB_ = particleVB; // メンバに保持
+  }
+  // IB
+  {
+    auto ibSize = sizeof(idx);
+    D3D12_HEAP_PROPERTIES heap{D3D12_HEAP_TYPE_UPLOAD};
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width = ibSize;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    HRESULT hr = device->CreateCommittedResource(
+        &heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr, IID_PPV_ARGS(&particleIB));
+    assert(SUCCEEDED(hr));
+    void *mapped = nullptr;
+    particleIB->Map(0, nullptr, &mapped);
+    memcpy(mapped, idx, ibSize);
+    particleIB->Unmap(0, nullptr);
+    particleIBView_.BufferLocation = particleIB->GetGPUVirtualAddress();
+    particleIBView_.Format = DXGI_FORMAT_R16_UINT;
+    particleIBView_.SizeInBytes = static_cast<UINT>(ibSize);
+    particleIB_ = particleIB; // メンバに保持
+  }
 }
 
 void GameApp::InitCamera_() {
@@ -577,4 +705,83 @@ void GameApp::InitCamera_() {
 
   // DebugCamera 生成（クラス定義に合わせて後で include & new）
   debugCamera_ = new DebugCamera();
+}
+
+// GameApp のプライベートメンバ関数として追加してOK
+void GameApp::RespawnParticle_(Particle &p) {
+  // 位置: 生成中心 ± Extent * ランダム[-1,1]
+  auto rndSigned = []() { return Rand01() * 2.0f - 1.0f; };
+
+  Vector3 offset{
+      rndSigned() * particleSpawnExtent_.x,
+      rndSigned() * particleSpawnExtent_.y,
+      rndSigned() * particleSpawnExtent_.z,
+  };
+  p.transform.translate = {
+      particleSpawnCenter_.x + offset.x,
+      particleSpawnCenter_.y + offset.y,
+      particleSpawnCenter_.z + offset.z,
+  };
+
+  // スケール（ここはとりあえず固定。ImGui
+  // から調整したければ後でパラメータ追加）
+  p.transform.scale = {0.5f, 0.5f, 0.5f};
+  p.transform.rotate = {0.0f, 0.0f, 0.0f};
+
+  // 方向: BaseDir ± ランダムなノイズ
+  Vector3 dir = particleBaseDir_;
+  dir.x += (Rand01() * 2.0f - 1.0f) * particleDirRandomness_;
+  dir.y += (Rand01() * 2.0f - 1.0f) * particleDirRandomness_;
+  dir.z += (Rand01() * 2.0f - 1.0f) * particleDirRandomness_;
+  if (Length(dir) > 0.0001f) {
+    dir = Normalize(dir);
+  } else {
+    dir = {0.0f, 1.0f, 0.0f}; // デフォルト上向き
+  }
+
+  // 速度
+  float speed = RandRange(particleSpeedMin_, particleSpeedMax_);
+  p.velocity = {dir.x * speed, dir.y * speed, dir.z * speed};
+
+  // 寿命と年齢
+  p.lifetime = RandRange(particleLifeMin_, particleLifeMax_);
+  p.age = 0.0f;
+
+  p.color = {
+      Rand01(), // R
+      Rand01(), // G
+      Rand01(), // B
+      1.0f      // A
+  };
+}
+
+// （ヘルパ追加）パーティクル用ビルボード行列生成
+Matrix4x4 GameApp::MakeBillboardMatrix(const Vector3 &scale,
+                                       const Vector3 &translate,
+                                       const Matrix4x4 &viewMatrix) {
+  Matrix4x4 camWorld = Inverse(viewMatrix);
+  Vector3 right{camWorld.m[0][0], camWorld.m[0][1], camWorld.m[0][2]};
+  Vector3 up{camWorld.m[1][0], camWorld.m[1][1], camWorld.m[1][2]};
+  Vector3 forward{camWorld.m[2][0], camWorld.m[2][1], camWorld.m[2][2]};
+  // カメラへ向けるため forward を反転
+  forward = {-forward.x, -forward.y, -forward.z};
+
+  Matrix4x4 m{};
+  m.m[0][0] = scale.x * right.x;
+  m.m[0][1] = scale.x * right.y;
+  m.m[0][2] = scale.x * right.z;
+  m.m[0][3] = 0;
+  m.m[1][0] = scale.y * up.x;
+  m.m[1][1] = scale.y * up.y;
+  m.m[1][2] = scale.y * up.z;
+  m.m[1][3] = 0;
+  m.m[2][0] = scale.z * forward.x;
+  m.m[2][1] = scale.z * forward.y;
+  m.m[2][2] = scale.z * forward.z;
+  m.m[2][3] = 0;
+  m.m[3][0] = translate.x;
+  m.m[3][1] = translate.y;
+  m.m[3][2] = translate.z;
+  m.m[3][3] = 1;
+  return m;
 }
