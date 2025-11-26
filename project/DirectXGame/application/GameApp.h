@@ -67,8 +67,13 @@ private:
     Vector3 velocity; // 移動速度 (units/sec)
     float lifetime;   // 寿命 (秒)
     float age;        // 経過時間 (秒)
+    Vector4 color;    // RGBA
   };
   void RespawnParticle_(Particle &p);
+
+  Matrix4x4 MakeBillboardMatrix(const Vector3 &scale,
+                                       const Vector3 &translate,
+                                       const Matrix4x4 &viewMatrix);
 
 private:
   WinApp winApp_;
@@ -107,11 +112,12 @@ private:
 
   ComPtr<ID3D12Resource> particleInstanceBuffer_;
   D3D12_GPU_DESCRIPTOR_HANDLE particleMatricesSrvGPU_{};
-  struct TransformationMatrix {
+  struct ParticleForGPU {
     Matrix4x4 WVP;
     Matrix4x4 World;
+    Vector4 color;
   };
-  TransformationMatrix *particleMatrices_ = nullptr;
+  ParticleForGPU *particleMatrices_ = nullptr;
 
   // パーティクル用マテリアル定数バッファ
   ComPtr<ID3D12Resource> particleMaterialCB_;
@@ -158,4 +164,14 @@ private:
   int spriteBlendMode_ = 0;
   bool useMonsterBall_ = true;
   float selectVol_ = 1.0f;
+
+  // 板ポリ用のVB/IBビューをメンバに追加
+  D3D12_VERTEX_BUFFER_VIEW particleVBView_{};
+  D3D12_INDEX_BUFFER_VIEW  particleIBView_{};
+  ComPtr<ID3D12Resource>   particleVB_;
+  ComPtr<ID3D12Resource>   particleIB_;
+
+  // パーティクル用テクスチャ
+  ComPtr<ID3D12Resource> particleTexture_;
+  D3D12_GPU_DESCRIPTOR_HANDLE particleTextureHandle_{};
 };

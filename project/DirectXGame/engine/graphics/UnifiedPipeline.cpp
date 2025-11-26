@@ -261,24 +261,21 @@ PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
 PipelineDesc UnifiedPipeline::MakeParticleDesc() {
   PipelineDesc d{};
   d.inputElements = {
-      {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
-       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-       0},
-      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
-       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-      {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
-       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-       0},
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
   d.vsPath = L"resources/shaders/Particle.VS.hlsl";
   d.psPath = L"resources/shaders/Particle.PS.hlsl";
   d.usePSMaterial_b0 = true;
-  d.useVSTransform_b0 = false;      // Instancingなので単一CB不要
-  d.usePSTextureTable_t0 = true;    // テクスチャ SRV (t0)
-  d.useVSInstancingTable_t1 = true; // 行列 StructuredBuffer SRV (t1)
+  d.useVSTransform_b0 = false;      // Instancingで行列はSRV
+  d.usePSTextureTable_t0 = true;
+  d.useVSInstancingTable_t1 = true; // t1 StructuredBuffer
   d.usePSDirectionalLight_b1 = false;
-  d.enableDepth = true;
-  d.alphaBlend = false;
-  d.cullMode = D3D12_CULL_MODE_NONE; // 両面表示したいなら
+  d.enableDepth = false;
+  d.alphaBlend = true;              // ← 透過フェードのため有効化
+  d.blendMode = BlendMode::Alpha;   // ← 通常アルファ
+  d.cullMode = D3D12_CULL_MODE_NONE;
   return d;
 }

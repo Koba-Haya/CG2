@@ -175,14 +175,14 @@ struct VertexShaderOutput
 {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
-    float3 normal : NORMAL0;
+    float4 color : COLOR0;
 };
 
 
 
 // Particle.PS.hlsl
 
-#include "object3d.hlsli"
+#include "Particle.hlsli"
 
 struct Material
 {
@@ -191,66 +191,56 @@ struct Material
     float4x4 uvTransform;
 };
 
-struct DirectionalLight
-{
-    float4 color; // ライトの色
-    float3 direction; // ライトの向き
-    float intensity; // 輝度
-};
-
 ConstantBuffer<Material> gMaterial : register(b0);
 Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
-ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
 
 struct PixelShaderOutput
 {
     float4 color : SV_TARGET0;
 };
 
-
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
-    
-    float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
-    float4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
-    output.color = gMaterial.color * textureColor;
-    
-    if (output.color.a == 0.0)
-    {
+    float4 uv = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
+    float4 tex = gTexture.Sample(gSampler, uv.xy);
+    float4 col = input.color * gMaterial.color * tex;
+
+    if (col.a <= 0.0f)
         discard;
-    }
-    
+
+    output.color = col;
     return output;
 }
 
 
-
 // Particle.VS.hlsl
 
-#include "object3d.hlsli"
+#include "Particle.hlsli"
 
-struct TransformationMatrix
+struct ParticleForGPU
 {
     float4x4 WVP;
     float4x4 World;
+    float4 color;
 };
 
-StructuredBuffer<TransformationMatrix> gTransformationMatrices : register(t0);
+StructuredBuffer<ParticleForGPU> gParticle : register(t1);
 
 struct VertexShaderInput
 {
-    float4 position : POSITION0;
+    float3 position : POSITION0;
     float2 texcoord : TEXCOORD0;
-    float3 normal : NORMAL0;
+    // billboard 板ポリ用。NORMAL/COLOR は使わない
 };
 
 VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID)
 {
     VertexShaderOutput output;
-    output.position = mul(input.position, gTransformationMatrices[instanceId].WVP);
+    float4 pos = float4(input.position, 1.0f);
+    output.position = mul(pos, gParticle[instanceId].WVP);
     output.texcoord = input.texcoord;
-    output.normal = normalize(mul(input.normal, (float3x3) gTransformationMatrices[instanceId].World));
+    output.color = gParticle[instanceId].color;
     return output;
 }

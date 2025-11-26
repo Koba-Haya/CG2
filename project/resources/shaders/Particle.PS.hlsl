@@ -1,9 +1,9 @@
-#include "object3d.hlsli"
+#include "Particle.hlsli"
 
 struct Material
 {
     float4 color;
-    int enableLighting;      // 不使用でもレイアウト維持
+    int enableLighting;
     float4x4 uvTransform;
 };
 
@@ -16,21 +16,16 @@ struct PixelShaderOutput
     float4 color : SV_TARGET0;
 };
 
-
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
-    
-    float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
-    float4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
-    float4 base = gMaterial.color * textureColor;
-    
-    if (output.color.a == 0.0)
-    {
+    float4 uv = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
+    float4 tex = gTexture.Sample(gSampler, uv.xy);
+    float4 col = input.color * gMaterial.color * tex;
+
+    if (col.a <= 0.0f)
         discard;
-    }
-    
-    output.color = base;
-    
+
+    output.color = col;
     return output;
 }
