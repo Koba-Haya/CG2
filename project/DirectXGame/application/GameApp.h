@@ -1,8 +1,5 @@
 #pragma once
 
-#include <fstream>
-#include <string>
-
 #include "Audio.h"
 #include "DirectXCommon.h"
 #include "Input.h"
@@ -14,11 +11,37 @@
 #include "WinApp.h"
 #include "include.h" // Transform で Vector3/Matrix4x4 使うので
 
+#include <fstream>
+#include <list>
+#include <string>
+
 // Transform は main.cpp と同じ定義をここに寄せたい
 struct Transform {
   Vector3 scale;
   Vector3 rotate;
   Vector3 translate;
+};
+
+// パーティクル
+struct Particle {
+  Transform transform;
+  Vector3 velocity; // 移動速度 (units/sec)
+  float lifetime;   // 寿命 (秒)
+  float age;        // 経過時間 (秒)
+  Vector4 color;    // RGBA
+};
+
+// 形状
+enum class EmitterShape {
+  Box,   // AABB 的な直方体
+  Sphere // 球
+};
+
+enum class ParticleColorMode {
+  RandomRGB, // 完全ランダム(RGB)
+  RangeRGB,  // 指定色 ± 幅 (RGB 空間)
+  RangeHSV,  // 指定色 ± 幅 (HSV 空間)
+  Fixed      // 完全固定色
 };
 
 // D3D リソースリークチェック（元 main.cpp の struct を流用）
@@ -62,18 +85,11 @@ private:
   void InitLogging_();   // ログファイル作成
   void InitCamera_();    // Transform / DebugCamera 等（後で）
 
-  struct Particle {
-    Transform transform;
-    Vector3 velocity; // 移動速度 (units/sec)
-    float lifetime;   // 寿命 (秒)
-    float age;        // 経過時間 (秒)
-    Vector4 color;    // RGBA
-  };
-  void RespawnParticle_(Particle &p);
+  void RespawnParticle_(Particle &p); // パーティクル再生成
+  Vector4 GenerateParticleColor_();   // パーティクル色生成
 
-  Matrix4x4 MakeBillboardMatrix(const Vector3 &scale,
-                                       const Vector3 &translate,
-                                       const Matrix4x4 &viewMatrix);
+  Matrix4x4 MakeBillboardMatrix(const Vector3 &scale, const Vector3 &translate,
+                                const Matrix4x4 &viewMatrix);
 
 private:
   WinApp winApp_;
@@ -90,17 +106,18 @@ private:
   ShaderCompiler shaderCompiler_;
 
   // パイプライン
-  UnifiedPipeline objPipeline_;
-  UnifiedPipeline spritePipelineAlpha_;
-  UnifiedPipeline spritePipelineAdd_;
-  UnifiedPipeline spritePipelineSub_;
-  UnifiedPipeline spritePipelineMul_;
-  UnifiedPipeline spritePipelineScreen_;
-  UnifiedPipeline particlePipelineAlpha_;
-  UnifiedPipeline particlePipelineAdd_;
-  UnifiedPipeline particlePipelineSub_;
-  UnifiedPipeline particlePipelineMul_;
-  UnifiedPipeline particlePipelineScreen_;
+  UnifiedPipeline objPipeline_;              // Object3D 用
+  UnifiedPipeline emitterGizmoPipelineWire_; // エミッタ用 ワイヤーフレーム
+  UnifiedPipeline spritePipelineAlpha_;      // スプライト用 Alpha
+  UnifiedPipeline spritePipelineAdd_;        // スプライト用 Add
+  UnifiedPipeline spritePipelineSub_;        // スプライト用 Sub
+  UnifiedPipeline spritePipelineMul_;        // スプライト用 Mul
+  UnifiedPipeline spritePipelineScreen_;     // スプライト用 Screen
+  UnifiedPipeline particlePipelineAlpha_;    // パーティクル用 Alpha
+  UnifiedPipeline particlePipelineAdd_;      // パーティクル用 Add
+  UnifiedPipeline particlePipelineSub_;      // パーティクル用 Sub
+  UnifiedPipeline particlePipelineMul_;      // パーティクル用 Mul
+  UnifiedPipeline particlePipelineScreen_;   // パーティクル用 Screen
 
   // SRV 割り当てヘルパ（DirectXCommon の SRV ヒープを利用）
   SrvAllocator srvAlloc_;
@@ -109,10 +126,8 @@ private:
   Model model_;
   Model planeModel_;
   Sprite sprite_;
-
-  // パーティクル関連
-  static constexpr uint32_t kParticleCount_ = 20;
-  Particle particles_[kParticleCount_];
+  Model emitterSphereModel_;
+  Model emitterBoxModel_;
 
   ComPtr<ID3D12Resource> particleInstanceBuffer_;
   D3D12_GPU_DESCRIPTOR_HANDLE particleMatricesSrvGPU_{};
@@ -134,9 +149,23 @@ private:
   };
   ParticleMaterialData *particleMaterialData_ = nullptr;
 
-  // === パーティクル制御用パラメータ（ImGuiから操作） ===
-  uint32_t particleCountUI_ = kParticleCount_; // 表示する最大個数
+  // パーティクル関連
+  static constexpr uint32_t kParticleCount_ =
+      100; // GPU側の最大インスタンス数 (= 最大発生数上限)
 
+  // パーティクルのリスト（CPU 側で管理）
+  std::list<Particle> particles_;
+
+  // GPU に詰めた個数（Draw() で使う）
+  uint32_t activeParticleCount_ = 0;
+
+  // Emitter の上限（ImGui で 0〜kParticleCount_ を操作）
+  uint32_t particleCountUI_ = kParticleCount_; // 「Max Count」の意味に変える
+
+  // 初期に一気に出す数（起動時だけ利用）
+  uint32_t initialParticleCount_ = 30;
+
+  // === パーティクル制御用パラメータ（Emitterの挙動） ===
   Vector3 particleSpawnCenter_{0.0f, 0.0f, 0.0f}; // 生成中心
   Vector3 particleSpawnExtent_{1.0f, 1.0f, 1.0f}; // 中心からの±範囲
 
@@ -148,6 +177,33 @@ private:
 
   float particleLifeMin_ = 1.0f; // 寿命レンジ
   float particleLifeMax_ = 3.0f;
+
+  // 1 秒あたりの発生数（頻度）と蓄積値
+  float particleEmitRate_ = 10.0f; // particles / sec
+  float particleEmitAccum_ = 0.0f; // Emit の蓄積カウンタ
+
+  // エミッタの形状
+  EmitterShape emitterShape_ = EmitterShape::Box;
+  bool showEmitterGizmo_ = false; // 範囲表示のON/OFF
+
+  enum class ParticleColorMode {
+    RandomRGB, // 完全ランダム(RGB)
+    RangeRGB,  // 指定色 ± 幅 (RGB 空間)
+    RangeHSV,  // 指定色 ± 幅 (HSV 空間)
+    Fixed      // 完全固定色
+  };
+
+  ParticleColorMode particleColorMode_ = ParticleColorMode::RandomRGB;
+
+  // 基本色（RGBA）
+  Vector4 particleBaseColor_{1.0f, 1.0f, 1.0f, 1.0f};
+
+  // RGB 空間での幅 (0〜1)
+  Vector3 particleColorRangeRGB_{0.2f, 0.2f, 0.2f};
+
+  // HSV 空間での中心値 & 幅 (H,S,V それぞれ 0〜1)
+  Vector3 particleBaseHSV_{0.0f, 1.0f, 1.0f};
+  Vector3 particleHSVRange_{0.1f, 0.1f, 0.1f};
 
   // 平行光用 CB
   ComPtr<ID3D12Resource> directionalLightCB_;
@@ -175,9 +231,9 @@ private:
 
   // 板ポリ用のVB/IBビューをメンバに追加
   D3D12_VERTEX_BUFFER_VIEW particleVBView_{};
-  D3D12_INDEX_BUFFER_VIEW  particleIBView_{};
-  ComPtr<ID3D12Resource>   particleVB_;
-  ComPtr<ID3D12Resource>   particleIB_;
+  D3D12_INDEX_BUFFER_VIEW particleIBView_{};
+  ComPtr<ID3D12Resource> particleVB_;
+  ComPtr<ID3D12Resource> particleIB_;
 
   // パーティクル用テクスチャ
   ComPtr<ID3D12Resource> particleTexture_;

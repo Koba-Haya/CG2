@@ -174,7 +174,7 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   // --- Raster / Blend / Depth ---
   D3D12_RASTERIZER_DESC rast{};
   rast.CullMode = desc.cullMode;
-  rast.FillMode = D3D12_FILL_MODE_SOLID;
+  rast.FillMode = desc.fillMode;
 
   D3D12_BLEND_DESC blend = MakeBlendDesc(desc);
 
@@ -232,6 +232,7 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
   d.enableDepth = true;
   d.alphaBlend = false;
   d.cullMode = D3D12_CULL_MODE_BACK;
+  d.fillMode = D3D12_FILL_MODE_SOLID;
   return d;
 }
 
@@ -251,6 +252,7 @@ PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
   d.enableDepth = false;
   d.alphaBlend = true;
   d.cullMode = D3D12_CULL_MODE_NONE;
+  d.fillMode = D3D12_FILL_MODE_SOLID;
 
   // ★ Sprite のデフォルトは Alpha ブレンド
   d.blendMode = BlendMode::Alpha;
