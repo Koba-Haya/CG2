@@ -24,7 +24,7 @@ void DebugCamera::Update(const Input& input) {
     auto mouse = input.GetMouse(); // ← これで MouseState エラーは出なくなる
 
     // 左クリック中はドラッグで左右平行移動（ドラッグ方向の逆にカメラを動かす）
-    if (input.IsMouseDown(0)) { // 0 = 左ボタン
+    if (input.IsMouseDown(2)) { // 2 = 中ボタン
         // 左にドラッグ(dx<0) → カメラを右(+X)へ動かすように符号を反転
         move.x += -mouse.dx * mousePanSpeed;
         // 必要なら縦方向もつけるなら↓を有効にする

@@ -67,6 +67,9 @@ public:
   void Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
             ID3D12Resource *directionalLightCB);
 
+  // パイプライン変更（必要なら）
+  void SetPipeline(UnifiedPipeline *pipeline) { pipeline_ = pipeline; }
+
   D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const { return texSrvHandleGPU_; }
   ID3D12Resource* GetMaterialCB() const { return cbMaterial_.Get(); }
   D3D12_VERTEX_BUFFER_VIEW GetVBV() const { return vbv_; }

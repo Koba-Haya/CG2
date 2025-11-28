@@ -308,6 +308,9 @@ void DirectXCommon::InitImGui_() {
       srvDescriptorHeap_.Get(),
       GetCPUDescriptorHandle(srvDescriptorHeap_.Get(), descriptorSizeSRV_, 0),
       GetGPUDescriptorHandle(srvDescriptorHeap_.Get(), descriptorSizeSRV_, 0));
+  ImGuiIO &io = ImGui::GetIO();
+  io.Fonts->AddFontFromFileTTF("resources/fonts/M_PLUS_1p/MPLUS1p-Regular.ttf", 22.0f,
+                               nullptr, io.Fonts->GetGlyphRangesJapanese());
 }
 
 void DirectXCommon::TransitionBackBufferToRenderTarget_() {

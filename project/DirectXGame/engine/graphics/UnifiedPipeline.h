@@ -43,6 +43,9 @@ struct PipelineDesc {
   bool alphaBlend = false;
   D3D12_CULL_MODE cullMode = D3D12_CULL_MODE_BACK;
 
+  // ラスタライザのFillMode（ソリッド・ワイヤーフレーム）
+  D3D12_FILL_MODE fillMode = D3D12_FILL_MODE_SOLID;
+
   // ブレンドモード
   BlendMode blendMode = BlendMode::Opaque;
 
