@@ -95,7 +95,14 @@
     <PostBuildEvent>
       <Message>
       </Message>
-      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y</Command>
+      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y
+
+set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
+set OUTDIR="$(OutDir)"
+
+copy /Y %SDK_BIN%\dxcompiler.dll %OUTDIR%
+copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -127,7 +134,14 @@
     <PostBuildEvent>
       <Message>
       </Message>
-      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y</Command>
+      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y
+
+set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
+set OUTDIR="$(OutDir)"
+
+copy /Y %SDK_BIN%\dxcompiler.dll %OUTDIR%
+copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
@@ -162,7 +176,14 @@
     <PostBuildEvent>
       <Message>
       </Message>
-      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y</Command>
+      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y
+
+set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
+set OUTDIR="$(OutDir)"
+
+copy /Y %SDK_BIN%\dxcompiler.dll %OUTDIR%
+copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
