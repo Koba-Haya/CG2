@@ -10,6 +10,7 @@
 #include "Vector.h"
 #include "WinApp.h"
 #include "include.h" // Transform で Vector3/Matrix4x4 使うので
+#include "AABB.h"
 
 #include <fstream>
 #include <list>
@@ -29,6 +30,12 @@ struct Particle {
   float lifetime;   // 寿命 (秒)
   float age;        // 経過時間 (秒)
   Vector4 color;    // RGBA
+};
+
+// 加速度フィールド
+struct AccelerationField {
+  Vector3 acceleration; // 加速度
+  AABB area;            // 範囲（AABB）
 };
 
 // 形状
@@ -90,6 +97,8 @@ private:
 
   Matrix4x4 MakeBillboardMatrix(const Vector3 &scale, const Vector3 &translate,
                                 const Matrix4x4 &viewMatrix);
+
+  bool IsCollision(const AABB &aabb, const Vector3 &point);
 
 private:
   WinApp winApp_;
@@ -238,4 +247,8 @@ private:
   // パーティクル用テクスチャ
   ComPtr<ID3D12Resource> particleTexture_;
   D3D12_GPU_DESCRIPTOR_HANDLE particleTextureHandle_{};
+
+  // 加速度フィールド
+  AccelerationField accelerationField_;
+  bool enableAccelerationField_ = false;
 };

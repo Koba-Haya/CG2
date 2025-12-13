@@ -224,6 +224,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <ClInclude Include="DirectXGame\engine\base\DirectXCommon.h" />
     <ClInclude Include="DirectXGame\engine\base\EngineCore.h" />
     <ClInclude Include="DirectXGame\engine\base\DirectXResourceUtils.h" />
+    <ClInclude Include="DirectXGame\engine\math\AABB.h" />
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="externals\imgui\imgui.h" />
     <ClInclude Include="externals\imgui\imgui_impl_dx12.h" />
