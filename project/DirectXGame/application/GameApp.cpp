@@ -111,6 +111,7 @@ bool GameApp::Initialize() {
   InitResources_();
 
   // カメラ関連
+  debugCamera_ = std::make_unique<DebugCamera>();
   InitCamera_();
 
   accelerationField_.acceleration = {15.0f, 0.0f, 0.0f};
@@ -941,9 +942,6 @@ void GameApp::InitCamera_() {
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
 
   transform2_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}};
-
-  // DebugCamera 生成（クラス定義に合わせて後で include & new）
-  debugCamera_ = new DebugCamera();
 }
 
 Vector4 GameApp::GenerateParticleColor_() {

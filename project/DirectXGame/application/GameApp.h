@@ -15,6 +15,7 @@
 #include <fstream>
 #include <list>
 #include <string>
+#include <memory>
 
 // Transform は main.cpp と同じ定義をここに寄せたい
 struct Transform {
@@ -107,7 +108,6 @@ private:
   AudioManager audio_;
 
   std::ofstream logStream_;
-  D3DResourceLeakChecker leakChecker_; // ReportLiveObjects
 
   // ===== ここから Step3 用のメンバ（まだ中身は後で詰める） =====
 
@@ -195,13 +195,6 @@ private:
   EmitterShape emitterShape_ = EmitterShape::Box;
   bool showEmitterGizmo_ = false; // 範囲表示のON/OFF
 
-  enum class ParticleColorMode {
-    RandomRGB, // 完全ランダム(RGB)
-    RangeRGB,  // 指定色 ± 幅 (RGB 空間)
-    RangeHSV,  // 指定色 ± 幅 (HSV 空間)
-    Fixed      // 完全固定色
-  };
-
   ParticleColorMode particleColorMode_ = ParticleColorMode::RandomRGB;
 
   // 基本色（RGBA）
@@ -228,8 +221,7 @@ private:
   Matrix4x4 view3D_;
   Matrix4x4 proj3D_;
 
-  // DebugCamera は後で unique_ptr にする想定
-  class DebugCamera *debugCamera_ = nullptr;
+  std::unique_ptr<class DebugCamera> debugCamera_;
 
   // ライティング・ブレンドモード
   int lightingMode_ = 1;
