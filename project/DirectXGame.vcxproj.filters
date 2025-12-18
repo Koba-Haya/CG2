@@ -129,9 +129,6 @@
     <ClCompile Include="DirectXGame\engine\base\DirectXCommon.cpp">
       <Filter>ソース ファイル\engine\base</Filter>
     </ClCompile>
-    <ClCompile Include="DirectXGame\engine\base\EngineCore.cpp">
-      <Filter>ソース ファイル\engine\base</Filter>
-    </ClCompile>
     <ClCompile Include="DirectXGame\engine\base\WinApp.cpp">
       <Filter>ソース ファイル\engine\window</Filter>
     </ClCompile>
@@ -160,6 +157,9 @@
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="ShaderCompilerUtils.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="DirectXGame\engine\base\ImGuiManager.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
   </ItemGroup>
@@ -197,7 +197,7 @@
     <ClInclude Include="DirectXGame\engine\base\input\Input.h">
       <Filter>ヘッダー ファイル\engine\input</Filter>
     </ClInclude>
-    <ClInclude Include="DirectXGame\engine\math\Matrix.h">
+    <ClInclude Include="DirectXGame\engine\Type\Matrix.h">
       <Filter>ヘッダー ファイル\engine\math</Filter>
     </ClInclude>
     <ClInclude Include="DirectXGame\engine\math\Method.h">
@@ -211,9 +211,6 @@
     </ClInclude>
     <ClInclude Include="DirectXGame\engine\camera\DebugCamera.h">
       <Filter>ヘッダー ファイル\engine\camera</Filter>
-    </ClInclude>
-    <ClInclude Include="DirectXGame\engine\base\EngineCore.h">
-      <Filter>ヘッダー ファイル\engine\base</Filter>
     </ClInclude>
     <ClInclude Include="DirectXGame\engine\base\DirectXCommon.h">
       <Filter>ヘッダー ファイル\engine\base</Filter>
@@ -236,7 +233,7 @@
     <ClInclude Include="DirectXGame\engine\base\WinApp.h">
       <Filter>ヘッダー ファイル\engine\window</Filter>
     </ClInclude>
-    <ClInclude Include="DirectXGame\engine\math\Vector.h">
+    <ClInclude Include="DirectXGame\engine\Type\Vector.h">
       <Filter>ヘッダー ファイル\engine\math</Filter>
     </ClInclude>
     <ClInclude Include="DirectXGame\engine\graphics\ResourceManager.h">
@@ -254,7 +251,13 @@
     <ClInclude Include="ShaderCompilerUtils.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="DirectXGame\engine\math\AABB.h">
+    <ClInclude Include="DirectXGame\engine\Type\AABB.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="DirectXGame\engine\Type\Transform.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="DirectXGame\engine\base\ImGuiManager.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>

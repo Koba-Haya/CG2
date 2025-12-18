@@ -3,7 +3,9 @@
 // ImGui の Win32 バックエンドを使うためのヘッダ
 // → h ファイルには書かず cpp にだけ書く（依存を最小化するため）
 #include "externals/imgui/imgui.h"
- #include "externals/imgui/imgui_impl_win32.h"
+#ifdef USE_IMGUI
+#include "externals/imgui/imgui_impl_win32.h"
+#endif
 
 // extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
 //                                                              UINT msg,
@@ -134,9 +136,11 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
 
 LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
   // まず ImGui に渡す（ここが無いとクリックやキーボードが効かない）
+#ifdef USE_IMGUI
   if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wp, lp)) {
-    return 1;
+    return true;
   }
+#endif
 
   switch (msg) {
   case WM_CLOSE:

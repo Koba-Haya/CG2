@@ -1,5 +1,6 @@
 #pragma once
 #include "externals/DirectXTex/d3dx12.h"
+#include "DirectXResourceUtils.h"
 #include <Windows.h>
 #include <dxgi1_6.h>
 #include <wrl.h>
@@ -69,6 +70,11 @@ public:
     return dxc_.includeHandler;
   }
 
+  // SRV割当器取得
+  SrvAllocator &GetSrvAllocator() { return *srvAlloc_; }
+  // const版SRV割当器取得
+  const SrvAllocator &GetSrvAllocator() const { return *srvAlloc_; }
+
 private:
   void CreateDeviceAndFactory_();
   void ChooseAdapter_();
@@ -80,7 +86,7 @@ private:
   void CreateFenceAndEvent_();
   void SetupViewportAndScissor_();
   void InitDXC_();
-  void InitImGui_();
+  /*void InitImGui_();*/
   void TransitionBackBufferToRenderTarget_();
   void TransitionBackBufferToPresent_();
 
@@ -111,6 +117,9 @@ private:
   uint32_t descriptorSizeRTV_ = 0;
   uint32_t descriptorSizeSRV_ = 0;
   uint32_t descriptorSizeDSV_ = 0;
+
+  // SRV割当器
+  std::unique_ptr<SrvAllocator> srvAlloc_;
 
   // 深度ステンシル
   ComPtr<ID3D12Resource> depthStencilResource_;

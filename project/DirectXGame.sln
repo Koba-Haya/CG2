@@ -4,6 +4,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.12.35728.132
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXGame", "DirectXGame.vcxproj", "{8DA374DA-DF26-4341-925F-411A02A37A10}"
+	ProjectSection(ProjectDependencies) = postProject
+		{FD003BB1-BCA8-482F-83FF-68516FC10C64} = {FD003BB1-BCA8-482F-83FF-68516FC10C64}
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ソリューション項目", "ソリューション項目", "{739F5503-0A42-4587-BF36-1C3DA01537A4}"
 	ProjectSection(SolutionItems) = preProject
@@ -11,6 +14,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ソリューション項目
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTex", "externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj", "{371B9FA9-4C90-4AC6-A123-ACED756D6C77}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "imgui", "..\imgui\imgui.vcxproj", "{FD003BB1-BCA8-482F-83FF-68516FC10C64}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,8 +36,17 @@ Global
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77}.Development|x64.Build.0 = Development|x64
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77}.Release|x64.ActiveCfg = Release|x64
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77}.Release|x64.Build.0 = Release|x64
+		{FD003BB1-BCA8-482F-83FF-68516FC10C64}.Debug|x64.ActiveCfg = Debug|x64
+		{FD003BB1-BCA8-482F-83FF-68516FC10C64}.Debug|x64.Build.0 = Debug|x64
+		{FD003BB1-BCA8-482F-83FF-68516FC10C64}.Development|x64.ActiveCfg = Release|x64
+		{FD003BB1-BCA8-482F-83FF-68516FC10C64}.Development|x64.Build.0 = Release|x64
+		{FD003BB1-BCA8-482F-83FF-68516FC10C64}.Release|x64.ActiveCfg = Release|x64
+		{FD003BB1-BCA8-482F-83FF-68516FC10C64}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4DAD91FF-169B-4B42-AA82-A135891E5513}
 	EndGlobalSection
 EndGlobal
