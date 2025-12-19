@@ -2,17 +2,21 @@
 #include "WinApp.h"
 #include "DirectXCommon.h"
 
+#ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
+#endif
 
 #include <Windows.h>
 #include <cassert>
 
+#ifdef USE_IMGUI
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
 	UINT msg,
 	WPARAM wParam,
 	LPARAM lParam);
+#endif
 
 void ImGuiManager::Initialize(WinApp* winApp, DirectXCommon* dx) {
 	assert(winApp != nullptr);
@@ -25,6 +29,7 @@ void ImGuiManager::Initialize(WinApp* winApp, DirectXCommon* dx) {
 	winApp_ = winApp;
 	dx_ = dx;
 
+#ifdef USE_IMGUI
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGui::StyleColorsDark();
@@ -61,15 +66,19 @@ void ImGuiManager::Initialize(WinApp* winApp, DirectXCommon* dx) {
 		});
 
 	initialized_ = true;
+#else
+	initialized_ = false;
+#endif
 }
 
 void ImGuiManager::Finalize() {
+#ifdef USE_IMGUI
 	if (!initialized_) {
 		return;
 	}
 
 	if (frameBegun_) {
-		EndFrame();
+		End();
 	}
 
 	// 先にWinAppのフック解除（終了時にWndProcがImGui触らないように）
@@ -86,9 +95,14 @@ void ImGuiManager::Finalize() {
 	frameBegun_ = false;
 	winApp_ = nullptr;
 	dx_ = nullptr;
+#else
+	winApp_ = nullptr;
+	dx_ = nullptr;
+#endif
 }
 
-void ImGuiManager::BeginFrame() {
+void ImGuiManager::Begin() {
+#ifdef USE_IMGUI
 	if (!initialized_) {
 		return;
 	}
@@ -101,9 +115,11 @@ void ImGuiManager::BeginFrame() {
 	ImGui::NewFrame();
 
 	frameBegun_ = true;
+#endif
 }
 
-void ImGuiManager::EndFrame() {
+void ImGuiManager::End() {
+#ifdef USE_IMGUI
 	if (!initialized_) {
 		return;
 	}
@@ -115,9 +131,11 @@ void ImGuiManager::EndFrame() {
 	ImGui::Render();
 
 	frameBegun_ = false;
+#endif
 }
 
 void ImGuiManager::Draw(ID3D12GraphicsCommandList* cmdList) {
+#ifdef USE_IMGUI
 	if (!initialized_) {
 		return;
 	}
@@ -125,11 +143,12 @@ void ImGuiManager::Draw(ID3D12GraphicsCommandList* cmdList) {
 
 	// EndFrame() が呼ばれてないと "g.WithinFrameScope" 系で落ちるので保険
 	if (frameBegun_) {
-		EndFrame();
+		End();
 	}
 
 	ID3D12DescriptorHeap* heaps[] = { dx_->GetSRVHeap() };
 	cmdList->SetDescriptorHeaps(1, heaps);
 
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmdList);
+#endif
 }

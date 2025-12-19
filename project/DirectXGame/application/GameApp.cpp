@@ -150,8 +150,9 @@ void GameApp::Update() {
   proj3D_ = MakePerspectiveFovMatrix(
       0.45f, float(WinApp::kClientWidth) / float(WinApp::kClientHeight), 0.1f, 100.0f);
 
+#ifdef USE_IMGUI
   static bool settingsOpen = true;
-  imgui_.BeginFrame();
+  imgui_.Begin();
   if (settingsOpen) {
     ImGui::Begin("Settings", &settingsOpen);
 
@@ -218,7 +219,8 @@ void GameApp::Update() {
 
     ImGui::End();
   }
-  imgui_.EndFrame();
+  imgui_.End();
+#endif
 
   if (particleMatrices_) {
     float deltaTime = 1.0f / 60.0f;
@@ -366,7 +368,9 @@ void GameApp::Draw() {
     cmdList->DrawIndexedInstanced(indexCount, instanceCount, 0, 0, 0);
   }
 
+#ifdef USE_IMGUI
   imgui_.Draw(cmdList);
+#endif
 
   dx_.EndFrame();
 }

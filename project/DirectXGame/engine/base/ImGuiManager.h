@@ -14,8 +14,8 @@ public:
 	void Initialize(WinApp* winApp, DirectXCommon* dx);
 	void Finalize();
 
-	void BeginFrame();
-	void EndFrame();
+	void Begin();
+	void End();
 	void Draw(ID3D12GraphicsCommandList* cmdList);
 
 private:
