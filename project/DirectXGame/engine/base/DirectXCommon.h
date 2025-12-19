@@ -75,6 +75,10 @@ public:
   // const版SRV割当器取得
   const SrvAllocator &GetSrvAllocator() const { return *srvAlloc_; }
 
+  UINT GetSRVDescriptorSize() const { return descriptorSizeSRV_; }
+  int GetBackBufferCount() const { return swapChainDesc_.BufferCount; }
+  DXGI_FORMAT GetRTVFormat() const { return rtvDesc_.Format; }
+
 private:
   void CreateDeviceAndFactory_();
   void ChooseAdapter_();
