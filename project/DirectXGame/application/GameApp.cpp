@@ -151,7 +151,7 @@ void GameApp::Update() {
       0.45f, float(WinApp::kClientWidth) / float(WinApp::kClientHeight), 0.1f, 100.0f);
 
   static bool settingsOpen = true;
-  imgui_.Begin();
+  imgui_.BeginFrame();
   if (settingsOpen) {
     ImGui::Begin("Settings", &settingsOpen);
 
@@ -218,7 +218,7 @@ void GameApp::Update() {
 
     ImGui::End();
   }
-  imgui_.End();
+  imgui_.EndFrame();
 
   if (particleMatrices_) {
     float deltaTime = 1.0f / 60.0f;
@@ -366,7 +366,7 @@ void GameApp::Draw() {
     cmdList->DrawIndexedInstanced(indexCount, instanceCount, 0, 0, 0);
   }
 
-  imgui_.Draw();
+  imgui_.Draw(cmdList);
 
   dx_.EndFrame();
 }
