@@ -1,17 +1,18 @@
 #pragma once
 #include <d3d12.h>
+#include <wrl.h>
 
 class ResourceObject {
 public:
-  ResourceObject(ID3D12Resource *resource)
-      : resource_(resource) {}
-  ~ResourceObject() {
-    if (resource_) {
-      resource_->Release();
-    }
-  }
- ID3D12Resource *Get() { return resource_; }
+	using ComPtr = Microsoft::WRL::ComPtr<ID3D12Resource>;
+
+	ResourceObject() = default;
+	explicit ResourceObject(ComPtr resource) : resource_(std::move(resource)) {}
+
+	ID3D12Resource* Get() const { return resource_.Get(); }
+	ID3D12Resource* const* GetAddressOf() const { return resource_.GetAddressOf(); }
+	ComPtr& GetComPtr() { return resource_; }
 
 private:
-  ID3D12Resource *resource_;
+	ComPtr resource_;
 };

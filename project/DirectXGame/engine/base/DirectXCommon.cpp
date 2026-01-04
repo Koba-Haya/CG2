@@ -70,7 +70,7 @@ void DirectXCommon::Initialize(const InitParams &params) {
 
   // SRV割当器をDirectXCommonが所有
   srvAlloc_ = std::make_unique<SrvAllocator>();
-  srvAlloc_->Init(device_.Get(), srvDescriptorHeap_.Get());
+  srvAlloc_->Init(device_.Get(), srvDescriptorHeap_.Get(), 1);
 }
 
 void DirectXCommon::BeginFrame() {

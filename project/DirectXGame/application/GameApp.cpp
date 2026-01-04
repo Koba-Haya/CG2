@@ -1,6 +1,10 @@
 #define NOMINMAX
 #include "GameApp.h"
+#include "GameCamera.h"
 #include "DebugCamera.h"
+#include "TextureManager.h"
+#include "ModelManager.h"
+#include "TextureResource.h"
 #include "DirectXResourceUtils.h"
 #include "ModelUtils.h"
 #include "TextureUtils.h"
@@ -62,225 +66,236 @@ Vector3 HSVtoRGB(const Vector3 &hsv) {
 
 GameApp::GameApp()
     : winApp_(), dx_(), input_(), audio_(), transform_{}, cameraTransform_{},
-      transformSprite_{}, uvTransformSprite_{}, transform2_{}, particles_{} {}
+    transformSprite_{}, uvTransformSprite_{}, transform2_{}, particles_{} {
+}
 
 GameApp::~GameApp() { Finalize(); }
 
 bool GameApp::Initialize() {
-  HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-  assert(SUCCEEDED(hr));
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    assert(SUCCEEDED(hr));
 
-  InitLogging_();
+    InitLogging_();
 
-  winApp_.Initialize();
+    winApp_.Initialize();
 
-  DirectXCommon::InitParams params{
-      winApp_.GetHInstance(),
-      winApp_.GetHwnd(),
-      WinApp::kClientWidth,
-      WinApp::kClientHeight,
-  };
-  dx_.Initialize(params);
+    DirectXCommon::InitParams params{
+        winApp_.GetHInstance(),
+        winApp_.GetHwnd(),
+        WinApp::kClientWidth,
+        WinApp::kClientHeight,
+    };
+    dx_.Initialize(params);
 
-  // ImGui初期化
-  imgui_.Initialize(&winApp_, &dx_);
+    // SRV/Textureマネージャーの初期化
+    TextureManager::GetInstance()->Initialize(&dx_);
+    ModelManager::GetInstance()->Initialize(&dx_, &dx_.GetSrvAllocator());
 
-  bool inputOk = input_.Initialize(winApp_.GetHInstance(), winApp_.GetHwnd());
-  assert(inputOk);
+    // ImGui初期化
+    imgui_.Initialize(&winApp_, &dx_);
 
-  bool audioOk = audio_.Initialize();
-  assert(audioOk);
+    bool inputOk = input_.Initialize(winApp_.GetHInstance(), winApp_.GetHwnd());
+    assert(inputOk);
 
-  shaderCompiler_.Initialize(dx_.GetDXCUtils(), dx_.GetDXCCompiler(), dx_.GetDXCIncludeHandler());
+    bool audioOk = audio_.Initialize();
+    assert(audioOk);
 
-  InitPipelines_();
-  InitResources_();
+    shaderCompiler_.Initialize(dx_.GetDXCUtils(), dx_.GetDXCCompiler(), dx_.GetDXCIncludeHandler());
 
-  debugCamera_ = std::make_unique<DebugCamera>();
-  InitCamera_();
+    InitPipelines_();
+    InitResources_();
 
-  accelerationField_.acceleration = {15.0f, 0.0f, 0.0f};
-  accelerationField_.area.min = {-1.0f, -1.0f, -1.0f};
-  accelerationField_.area.max = {1.0f, 1.0f, 1.0f};
+    // カメラ生成（今はデバッグカメラを Camera インターフェースで包んで使う）
+    camera_ = std::make_unique<DebugCamera>();
+    camera_->Initialize();
+    InitCamera_();
 
-  return true;
+    accelerationField_.acceleration = { 15.0f, 0.0f, 0.0f };
+    accelerationField_.area.min = { -1.0f, -1.0f, -1.0f };
+    accelerationField_.area.max = { 1.0f, 1.0f, 1.0f };
+
+    return true;
 }
 
 int GameApp::Run() {
-  if (!Initialize()) {
-    return -1;
-  }
+    if (!Initialize()) {
+        return -1;
+    }
 
-  while (winApp_.ProcessMessage()) {
-    input_.Update();
-    Update();
-    Draw();
-  }
+    while (winApp_.ProcessMessage()) {
+        input_.Update();
+        Update();
+        Draw();
+    }
 
-  Finalize();
-  return 0;
+    Finalize();
+    return 0;
 }
 
 void GameApp::Finalize() {
-  static bool finalized = false;
-  if (finalized) {
-    return;
-  }
-  finalized = true;
+    static bool finalized = false;
+    if (finalized) {
+        return;
+    }
+    finalized = true;
 
-  // リソース解放
-  imgui_.Finalize();
+    // リソース解放
+    imgui_.Finalize();
 
-  audio_.Shutdown();
-  input_.Finalize();
+    audio_.Shutdown();
+    input_.Finalize();
 
-  winApp_.Finalize();
-  CoUninitialize();
+    winApp_.Finalize();
+    CoUninitialize();
 }
 
 void GameApp::Update() {
-  if (debugCamera_) {
-    debugCamera_->Update(input_);
-    view3D_ = debugCamera_->GetViewMatrix();
-  } else {
-    view3D_ = Inverse(MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f},
-                                       {0.0f, 0.0f, -10.0f}));
-  }
-
-  proj3D_ = MakePerspectiveFovMatrix(
-      0.45f, float(WinApp::kClientWidth) / float(WinApp::kClientHeight), 0.1f, 100.0f);
+    if (camera_) {
+        camera_->Update(input_);
+        view3D_ = camera_->GetViewMatrix();
+        proj3D_ = camera_->GetProjectionMatrix();
+    } else {
+        view3D_ = Inverse(MakeAffineMatrix({ 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f },
+            { 0.0f, 0.0f, -10.0f }));
+        proj3D_ = MakePerspectiveFovMatrix(
+            0.45f, float(WinApp::kClientWidth) / float(WinApp::kClientHeight), 0.1f, 100.0f);
+    }
 
 #ifdef USE_IMGUI
-  static bool settingsOpen = true;
-  imgui_.Begin();
-  if (settingsOpen) {
-    ImGui::Begin("Settings", &settingsOpen);
+    static bool settingsOpen = true;
+    imgui_.Begin();
+    if (settingsOpen) {
+        ImGui::Begin("Settings", &settingsOpen);
 
-    ImGui::Text("Particles");
-    ImGui::SliderInt("最大発生数", reinterpret_cast<int *>(&particleCountUI_), 0,
-                     static_cast<int>(kParticleCount_));
+        ImGui::Text("Particles");
+        ImGui::SliderInt("最大発生数", reinterpret_cast<int*>(&particleCountUI_), 0,
+            static_cast<int>(kParticleCount_));
 
-    ImGui::SliderFloat("発生頻度（1秒あたりの発生数）", &particleEmitRate_, 0.0f, 100.0f);
-    if (particleEmitRate_ < 0.0f) {
-      particleEmitRate_ = 0.0f;
+        ImGui::SliderFloat("発生頻度（1秒あたりの発生数）", &particleEmitRate_, 0.0f, 100.0f);
+        if (particleEmitRate_ < 0.0f) {
+            particleEmitRate_ = 0.0f;
+        }
+
+        ImGui::DragFloat3("エミッタ位置", reinterpret_cast<float*>(&particleSpawnCenter_), 0.01f);
+        ImGui::DragFloat3("エミッタ範囲", reinterpret_cast<float*>(&particleSpawnExtent_), 0.01f, 0.0f, 10.0f);
+
+        ImGui::DragFloat3("初速度", reinterpret_cast<float*>(&particleBaseDir_), 0.01f, -1.0f, 1.0f);
+        ImGui::SliderFloat("初速度ランダム範囲", &particleDirRandomness_, 0.0f, 1.0f);
+
+        ImGui::SliderFloat("最低速度", &particleSpeedMin_, 0.0f, 10.0f);
+        ImGui::SliderFloat("最大速度", &particleSpeedMax_, 0.0f, 10.0f);
+        if (particleSpeedMin_ > particleSpeedMax_) {
+            particleSpeedMin_ = particleSpeedMax_;
+        }
+
+        ImGui::SliderFloat("最低寿命", &particleLifeMin_, 0.1f, 10.0f);
+        ImGui::SliderFloat("最大寿命", &particleLifeMax_, 0.1f, 10.0f);
+        if (particleLifeMin_ > particleLifeMax_) {
+            particleLifeMin_ = particleLifeMax_;
+        }
+
+        ImGui::Checkbox("Emitter範囲を表示", &showEmitterGizmo_);
+
+        int shapeIndex = (emitterShape_ == EmitterShape::Box) ? 0 : 1;
+        const char* shapeItems[] = { "Box(AABB)", "Sphere" };
+        ImGui::Combo("Emitter形状", &shapeIndex, shapeItems, IM_ARRAYSIZE(shapeItems));
+        emitterShape_ = (shapeIndex == 0) ? EmitterShape::Box : EmitterShape::Sphere;
+
+        ImGui::Separator();
+        int colorModeIndex = static_cast<int>(particleColorMode_);
+        const char* colorModeItems[] = { "Random RGB", "Range RGB", "Range HSV", "Fixed Color" };
+        ImGui::Combo("Mode", &colorModeIndex, colorModeItems, IM_ARRAYSIZE(colorModeItems));
+        particleColorMode_ = static_cast<ParticleColorMode>(colorModeIndex);
+
+        ImGui::ColorEdit4("Base Color", reinterpret_cast<float*>(&particleBaseColor_));
+
+        if (particleColorMode_ == ParticleColorMode::RangeRGB) {
+            ImGui::SliderFloat3("RGB Range", reinterpret_cast<float*>(&particleColorRangeRGB_), 0.0f, 1.0f);
+        }
+
+        if (particleColorMode_ == ParticleColorMode::RangeHSV) {
+            ImGui::SliderFloat3("Base HSV", reinterpret_cast<float*>(&particleBaseHSV_), 0.0f, 1.0f);
+            ImGui::SliderFloat3("HSV Range", reinterpret_cast<float*>(&particleHSVRange_), 0.0f, 1.0f);
+        }
+
+        ImGui::Text("Blend");
+        const char* particleBlendItems[] = { "Alpha (通常)", "Add (加算)", "Subtract (減算)", "Multiply (乗算)", "Screen (スクリーン)" };
+        ImGui::Combo("Particle Blend", &particleBlendMode_, particleBlendItems, IM_ARRAYSIZE(particleBlendItems));
+
+        ImGui::Text("Acceleration Field");
+        ImGui::Checkbox("加速度場を有効化", &enableAccelerationField_);
+        ImGui::DragFloat3("加速度", reinterpret_cast<float*>(&accelerationField_.acceleration), 0.1f, -100.0f, 100.0f);
+        ImGui::DragFloat3("範囲Min", reinterpret_cast<float*>(&accelerationField_.area.min), 0.1f, -10.0f, 10.0f);
+        ImGui::DragFloat3("範囲Max", reinterpret_cast<float*>(&accelerationField_.area.max), 0.1f, -10.0f, 10.0f);
+
+        ImGui::End();
     }
-
-    ImGui::DragFloat3("エミッタ位置", reinterpret_cast<float *>(&particleSpawnCenter_), 0.01f);
-    ImGui::DragFloat3("エミッタ範囲", reinterpret_cast<float *>(&particleSpawnExtent_), 0.01f, 0.0f, 10.0f);
-
-    ImGui::DragFloat3("初速度", reinterpret_cast<float *>(&particleBaseDir_), 0.01f, -1.0f, 1.0f);
-    ImGui::SliderFloat("初速度ランダム範囲", &particleDirRandomness_, 0.0f, 1.0f);
-
-    ImGui::SliderFloat("最低速度", &particleSpeedMin_, 0.0f, 10.0f);
-    ImGui::SliderFloat("最大速度", &particleSpeedMax_, 0.0f, 10.0f);
-    if (particleSpeedMin_ > particleSpeedMax_) {
-      particleSpeedMin_ = particleSpeedMax_;
-    }
-
-    ImGui::SliderFloat("最低寿命", &particleLifeMin_, 0.1f, 10.0f);
-    ImGui::SliderFloat("最大寿命", &particleLifeMax_, 0.1f, 10.0f);
-    if (particleLifeMin_ > particleLifeMax_) {
-      particleLifeMin_ = particleLifeMax_;
-    }
-
-    ImGui::Checkbox("Emitter範囲を表示", &showEmitterGizmo_);
-
-    int shapeIndex = (emitterShape_ == EmitterShape::Box) ? 0 : 1;
-    const char *shapeItems[] = {"Box(AABB)", "Sphere"};
-    ImGui::Combo("Emitter形状", &shapeIndex, shapeItems, IM_ARRAYSIZE(shapeItems));
-    emitterShape_ = (shapeIndex == 0) ? EmitterShape::Box : EmitterShape::Sphere;
-
-    ImGui::Separator();
-    int colorModeIndex = static_cast<int>(particleColorMode_);
-    const char *colorModeItems[] = {"Random RGB", "Range RGB", "Range HSV", "Fixed Color"};
-    ImGui::Combo("Mode", &colorModeIndex, colorModeItems, IM_ARRAYSIZE(colorModeItems));
-    particleColorMode_ = static_cast<ParticleColorMode>(colorModeIndex);
-
-    ImGui::ColorEdit4("Base Color", reinterpret_cast<float *>(&particleBaseColor_));
-
-    if (particleColorMode_ == ParticleColorMode::RangeRGB) {
-      ImGui::SliderFloat3("RGB Range", reinterpret_cast<float *>(&particleColorRangeRGB_), 0.0f, 1.0f);
-    }
-
-    if (particleColorMode_ == ParticleColorMode::RangeHSV) {
-      ImGui::SliderFloat3("Base HSV", reinterpret_cast<float *>(&particleBaseHSV_), 0.0f, 1.0f);
-      ImGui::SliderFloat3("HSV Range", reinterpret_cast<float *>(&particleHSVRange_), 0.0f, 1.0f);
-    }
-
-    ImGui::Text("Blend");
-    const char *particleBlendItems[] = {"Alpha (通常)", "Add (加算)", "Subtract (減算)", "Multiply (乗算)", "Screen (スクリーン)"};
-    ImGui::Combo("Particle Blend", &particleBlendMode_, particleBlendItems, IM_ARRAYSIZE(particleBlendItems));
-
-    ImGui::Text("Acceleration Field");
-    ImGui::Checkbox("加速度場を有効化", &enableAccelerationField_);
-    ImGui::DragFloat3("加速度", reinterpret_cast<float *>(&accelerationField_.acceleration), 0.1f, -100.0f, 100.0f);
-    ImGui::DragFloat3("範囲Min", reinterpret_cast<float *>(&accelerationField_.area.min), 0.1f, -10.0f, 10.0f);
-    ImGui::DragFloat3("範囲Max", reinterpret_cast<float *>(&accelerationField_.area.max), 0.1f, -10.0f, 10.0f);
-
-    ImGui::End();
-  }
-  imgui_.End();
+    imgui_.End();
 #endif
 
-  if (particleMatrices_) {
-    float deltaTime = 1.0f / 60.0f;
-    uint32_t capacity = std::min(particleCountUI_, kParticleCount_);
+    if (particleMatrices_) {
+        float deltaTime = 1.0f / 60.0f;
+        uint32_t capacity = std::min(particleCountUI_, kParticleCount_);
 
-    uint32_t gpuIndex = 0;
-    for (auto it = particles_.begin(); it != particles_.end();) {
-      Particle &p = *it;
+        uint32_t gpuIndex = 0;
+        for (auto it = particles_.begin(); it != particles_.end();) {
+            Particle& p = *it;
 
-      p.age += deltaTime;
-      if (p.age >= p.lifetime) {
-        it = particles_.erase(it);
-        continue;
-      }
+            p.age += deltaTime;
+            if (p.age >= p.lifetime) {
+                it = particles_.erase(it);
+                continue;
+            }
 
-      if (enableAccelerationField_) {
-        if (IsCollision(accelerationField_.area, p.transform.translate)) {
-          p.velocity.x += accelerationField_.acceleration.x * deltaTime;
-          p.velocity.y += accelerationField_.acceleration.y * deltaTime;
-          p.velocity.z += accelerationField_.acceleration.z * deltaTime;
+            if (enableAccelerationField_) {
+                if (IsCollision(accelerationField_.area, p.transform.translate)) {
+                    p.velocity.x += accelerationField_.acceleration.x * deltaTime;
+                    p.velocity.y += accelerationField_.acceleration.y * deltaTime;
+                    p.velocity.z += accelerationField_.acceleration.z * deltaTime;
+                }
+            }
+
+            p.transform.translate.x += p.velocity.x * deltaTime;
+            p.transform.translate.y += p.velocity.y * deltaTime;
+            p.transform.translate.z += p.velocity.z * deltaTime;
+
+            float t = p.age / p.lifetime;
+            float alpha = std::clamp(1.0f - t, 0.0f, 1.0f);
+
+            if (gpuIndex < capacity) {
+                Matrix4x4 world = MakeBillboardMatrix(p.transform.scale, p.transform.translate, view3D_);
+                Matrix4x4 wvp = Multiply(world, Multiply(view3D_, proj3D_));
+                particleMatrices_[gpuIndex].World = world;
+                particleMatrices_[gpuIndex].WVP = wvp;
+                particleMatrices_[gpuIndex].color = { p.color.x, p.color.y, p.color.z, alpha };
+                ++gpuIndex;
+            }
+
+            ++it;
         }
-      }
 
-      p.transform.translate.x += p.velocity.x * deltaTime;
-      p.transform.translate.y += p.velocity.y * deltaTime;
-      p.transform.translate.z += p.velocity.z * deltaTime;
+        activeParticleCount_ = gpuIndex;
 
-      float t = p.age / p.lifetime;
-      float alpha = std::clamp(1.0f - t, 0.0f, 1.0f);
+        if (particleEmitRate_ > 0.0f) {
+            particleEmitAccum_ += deltaTime * particleEmitRate_;
 
-      if (gpuIndex < capacity) {
-        Matrix4x4 world = MakeBillboardMatrix(p.transform.scale, p.transform.translate, view3D_);
-        Matrix4x4 wvp = Multiply(world, Multiply(view3D_, proj3D_));
-        particleMatrices_[gpuIndex].World = world;
-        particleMatrices_[gpuIndex].WVP = wvp;
-        particleMatrices_[gpuIndex].color = {p.color.x, p.color.y, p.color.z, alpha};
-        ++gpuIndex;
-      }
+            uint32_t spawnCount = static_cast<uint32_t>(particleEmitAccum_);
+            if (spawnCount > 0) {
+                particleEmitAccum_ -= static_cast<float>(spawnCount);
 
-      ++it;
+                uint32_t maxSpawn = (capacity > static_cast<uint32_t>(particles_.size()))
+                    ? (capacity - static_cast<uint32_t>(particles_.size()))
+                    : 0;
+                spawnCount = std::min(spawnCount, maxSpawn);
+
+                for (uint32_t i = 0; i < spawnCount; ++i) {
+                    Particle p{};
+                    RespawnParticle_(p);
+                    particles_.push_back(p);
+                }
+            }
+        }
     }
-
-    activeParticleCount_ = gpuIndex;
-
-    uint32_t currentCount = static_cast<uint32_t>(particles_.size());
-    uint32_t maxCount = capacity;
-
-    if (particleEmitRate_ > 0.0f && currentCount < maxCount) {
-      particleEmitAccum_ += particleEmitRate_ * deltaTime;
-      while (particleEmitAccum_ >= 1.0f && currentCount < maxCount) {
-        Particle p{};
-        RespawnParticle_(p);
-        particles_.push_back(p);
-        particleEmitAccum_ -= 1.0f;
-        ++currentCount;
-      }
-    } else {
-      particleEmitAccum_ = 0.0f;
-    }
-  }
 }
 
 void GameApp::Draw() {
@@ -453,12 +468,14 @@ void GameApp::InitResources_() {
   ComPtr<ID3D12Device> device;
   dx_.GetDevice()->QueryInterface(IID_PPV_ARGS(&device));
 
+  particleInstanceSrv_.Reset();
+  particleTextureResource_.reset();
+
   // ===== Model =====
   {
     Model::CreateInfo ci{};
     ci.dx = &dx_;
     ci.pipeline = &objPipeline_;
-    ci.srvAlloc = &dx_.GetSrvAllocator();
     ci.modelData = LoadObjFile("resources/sphere", "sphere.obj");
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
@@ -469,7 +486,6 @@ void GameApp::InitResources_() {
     Model::CreateInfo ci{};
     ci.dx = &dx_;
     ci.pipeline = &objPipeline_;
-    ci.srvAlloc = &dx_.GetSrvAllocator();
     ci.modelData = LoadObjFile("resources/plane", "plane.obj");
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
@@ -480,7 +496,6 @@ void GameApp::InitResources_() {
     Model::CreateInfo ci{};
     ci.dx = &dx_;
     ci.pipeline = &emitterGizmoPipelineWire_;
-    ci.srvAlloc = &dx_.GetSrvAllocator();
     ci.modelData = LoadObjFile("resources/sphere", "sphere.obj");
     ci.baseColor = {0.3f, 0.8f, 1.0f, 0.3f};
     ci.lightingMode = 0;
@@ -491,7 +506,6 @@ void GameApp::InitResources_() {
     Model::CreateInfo ci{};
     ci.dx = &dx_;
     ci.pipeline = &emitterGizmoPipelineWire_;
-    ci.srvAlloc = &dx_.GetSrvAllocator();
     ci.modelData = LoadObjFile("resources/cube", "cube.obj");
     ci.baseColor = {1.0f, 0.8f, 0.2f, 0.3f};
     ci.lightingMode = 0;
@@ -501,15 +515,14 @@ void GameApp::InitResources_() {
 
   // ===== Sprite =====
   {
-    Sprite::CreateInfo sprInfo{};
-    sprInfo.dx = &dx_;
-    sprInfo.pipeline = &spritePipelineAlpha_;
-    sprInfo.srvAlloc = &dx_.GetSrvAllocator();
-    sprInfo.texturePath = "resources/uvChecker.png";
-    sprInfo.size = {640.0f, 360.0f};
-    sprInfo.color = {1.0f, 1.0f, 1.0f, 1.0f};
-    bool okSprite = sprite_.Initialize(sprInfo);
-    assert(okSprite);
+      Sprite::CreateInfo sprInfo{};
+      sprInfo.dx = &dx_;
+      sprInfo.pipeline = &spritePipelineAlpha_;
+      sprInfo.texturePath = "resources/uvChecker.png";
+      sprInfo.size = { 640.0f, 360.0f };
+      sprInfo.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+      bool okSprite = sprite_.Initialize(sprInfo);
+      assert(okSprite);
   }
 
   // ===== Particle Instance Buffer (StructuredBuffer SRV) =====
@@ -533,9 +546,11 @@ void GameApp::InitResources_() {
     desc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
     desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
-    UINT index = dx_.GetSrvAllocator().Allocate();
-    device->CreateShaderResourceView(particleInstanceBuffer_.Get(), &desc, dx_.GetSrvAllocator().Cpu(index));
-    particleMatricesSrvGPU_ = dx_.GetSrvAllocator().Gpu(index);
+    SrvAllocator* alloc = &dx_.GetSrvAllocator();
+    uint32_t index = alloc->Allocate();
+    particleInstanceSrv_ = SrvHandle(alloc, index);
+    device->CreateShaderResourceView(particleInstanceBuffer_.Get(), &desc, alloc->Cpu(index));
+    particleMatricesSrvGPU_ = alloc->Gpu(index);
   }
 
   // 初期生成
@@ -574,26 +589,10 @@ void GameApp::InitResources_() {
     particleMaterialData_->uvTransform = MakeIdentity4x4();
   }
 
-  // ===== Particle Texture SRV (Texture2D) =====
+  // ===== Particle Texture SRV (Texture2D) : RAII + TextureManager =====
   {
-    DirectX::ScratchImage mipImages = LoadTexture("resources/particle/circle.png");
-    const DirectX::TexMetadata &meta = mipImages.GetMetadata();
-
-    particleTexture_ = CreateTextureResource(device, meta);
-    UploadTextureData(particleTexture_, mipImages);
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-    srvDesc.Format = meta.format;
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = static_cast<UINT>(meta.mipLevels);
-
-    UINT texIndex = dx_.GetSrvAllocator().Allocate();
-
-    // ここが重要：Texture2D のSRVには particleTexture_ を渡す
-    device->CreateShaderResourceView(particleTexture_.Get(), &srvDesc, dx_.GetSrvAllocator().Cpu(texIndex));
-
-    particleTextureHandle_ = dx_.GetSrvAllocator().Gpu(texIndex);
+      particleTextureResource_ = TextureManager::GetInstance()->Load("resources/particle/circle.png");
+      particleTextureHandle_ = particleTextureResource_->GetSrvGpu();
   }
 
   // ===== DirectionalLight CB =====
@@ -615,8 +614,10 @@ void GameApp::InitResources_() {
         nullptr, IID_PPV_ARGS(&directionalLightCB_));
     assert(SUCCEEDED(hr));
 
-    directionalLightCB_->Map(0, nullptr, reinterpret_cast<void **>(&directionalLightData_));
-    *directionalLightData_ = {{1, 1, 1, 1}, {0, -1, 0}, 1.0f};
+    directionalLightCB_->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData_));
+    directionalLightData_->color = { 1, 1, 1, 1 };
+    directionalLightData_->direction = { 0, -1, 0 };
+    directionalLightData_->intensity = 1.0f;
   }
 
   bool select = audio_.Load("select", L"resources/sound/select.mp3", 1.0f);
@@ -690,11 +691,17 @@ void GameApp::InitResources_() {
 }
 
 void GameApp::InitCamera_() {
-  transform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-  cameraTransform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -10.0f}};
-  transformSprite_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-  uvTransformSprite_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-  transform2_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}};
+    transform_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+    cameraTransform_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -10.0f} };
+    transformSprite_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+    uvTransformSprite_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+    transform2_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f} };
+
+    // 3D投影はカメラ側に持たせる（Update では view だけ更新する）
+    if (camera_) {
+        camera_->SetPerspective(
+            0.45f, float(WinApp::kClientWidth) / float(WinApp::kClientHeight), 0.1f, 100.0f);
+    }
 }
 
 Vector4 GameApp::GenerateParticleColor_() {
