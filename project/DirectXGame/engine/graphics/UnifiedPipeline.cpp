@@ -260,6 +260,14 @@ PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeEmitterWireDesc() {
+    return PipelineDesc();
+}
+
+PipelineDesc UnifiedPipeline::MakeEmitterAlphaDesc() {
+    return PipelineDesc();
+}
+
 PipelineDesc UnifiedPipeline::MakeParticleDesc() {
   PipelineDesc d{};
   d.inputElements = {

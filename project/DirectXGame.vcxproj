@@ -193,6 +193,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="DirectXGame\engine\camera\Camera.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\AssetLoader.cpp" />
     <ClCompile Include="DirectXGame\engine\audio\Audio.cpp" />
     <ClCompile Include="DirectXGame\engine\camera\DebugCamera.cpp" />
@@ -212,22 +213,32 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="DirectXGame\engine\camera\GameCamera.cpp" />
     <ClCompile Include="main.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
     <ClCompile Include="DirectXGame\engine\math\Method.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\3d\Model.cpp" />
-    <ClCompile Include="DirectXGame\engine\graphics\ResourceManager.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\ModelManager.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\ShaderCompiler.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\2d\Sprite.cpp" />
     <ClCompile Include="DirectXGame\engine\base\TextureUtils.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\UnifiedPipeline.cpp" />
     <ClCompile Include="DirectXGame\engine\base\WinApp.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\ModelUtils.cpp" />
+    <ClCompile Include="ModelInstance.cpp" />
+    <ClCompile Include="ModelResource.cpp" />
+    <ClCompile Include="ParticleEmitter.cpp" />
+    <ClCompile Include="ParticleManager.cpp" />
     <ClCompile Include="ShaderCompilerUtils.cpp" />
+    <ClCompile Include="SrvHandle.cpp" />
+    <ClCompile Include="TextureManager.cpp" />
+    <ClCompile Include="TextureResource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DirectXGame\engine\camera\Camera.h" />
+    <ClInclude Include="DirectXGame\engine\camera\ICameraController.h" />
     <ClInclude Include="DirectXGame\engine\graphics\AssetLoader.h" />
     <ClInclude Include="DirectXGame\engine\audio\Audio.h" />
     <ClInclude Include="DirectXGame\engine\camera\DebugCamera.h" />
@@ -249,12 +260,13 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClInclude>
+    <ClInclude Include="DirectXGame\engine\camera\GameCamera.h" />
     <ClInclude Include="include.h" />
     <ClInclude Include="DirectXGame\engine\base\input\Input.h" />
     <ClInclude Include="DirectXGame\engine\Type\Matrix.h" />
     <ClInclude Include="DirectXGame\engine\math\Method.h" />
     <ClInclude Include="DirectXGame\engine\graphics\3d\Model.h" />
-    <ClInclude Include="DirectXGame\engine\graphics\ResourceManager.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\ModelManager.h" />
     <ClInclude Include="DirectXGame\engine\graphics\ResourceObject.h" />
     <ClInclude Include="DirectXGame\engine\graphics\ShaderCompiler.h" />
     <ClInclude Include="DirectXGame\engine\graphics\2d\Sprite.h" />
@@ -263,7 +275,15 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <ClInclude Include="DirectXGame\engine\Type\Vector.h" />
     <ClInclude Include="DirectXGame\engine\base\WinApp.h" />
     <ClInclude Include="DirectXGame\engine\graphics\ModelUtils.h" />
+    <ClInclude Include="ModelInstance.h" />
+    <ClInclude Include="ModelResource.h" />
+    <ClInclude Include="ParticleEmitter.h" />
+    <ClInclude Include="ParticleManager.h" />
     <ClInclude Include="ShaderCompilerUtils.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\SrvAllocator.h" />
+    <ClInclude Include="SrvHandle.h" />
+    <ClInclude Include="TextureManager.h" />
+    <ClInclude Include="TextureResource.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />

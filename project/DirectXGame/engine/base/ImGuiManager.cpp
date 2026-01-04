@@ -141,6 +141,14 @@ void ImGuiManager::Draw(ID3D12GraphicsCommandList* cmdList) {
 	}
 	assert(cmdList != nullptr);
 
+	if (ImGui::GetCurrentContext() == nullptr) {
+		return;
+	}
+	ImDrawData* drawData = ImGui::GetDrawData();
+	if (drawData == nullptr) {
+		return;
+	}
+
 	// EndFrame() が呼ばれてないと "g.WithinFrameScope" 系で落ちるので保険
 	if (frameBegun_) {
 		End();
