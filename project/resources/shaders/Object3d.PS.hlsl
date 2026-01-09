@@ -84,20 +84,20 @@ PixelShaderOutput main(VertexShaderOutput input)
 
     float3 specular = float3(0.0f, 0.0f, 0.0f);
 
-    // 鏡面反射（Phong）
+    // 鏡面反射（Blinn-Phong）
     if (gMaterial.enableLighting != 0 && gMaterial.shininess > 0.0f)
     {
         float3 V = normalize(gCamera.worldPosition - input.worldPosition); // 面→視点
-        float3 R = reflect(-L, N); // 入射は (光→面) なので -L
+        float3 H = normalize(L + V); // Half Vector（面→光 と 面→視点 の中間）
 
-        float RdotV = saturate(dot(R, V));
-        float specPow = pow(RdotV, gMaterial.shininess);
+        float NdotH = saturate(dot(N, H));
+        float specPow = pow(NdotH, gMaterial.shininess);
 
         specular =
-            gDirectionalLight.color.rgb *
-            gDirectionalLight.intensity *
-            gMaterial.specularColor *
-            specPow;
+        gDirectionalLight.color.rgb *
+        gDirectionalLight.intensity *
+        gMaterial.specularColor *
+        specPow;
     }
 
     float3 finalRGB = diffuse;
