@@ -123,6 +123,10 @@ void Model::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
   cbTransMapped_->World = world_;
   cbTransMapped_->WVP = wvp;
 
+  // worldの逆行列を計算して転置行列にする
+  const Matrix4x4 worldInv = Inverse(world_);
+  cbTransMapped_->WorldInverseTranspose = Transpose(worldInv);
+
   // PSO / RootSignature
   cmd->SetPipelineState(pipeline_->GetPipelineState());
   cmd->SetGraphicsRootSignature(pipeline_->GetRootSignature());

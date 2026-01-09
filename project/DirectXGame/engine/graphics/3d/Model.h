@@ -25,6 +25,7 @@ struct ModelMaterialCB {
 struct ModelTransformCB {
   Matrix4x4 WVP = MakeIdentity4x4();
   Matrix4x4 World = MakeIdentity4x4();
+  Matrix4x4 WorldInverseTranspose = MakeIdentity4x4();
 };
 
 class Model {
