@@ -18,8 +18,15 @@ struct VertexShaderInput
 VertexShaderOutput main(VertexShaderInput input)
 {
     VertexShaderOutput output;
+
     output.position = mul(input.position, gTransformationMatrix.WVP);
     output.texcoord = input.texcoord;
-    output.normal = normalize(mul(input.normal, (float3x3) gTransformationMatrix.World));
+
+    float3x3 world3x3 = (float3x3) gTransformationMatrix.World;
+    output.normal = normalize(mul(input.normal, world3x3));
+
+    float4 worldPos4 = mul(input.position, gTransformationMatrix.World);
+    output.worldPosition = worldPos4.xyz;
+
     return output;
 }

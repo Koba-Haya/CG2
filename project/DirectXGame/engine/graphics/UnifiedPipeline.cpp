@@ -91,7 +91,7 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
       D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
   // --- Root Parameters（フラグに応じて詰める） ---
-  D3D12_ROOT_PARAMETER params[5]{};
+  D3D12_ROOT_PARAMETER params[6]{};
   UINT numParams = 0;
 
   if (desc.usePSMaterial_b0) {
@@ -125,6 +125,12 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     p.Descriptor.ShaderRegister = 1; // b1
+  }
+  if (desc.usePSCamera_b2) {
+    auto &p = params[numParams++];
+    p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    p.Descriptor.ShaderRegister = 2; // b2
   }
 
   D3D12_STATIC_SAMPLER_DESC samp{};
@@ -210,8 +216,6 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
 // ===== プリセット =====
 PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
   PipelineDesc d{};
-  // POSITION(float4) / TEXCOORD(float2) / NORMAL(float3)  ← 既存 Object3D
-  // と合せる
   d.inputElements = {
       D3D12_INPUT_ELEMENT_DESC{"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
                                D3D12_APPEND_ALIGNED_ELEMENT,
@@ -228,7 +232,11 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
   d.usePSMaterial_b0 = true;
   d.useVSTransform_b0 = true;
   d.usePSTextureTable_t0 = true;
-  d.usePSDirectionalLight_b1 = true; // ← ライティングあり
+  d.usePSDirectionalLight_b1 = true;
+
+  // Phong 用に Camera を渡す
+  d.usePSCamera_b2 = true;
+
   d.enableDepth = true;
   d.alphaBlend = false;
   d.cullMode = D3D12_CULL_MODE_BACK;

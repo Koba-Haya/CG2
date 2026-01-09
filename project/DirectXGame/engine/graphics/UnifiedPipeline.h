@@ -38,6 +38,9 @@ struct PipelineDesc {
   bool useVSInstancingTable_t1 =
       false; // VS: t1 (SRVテーブル、インスタンシング用)
 
+  // カメラCB b2
+  bool usePSCamera_b2 = false;
+
   // ラスタ/ブレンド/深度
   bool enableDepth = true;
   bool alphaBlend = false;
