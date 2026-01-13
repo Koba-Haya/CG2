@@ -11,6 +11,7 @@
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
 #endif
+#include <Windows.h>
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -19,6 +20,33 @@
 #include <format>
 #include <objbase.h>
 #include <random>
+#include <string>
+
+static void FatalBoxAndTerminate_(const std::string &msg) {
+  MessageBoxA(nullptr, msg.c_str(), "Fatal", MB_OK | MB_ICONERROR);
+  std::terminate();
+}
+
+static void CheckBoolOrDie_(bool ok, const char *what) {
+  if (!ok) {
+    FatalBoxAndTerminate_(std::string("[GameApp] failed: ") + what);
+  }
+}
+
+static void CheckHROrDie_(HRESULT hr, const char *what) {
+  if (FAILED(hr)) {
+    char buf[512];
+    sprintf_s(buf, "[GameApp] HRESULT failed: %s (hr=0x%08X)", what,
+              (unsigned)hr);
+    FatalBoxAndTerminate_(buf);
+  }
+}
+
+static void CheckFileExists_(const std::string &path) {
+  if (!std::filesystem::exists(path)) {
+    FatalBoxAndTerminate_(std::string("File not found:\n") + path);
+  }
+}
 
 namespace {
 std::mt19937 &GetRNG() {
@@ -97,7 +125,7 @@ GameApp::~GameApp() { Finalize(); }
 
 bool GameApp::Initialize() {
   HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-  assert(SUCCEEDED(hr));
+  CheckHROrDie_(hr, "CoInitializeEx");
 
   InitLogging_();
 
@@ -111,18 +139,17 @@ bool GameApp::Initialize() {
   };
   dx_.Initialize(params);
 
-  // SRV/Textureマネージャーの初期化
   TextureManager::GetInstance()->Initialize(&dx_);
   ModelManager::GetInstance()->Initialize(&dx_, &dx_.GetSrvAllocator());
 
-  // ImGui初期化
   imgui_.Initialize(&winApp_, &dx_);
 
-  bool inputOk = input_.Initialize(winApp_.GetHInstance(), winApp_.GetHwnd());
-  assert(inputOk);
+  const bool inputOk =
+      input_.Initialize(winApp_.GetHInstance(), winApp_.GetHwnd());
+  CheckBoolOrDie_(inputOk, "input_.Initialize");
 
-  bool audioOk = audio_.Initialize();
-  assert(audioOk);
+  const bool audioOk = audio_.Initialize();
+  CheckBoolOrDie_(audioOk, "audio_.Initialize");
 
   shaderCompiler_.Initialize(dx_.GetDXCUtils(), dx_.GetDXCCompiler(),
                              dx_.GetDXCIncludeHandler());
@@ -130,7 +157,6 @@ bool GameApp::Initialize() {
   InitPipelines_();
   InitResources_();
 
-  // カメラ生成（今はデバッグカメラを Camera インターフェースで包んで使う）
   camera_ = std::make_unique<DebugCamera>();
   camera_->Initialize();
   InitCamera_();
@@ -547,101 +573,77 @@ void GameApp::Draw() {
     }
 
     ParticleManager::GetInstance()->Draw(cmdList, currentParticlePipeline);
+  }
 
-    // ===== パーティクル描画（ParticleManager）=====
-    {
-      UnifiedPipeline *currentParticlePipeline = &particlePipelineAlpha_;
-      switch (particleBlendMode_) {
-      case 1:
-        currentParticlePipeline = &particlePipelineAdd_;
-        break;
-      case 2:
-        currentParticlePipeline = &particlePipelineSub_;
-        break;
-      case 3:
-        currentParticlePipeline = &particlePipelineMul_;
-        break;
-      case 4:
-        currentParticlePipeline = &particlePipelineScreen_;
-        break;
-      default:
-        break;
-      }
-
-      ParticleManager::GetInstance()->Draw(cmdList, currentParticlePipeline);
+  // ===== Sprite描画 =====
+  {
+    UnifiedPipeline *currentSpritePipeline = &spritePipelineAlpha_;
+    switch (spriteBlendMode_) {
+    case 1:
+      currentSpritePipeline = &spritePipelineAdd_;
+      break;
+    case 2:
+      currentSpritePipeline = &spritePipelineSub_;
+      break;
+    case 3:
+      currentSpritePipeline = &spritePipelineMul_;
+      break;
+    case 4:
+      currentSpritePipeline = &spritePipelineScreen_;
+      break;
+    default:
+      break;
     }
 
-    // ===== Sprite描画 =====
-    {
-      UnifiedPipeline *currentSpritePipeline = &spritePipelineAlpha_;
-      switch (spriteBlendMode_) {
-      case 1:
-        currentSpritePipeline = &spritePipelineAdd_;
-        break;
-      case 2:
-        currentSpritePipeline = &spritePipelineSub_;
-        break;
-      case 3:
-        currentSpritePipeline = &spritePipelineMul_;
-        break;
-      case 4:
-        currentSpritePipeline = &spritePipelineScreen_;
-        break;
-      default:
-        break;
-      }
+    sprite_.SetPipeline(currentSpritePipeline);
 
-      sprite_.SetPipeline(currentSpritePipeline);
+    // Transformを反映
+    sprite_.SetPosition(transformSprite_.translate);
+    sprite_.SetRotation(transformSprite_.rotate);
+    sprite_.SetScale(transformSprite_.scale);
 
-      // Transformを反映
-      sprite_.SetPosition(transformSprite_.translate);
-      sprite_.SetRotation(transformSprite_.rotate);
-      sprite_.SetScale(transformSprite_.scale);
+    // UV transform（4x4でOK）
+    Matrix4x4 uvMat = MakeUVMatrixFromTransform(uvTransformSprite_);
+    sprite_.SetUVTransform(uvMat);
 
-      // UV transform（4x4でOK）
-      Matrix4x4 uvMat = MakeUVMatrixFromTransform(uvTransformSprite_);
-      sprite_.SetUVTransform(uvMat);
+    // 2D(画面固定) 用 view / proj
+    const auto &vp = dx_.GetViewport();
+    const float screenW = vp.Width;
+    const float screenH = vp.Height;
 
-      // 2D(画面固定) 用 view / proj
-      const auto &vp = dx_.GetViewport();
-      const float screenW = vp.Width;
-      const float screenH = vp.Height;
+    // 左上(0,0)〜右下(W,H) のピクセル座標で描ける正射影
+    Matrix4x4 view2D = MakeIdentity4x4();
+    Matrix4x4 proj2D = MakeOrthographicMatrix(0.0f, 0.0f,       // left, top
+                                              screenW, screenH, // right, bottom
+                                              0.0f, 1.0f        // near, far
+    );
 
-      // 左上(0,0)〜右下(W,H) のピクセル座標で描ける正射影
-      Matrix4x4 view2D = MakeIdentity4x4();
-      Matrix4x4 proj2D =
-          MakeOrthographicMatrix(0.0f, 0.0f,       // left, top
-                                 screenW, screenH, // right, bottom
-                                 0.0f, 1.0f        // near, far
-          );
+    sprite_.Draw(view2D, proj2D);
+  }
 
-      sprite_.Draw(view2D, proj2D);
-    }
+  // ===== エミッタ範囲ギズモ描画 =====
+  {
+    if (showEmitterGizmo_) {
+      const auto &ep = particleEmitter_.GetParams();
 
-    // ===== エミッタ範囲ギズモ描画 =====
-    {
-      if (showEmitterGizmo_) {
-        const auto &ep = particleEmitter_.GetParams();
-
-        if (ep.shape == EmitterShape::Box) {
-          Vector3 scale = {ep.extent.x * 2.0f, ep.extent.y * 2.0f,
-                           ep.extent.z * 2.0f};
-          Matrix4x4 world =
-              MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
-          emitterBoxModel_.SetWorldTransform(world);
-          emitterBoxModel_.Draw(viewMatrix, projectionMatrix,
-                                directionalLightCB_.Get(), cameraCB_.Get());
-        } else {
-          // sphere は extent を半径扱い（楕円でもOK）
-          Vector3 scale = {std::max(ep.extent.x, 0.001f),
-                           std::max(ep.extent.y, 0.001f),
-                           std::max(ep.extent.z, 0.001f)};
-          Matrix4x4 world =
-              MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
-          emitterSphereModel_.SetWorldTransform(world);
-          emitterSphereModel_.Draw(viewMatrix, projectionMatrix,
-                                   directionalLightCB_.Get(), cameraCB_.Get());
-        }
+      if (ep.shape == EmitterShape::Box) {
+        Vector3 scale = {ep.extent.x * 2.0f, ep.extent.y * 2.0f,
+                         ep.extent.z * 2.0f};
+        Matrix4x4 world =
+            MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
+        emitterBoxModel_.SetWorldTransform(world);
+        emitterBoxModel_.Draw(viewMatrix, projectionMatrix,
+                              directionalLightCB_.Get(), cameraCB_.Get());
+      } else {
+        // sphere は extent を半径扱い（楕円でもOK）
+        Vector3 scale = {std::max(ep.extent.x, 0.001f),
+                         std::max(ep.extent.y, 0.001f),
+                         std::max(ep.extent.z, 0.001f)};
+        Matrix4x4 world =
+            MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
+        emitterSphereModel_.SetWorldTransform(world);
+        emitterSphereModel_.Draw(viewMatrix, projectionMatrix,
+                                 directionalLightCB_.Get(), cameraCB_.Get());
       }
     }
   }
@@ -671,8 +673,9 @@ void GameApp::InitPipelines_() {
   auto *includeHandler = dx_.GetDXCIncludeHandler();
 
   PipelineDesc objBase = UnifiedPipeline::MakeObject3DDesc();
-  assert(objPipeline_.Initialize(device, dxcUtils, dxcCompiler, includeHandler,
-                                 objBase));
+  CheckBoolOrDie_(objPipeline_.Initialize(device, dxcUtils, dxcCompiler,
+                                          includeHandler, objBase),
+                  "objPipeline_.Initialize");
 
   {
     auto wire = objBase;
@@ -680,68 +683,88 @@ void GameApp::InitPipelines_() {
     wire.enableDepth = true;
     wire.cullMode = D3D12_CULL_MODE_NONE;
     wire.fillMode = D3D12_FILL_MODE_WIREFRAME;
-    assert(emitterGizmoPipelineWire_.Initialize(device, dxcUtils, dxcCompiler,
-                                                includeHandler, wire));
+
+    CheckBoolOrDie_(emitterGizmoPipelineWire_.Initialize(
+                        device, dxcUtils, dxcCompiler, includeHandler, wire),
+                    "emitterGizmoPipelineWire_.Initialize");
   }
 
   PipelineDesc sprBase = UnifiedPipeline::MakeSpriteDesc();
 
   auto sprAlpha = sprBase;
   sprAlpha.blendMode = BlendMode::Alpha;
-  assert(spritePipelineAlpha_.Initialize(device, dxcUtils, dxcCompiler,
-                                         includeHandler, sprAlpha));
+  CheckBoolOrDie_(spritePipelineAlpha_.Initialize(device, dxcUtils, dxcCompiler,
+                                                  includeHandler, sprAlpha),
+                  "spritePipelineAlpha_.Initialize");
 
   auto sprAdd = sprBase;
   sprAdd.blendMode = BlendMode::Add;
-  assert(spritePipelineAdd_.Initialize(device, dxcUtils, dxcCompiler,
-                                       includeHandler, sprAdd));
+  CheckBoolOrDie_(spritePipelineAdd_.Initialize(device, dxcUtils, dxcCompiler,
+                                                includeHandler, sprAdd),
+                  "spritePipelineAdd_.Initialize");
 
   auto sprSub = sprBase;
   sprSub.blendMode = BlendMode::Subtract;
-  assert(spritePipelineSub_.Initialize(device, dxcUtils, dxcCompiler,
-                                       includeHandler, sprSub));
+  CheckBoolOrDie_(spritePipelineSub_.Initialize(device, dxcUtils, dxcCompiler,
+                                                includeHandler, sprSub),
+                  "spritePipelineSub_.Initialize");
 
   auto sprMul = sprBase;
   sprMul.blendMode = BlendMode::Multiply;
-  assert(spritePipelineMul_.Initialize(device, dxcUtils, dxcCompiler,
-                                       includeHandler, sprMul));
+  CheckBoolOrDie_(spritePipelineMul_.Initialize(device, dxcUtils, dxcCompiler,
+                                                includeHandler, sprMul),
+                  "spritePipelineMul_.Initialize");
 
   auto sprScr = sprBase;
   sprScr.blendMode = BlendMode::Screen;
-  assert(spritePipelineScreen_.Initialize(device, dxcUtils, dxcCompiler,
-                                          includeHandler, sprScr));
+  CheckBoolOrDie_(spritePipelineScreen_.Initialize(
+                      device, dxcUtils, dxcCompiler, includeHandler, sprScr),
+                  "spritePipelineScreen_.Initialize");
 
   PipelineDesc partBase = UnifiedPipeline::MakeParticleDesc();
 
   auto pAlpha = partBase;
   pAlpha.blendMode = BlendMode::Alpha;
-  assert(particlePipelineAlpha_.Initialize(device, dxcUtils, dxcCompiler,
-                                           includeHandler, pAlpha));
+  CheckBoolOrDie_(particlePipelineAlpha_.Initialize(
+                      device, dxcUtils, dxcCompiler, includeHandler, pAlpha),
+                  "particlePipelineAlpha_.Initialize");
 
   auto pAdd = partBase;
   pAdd.blendMode = BlendMode::Add;
-  assert(particlePipelineAdd_.Initialize(device, dxcUtils, dxcCompiler,
-                                         includeHandler, pAdd));
+  CheckBoolOrDie_(particlePipelineAdd_.Initialize(device, dxcUtils, dxcCompiler,
+                                                  includeHandler, pAdd),
+                  "particlePipelineAdd_.Initialize");
 
   auto pSub = partBase;
   pSub.blendMode = BlendMode::Subtract;
-  assert(particlePipelineSub_.Initialize(device, dxcUtils, dxcCompiler,
-                                         includeHandler, pSub));
+  CheckBoolOrDie_(particlePipelineSub_.Initialize(device, dxcUtils, dxcCompiler,
+                                                  includeHandler, pSub),
+                  "particlePipelineSub_.Initialize");
 
   auto pMul = partBase;
   pMul.blendMode = BlendMode::Multiply;
-  assert(particlePipelineMul_.Initialize(device, dxcUtils, dxcCompiler,
-                                         includeHandler, pMul));
+  CheckBoolOrDie_(particlePipelineMul_.Initialize(device, dxcUtils, dxcCompiler,
+                                                  includeHandler, pMul),
+                  "particlePipelineMul_.Initialize");
 
   auto pScr = partBase;
   pScr.blendMode = BlendMode::Screen;
-  assert(particlePipelineScreen_.Initialize(device, dxcUtils, dxcCompiler,
-                                            includeHandler, pScr));
+  CheckBoolOrDie_(particlePipelineScreen_.Initialize(
+                      device, dxcUtils, dxcCompiler, includeHandler, pScr),
+                  "particlePipelineScreen_.Initialize");
 }
 
 void GameApp::InitResources_() {
   ComPtr<ID3D12Device> device;
   dx_.GetDevice()->QueryInterface(IID_PPV_ARGS(&device));
+
+  // ===== ファイル存在チェック（Releaseでも確実に止める）=====
+  CheckFileExists_("resources/sphere/sphere.obj");
+  CheckFileExists_("resources/plane/plane.obj");
+  CheckFileExists_("resources/cube/cube.obj");
+  CheckFileExists_("resources/uvChecker.png");
+  CheckFileExists_("resources/particle/circle.png");
+  CheckFileExists_("resources/sound/select.mp3");
 
   // ===== Model =====
   {
@@ -751,8 +774,9 @@ void GameApp::InitResources_() {
     ci.modelData = LoadObjFile("resources/sphere", "sphere.obj");
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
-    bool okModel = model_.Initialize(ci);
-    assert(okModel);
+
+    const bool okModel = model_.Initialize(ci);
+    CheckBoolOrDie_(okModel, "model_.Initialize(sphere)");
   }
   {
     Model::CreateInfo ci{};
@@ -761,8 +785,9 @@ void GameApp::InitResources_() {
     ci.modelData = LoadObjFile("resources/plane", "plane.obj");
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
-    bool okPlane = planeModel_.Initialize(ci);
-    assert(okPlane);
+
+    const bool okPlane = planeModel_.Initialize(ci);
+    CheckBoolOrDie_(okPlane, "planeModel_.Initialize(plane)");
   }
   {
     Model::CreateInfo ci{};
@@ -771,8 +796,9 @@ void GameApp::InitResources_() {
     ci.modelData = LoadObjFile("resources/sphere", "sphere.obj");
     ci.baseColor = {0.3f, 0.8f, 1.0f, 0.3f};
     ci.lightingMode = 0;
-    bool ok = emitterSphereModel_.Initialize(ci);
-    assert(ok);
+
+    const bool ok = emitterSphereModel_.Initialize(ci);
+    CheckBoolOrDie_(ok, "emitterSphereModel_.Initialize");
   }
   {
     Model::CreateInfo ci{};
@@ -781,8 +807,9 @@ void GameApp::InitResources_() {
     ci.modelData = LoadObjFile("resources/cube", "cube.obj");
     ci.baseColor = {1.0f, 0.8f, 0.2f, 0.3f};
     ci.lightingMode = 0;
-    bool ok = emitterBoxModel_.Initialize(ci);
-    assert(ok);
+
+    const bool ok = emitterBoxModel_.Initialize(ci);
+    CheckBoolOrDie_(ok, "emitterBoxModel_.Initialize");
   }
 
   // ===== Sprite =====
@@ -793,16 +820,18 @@ void GameApp::InitResources_() {
     sprInfo.texturePath = "resources/uvChecker.png";
     sprInfo.size = {640.0f, 360.0f};
     sprInfo.color = {1.0f, 1.0f, 1.0f, 1.0f};
-    bool okSprite = sprite_.Initialize(sprInfo);
-    assert(okSprite);
+
+    const bool okSprite = sprite_.Initialize(sprInfo);
+    CheckBoolOrDie_(okSprite, "sprite_.Initialize");
   }
 
-  // ===== Particle System (Manager + Emitter) =====
+  // ===== Particle System =====
   {
     ParticleManager::GetInstance()->Initialize(&dx_);
+
     const bool ok = ParticleManager::GetInstance()->CreateParticleGroup(
         particleGroupName_, "resources/particle/circle.png", kParticleCount_);
-    assert(ok);
+    CheckBoolOrDie_(ok, "ParticleManager::CreateParticleGroup");
 
     ParticleEmitter::Params params{};
     params.groupName = particleGroupName_;
@@ -821,12 +850,7 @@ void GameApp::InitResources_() {
     params.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
 
     particleEmitter_.Initialize(ParticleManager::GetInstance(), params);
-
     particleEmitter_.Burst(std::min(initialParticleCount_, kParticleCount_));
-
-    /*std::strncpy(particleGroupNameBuf_, params.groupName.c_str(),
-    sizeof(particleGroupNameBuf_) - 1);
-    particleGroupNameBuf_[sizeof(particleGroupNameBuf_) - 1] = '\0';*/
   }
 
   // ===== DirectionalLight CB =====
@@ -847,10 +871,16 @@ void GameApp::InitResources_() {
         &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
         IID_PPV_ARGS(&directionalLightCB_));
-    assert(SUCCEEDED(hr));
+    CheckHROrDie_(hr, "CreateCommittedResource(directionalLightCB_)");
 
-    directionalLightCB_->Map(0, nullptr,
-                             reinterpret_cast<void **>(&directionalLightData_));
+    hr = directionalLightCB_->Map(
+        0, nullptr, reinterpret_cast<void **>(&directionalLightData_));
+    CheckHROrDie_(hr, "directionalLightCB_->Map");
+
+    if (!directionalLightData_) {
+      FatalBoxAndTerminate_("directionalLightData_ is null after Map");
+    }
+
     directionalLightData_->color = {1, 1, 1, 1};
     directionalLightData_->direction = {0, -1, 0};
     directionalLightData_->intensity = 1.0f;
@@ -870,21 +900,30 @@ void GameApp::InitResources_() {
     resDesc.SampleDesc.Count = 1;
     resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-    auto *device = dx_.GetDevice();
-
-    HRESULT hr = device->CreateCommittedResource(
+    auto *dev = dx_.GetDevice();
+    HRESULT hr = dev->CreateCommittedResource(
         &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&cameraCB_));
-    assert(SUCCEEDED(hr));
+    CheckHROrDie_(hr, "CreateCommittedResource(cameraCB_)");
 
-    cameraCB_->Map(0, nullptr, reinterpret_cast<void **>(&cameraData_));
+    hr = cameraCB_->Map(0, nullptr, reinterpret_cast<void **>(&cameraData_));
+    CheckHROrDie_(hr, "cameraCB_->Map");
+
+    if (!cameraData_) {
+      FatalBoxAndTerminate_("cameraData_ is null after Map");
+    }
+
     cameraData_->worldPosition = {0.0f, 0.0f, -10.0f};
     cameraData_->pad = 0.0f;
   }
 
-  bool select = audio_.Load("select", L"resources/sound/select.mp3", 1.0f);
-  assert(select);
-  selectVol_ = 1.0f;
+  // ===== Audio =====
+  {
+    const bool select =
+        audio_.Load("select", L"resources/sound/select.mp3", 1.0f);
+    CheckBoolOrDie_(select, "audio_.Load(select.mp3)");
+    selectVol_ = 1.0f;
+  }
 
   struct Vtx {
     float px, py, pz;
