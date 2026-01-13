@@ -36,45 +36,96 @@ ComPtrT<ID3D12Resource> Model::CreateUploadBuffer(size_t size) {
   return resource;
 }
 
+#include <Windows.h>
+#include <string>
+
+static void ModelFatal_(const std::string &msg) {
+  MessageBoxA(nullptr, msg.c_str(), "Model Fatal", MB_OK | MB_ICONERROR);
+  std::terminate();
+}
+
+static void ModelCheckHR_(HRESULT hr, const char *where) {
+  if (FAILED(hr)) {
+    char buf[512];
+    sprintf_s(buf, "[Model] HRESULT failed at %s (hr=0x%08X)", where,
+              (unsigned)hr);
+    ModelFatal_(buf);
+  }
+}
+
 bool Model::Initialize(const CreateInfo &ci) {
   dx_ = ci.dx;
   pipeline_ = ci.pipeline;
+
   if (!dx_ || !pipeline_) {
-    return false;
+    ModelFatal_("[Model] dx_ or pipeline_ is null");
   }
 
-  // ===== VB =====
   vertexCount_ = static_cast<uint32_t>(ci.modelData.vertices.size());
+  if (vertexCount_ == 0) {
+    ModelFatal_(
+        "[Model] modelData.vertices is empty. OBJ load failed or path wrong.");
+  }
+
   const size_t vbSize = sizeof(VertexData) * ci.modelData.vertices.size();
+
   vb_ = CreateUploadBuffer(vbSize);
+  if (!vb_) {
+    ModelFatal_("[Model] vb_ CreateUploadBuffer failed");
+  }
+
+  // CopyToUpload_ が Map を含むなら、そこで hr を見てない可能性があるので、
+  // CopyToUpload_ 内も HRESULT チェックにするのが理想。
   CopyToUpload_(vb_.Get(), ci.modelData.vertices.data(), vbSize);
 
   vbv_.BufferLocation = vb_->GetGPUVirtualAddress();
   vbv_.StrideInBytes = sizeof(VertexData);
   vbv_.SizeInBytes = static_cast<UINT>(vbSize);
 
-  // ===== Material CB =====
   cbMaterial_ = CreateUploadBuffer(sizeof(ModelMaterialCB));
-  cbMaterial_->Map(0, nullptr, reinterpret_cast<void **>(&cbMatMapped_));
+  if (!cbMaterial_) {
+    ModelFatal_("[Model] cbMaterial_ CreateUploadBuffer failed");
+  }
+
+  HRESULT hr =
+      cbMaterial_->Map(0, nullptr, reinterpret_cast<void **>(&cbMatMapped_));
+  ModelCheckHR_(hr, "cbMaterial_->Map");
+  if (!cbMatMapped_) {
+    ModelFatal_("[Model] cbMatMapped_ is null after Map");
+  }
+
   cbMatMapped_->color = ci.baseColor;
   cbMatMapped_->enableLighting = ci.lightingMode;
   cbMatMapped_->uvTransform = MakeIdentity4x4();
-  cbMatMapped_->specularColor = {1.0f, 1.0f, 1.0f};
-  cbMatMapped_->shininess = 32.0f;
 
-  // ===== Transform CB =====
   cbTransform_ = CreateUploadBuffer(sizeof(ModelTransformCB));
-  cbTransform_->Map(0, nullptr, reinterpret_cast<void **>(&cbTransMapped_));
+  if (!cbTransform_) {
+    ModelFatal_("[Model] cbTransform_ CreateUploadBuffer failed");
+  }
+
+  hr =
+      cbTransform_->Map(0, nullptr, reinterpret_cast<void **>(&cbTransMapped_));
+  ModelCheckHR_(hr, "cbTransform_->Map");
+  if (!cbTransMapped_) {
+    ModelFatal_("[Model] cbTransMapped_ is null after Map");
+  }
+
   cbTransMapped_->World = MakeIdentity4x4();
   cbTransMapped_->WVP = MakeIdentity4x4();
 
-  // ===== Texture =====
+  // Texture
   if (!ci.modelData.material.textureFilePath.empty()) {
     texture_ = TextureManager::GetInstance()->Load(
         ci.modelData.material.textureFilePath);
   } else {
     texture_ = TextureManager::GetInstance()->Load("resources/white1x1.png");
   }
+
+  if (!texture_) {
+    ModelFatal_(
+        "[Model] texture load failed (TextureManager::Load returned null)");
+  }
+
   texSrvHandleGPU_ = texture_->GetSrvGpu();
 
   return true;
