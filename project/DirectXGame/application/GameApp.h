@@ -38,6 +38,12 @@ struct DirectionalLight {
     float intensity{ 1.0f };
 };
 
+// ===== Camera (CB用) =====
+struct CameraForGPU {
+  Vector3 worldPosition{};
+  float pad = 0.0f;
+};
+
 class GameApp {
 public:
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
@@ -101,8 +107,14 @@ private:
 
     ParticleEmitter particleEmitter_;
 
+    // ===== Constant Buffer =====
+    // Directional Light CB
     ComPtr<ID3D12Resource> directionalLightCB_;
     DirectionalLight* directionalLightData_ = nullptr;
+
+    // Camera CB
+    ComPtr<ID3D12Resource> cameraCB_;
+    CameraForGPU *cameraData_ = nullptr;
 
     Transform transform_;
     Transform cameraTransform_;

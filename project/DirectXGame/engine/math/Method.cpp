@@ -350,3 +350,13 @@ Vector3 Add(const Vector3 &v1, const Vector3 &v2) {
   result.z = v1.z + v2.z;
   return result;
 }
+
+Matrix4x4 Transpose(const Matrix4x4 &m) {
+  Matrix4x4 r{};
+  for (int y = 0; y < 4; ++y) {
+    for (int x = 0; x < 4; ++x) {
+      r.m[y][x] = m.m[x][y];
+    }
+  }
+  return r;
+}
