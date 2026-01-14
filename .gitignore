@@ -23,7 +23,9 @@ generated/
 LE2B_09_コバヤシハヤト/
 
 # Intermediate Generation
-Shaders/
+Compiled/
+
+.dic
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
