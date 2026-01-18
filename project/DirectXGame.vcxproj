@@ -80,13 +80,13 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/math;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>imgui.lib</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;dxcompiler.lib;imgui.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)..\generated\outputs\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
@@ -119,7 +119,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/math;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -128,8 +128,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
       <AdditionalLibraryDirectories>$(SolutionDir)..\generated\outputs\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>
-      </AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;dxcompiler.lib</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>
@@ -161,7 +160,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/math;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
@@ -173,7 +172,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
       <LinkTimeCodeGeneration />
       <AdditionalLibraryDirectories>$(SolutionDir)..\generated\outputs\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>imgui.lib</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;dxcompiler.lib;imgui.lib</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>
@@ -199,6 +198,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <ClCompile Include="DirectXGame\engine\camera\DebugCamera.cpp" />
     <ClCompile Include="DirectXGame\engine\base\DirectXCommon.cpp" />
     <ClCompile Include="DirectXGame\engine\base\DirectXResourceUtils.cpp" />
+    <ClCompile Include="DirectXGame\engine\math\Method.cpp" />
     <ClCompile Include="externals\imgui\imgui.cpp" />
     <ClCompile Include="externals\imgui\imgui_demo.cpp" />
     <ClCompile Include="externals\imgui\imgui_draw.cpp" />
@@ -214,11 +214,11 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="DirectXGame\engine\camera\GameCamera.cpp" />
+    <ClCompile Include="DirectXGame\engine\base\FrameWork.cpp" />
     <ClCompile Include="main.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
-    <ClCompile Include="DirectXGame\engine\math\Method.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\3d\Model.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\ModelManager.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\ShaderCompiler.cpp" />
@@ -244,6 +244,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <ClInclude Include="DirectXGame\engine\camera\DebugCamera.h" />
     <ClInclude Include="DirectXGame\engine\base\DirectXCommon.h" />
     <ClInclude Include="DirectXGame\engine\base\DirectXResourceUtils.h" />
+    <ClInclude Include="DirectXGame\engine\math\Method.h" />
     <ClInclude Include="DirectXGame\engine\Type\AABB.h" />
     <ClInclude Include="DirectXGame\engine\Type\Transform.h" />
     <ClInclude Include="externals\imgui\imconfig.h" />
@@ -261,10 +262,10 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClInclude>
     <ClInclude Include="DirectXGame\engine\camera\GameCamera.h" />
+    <ClInclude Include="DirectXGame\engine\base\FrameWork.h" />
     <ClInclude Include="include.h" />
     <ClInclude Include="DirectXGame\engine\base\input\Input.h" />
     <ClInclude Include="DirectXGame\engine\Type\Matrix.h" />
-    <ClInclude Include="DirectXGame\engine\math\Method.h" />
     <ClInclude Include="DirectXGame\engine\graphics\3d\Model.h" />
     <ClInclude Include="DirectXGame\engine\graphics\ModelManager.h" />
     <ClInclude Include="DirectXGame\engine\graphics\ResourceObject.h" />
