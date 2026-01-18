@@ -80,7 +80,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/graphics/3d/model;DirectXGame/engine/graphics/descriptor;DirectXGame/engine/graphics/particle;DirectXGame/engine/graphics/shader;DirectXGame/engine/graphics/texture;DirectXGame/engine/graphics/pipeline;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -119,7 +119,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/graphics/3d/model;DirectXGame/engine/graphics/descriptor;DirectXGame/engine/graphics/particle;DirectXGame/engine/graphics/shader;DirectXGame/engine/graphics/texture;DirectXGame/engine/graphics/pipeline;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -160,7 +160,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/graphics/3d/model;DirectXGame/engine/graphics/descriptor;DirectXGame/engine/graphics/particle;DirectXGame/engine/graphics/shader;DirectXGame/engine/graphics/texture;DirectXGame/engine/graphics/pipeline;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
@@ -193,7 +193,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DirectXGame\engine\camera\Camera.cpp" />
-    <ClCompile Include="DirectXGame\engine\graphics\AssetLoader.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\3d\AssetLoader.cpp" />
     <ClCompile Include="DirectXGame\engine\audio\Audio.cpp" />
     <ClCompile Include="DirectXGame\engine\camera\DebugCamera.cpp" />
     <ClCompile Include="DirectXGame\engine\base\DirectXCommon.cpp" />
@@ -219,27 +219,27 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
-    <ClCompile Include="DirectXGame\engine\graphics\3d\Model.cpp" />
-    <ClCompile Include="DirectXGame\engine\graphics\ModelManager.cpp" />
-    <ClCompile Include="DirectXGame\engine\graphics\ShaderCompiler.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\3d\model\Model.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\3d\model\ModelManager.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\shader\ShaderCompiler.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\2d\Sprite.cpp" />
-    <ClCompile Include="DirectXGame\engine\base\TextureUtils.cpp" />
-    <ClCompile Include="DirectXGame\engine\graphics\UnifiedPipeline.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\texture\TextureUtils.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\pipeline\UnifiedPipeline.cpp" />
     <ClCompile Include="DirectXGame\engine\base\WinApp.cpp" />
-    <ClCompile Include="DirectXGame\engine\graphics\ModelUtils.cpp" />
-    <ClCompile Include="ModelInstance.cpp" />
-    <ClCompile Include="ModelResource.cpp" />
-    <ClCompile Include="ParticleEmitter.cpp" />
-    <ClCompile Include="ParticleManager.cpp" />
-    <ClCompile Include="ShaderCompilerUtils.cpp" />
-    <ClCompile Include="SrvHandle.cpp" />
-    <ClCompile Include="TextureManager.cpp" />
-    <ClCompile Include="TextureResource.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\3d\model\ModelUtils.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\3d\model\ModelInstance.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\3d\model\ModelResource.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\particle\ParticleEmitter.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\particle\ParticleManager.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\shader\ShaderCompilerUtils.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\descriptor\SrvHandle.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\texture\TextureManager.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\texture\TextureResource.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DirectXGame\engine\camera\Camera.h" />
     <ClInclude Include="DirectXGame\engine\camera\ICameraController.h" />
-    <ClInclude Include="DirectXGame\engine\graphics\AssetLoader.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\3d\AssetLoader.h" />
     <ClInclude Include="DirectXGame\engine\audio\Audio.h" />
     <ClInclude Include="DirectXGame\engine\camera\DebugCamera.h" />
     <ClInclude Include="DirectXGame\engine\base\DirectXCommon.h" />
@@ -266,25 +266,25 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <ClInclude Include="include.h" />
     <ClInclude Include="DirectXGame\engine\base\input\Input.h" />
     <ClInclude Include="DirectXGame\engine\Type\Matrix.h" />
-    <ClInclude Include="DirectXGame\engine\graphics\3d\Model.h" />
-    <ClInclude Include="DirectXGame\engine\graphics\ModelManager.h" />
-    <ClInclude Include="DirectXGame\engine\graphics\ResourceObject.h" />
-    <ClInclude Include="DirectXGame\engine\graphics\ShaderCompiler.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\3d\model\Model.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\3d\model\ModelManager.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\resources\ResourceObject.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\shader\ShaderCompiler.h" />
     <ClInclude Include="DirectXGame\engine\graphics\2d\Sprite.h" />
-    <ClInclude Include="DirectXGame\engine\base\TextureUtils.h" />
-    <ClInclude Include="DirectXGame\engine\graphics\UnifiedPipeline.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\texture\TextureUtils.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\pipeline\UnifiedPipeline.h" />
     <ClInclude Include="DirectXGame\engine\Type\Vector.h" />
     <ClInclude Include="DirectXGame\engine\base\WinApp.h" />
-    <ClInclude Include="DirectXGame\engine\graphics\ModelUtils.h" />
-    <ClInclude Include="ModelInstance.h" />
-    <ClInclude Include="ModelResource.h" />
-    <ClInclude Include="ParticleEmitter.h" />
-    <ClInclude Include="ParticleManager.h" />
-    <ClInclude Include="ShaderCompilerUtils.h" />
-    <ClInclude Include="DirectXGame\engine\graphics\SrvAllocator.h" />
-    <ClInclude Include="SrvHandle.h" />
-    <ClInclude Include="TextureManager.h" />
-    <ClInclude Include="TextureResource.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\3d\model\ModelUtils.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\3d\model\ModelInstance.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\3d\model\ModelResource.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\particle\ParticleEmitter.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\particle\ParticleManager.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\shader\ShaderCompilerUtils.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\descriptor\SrvAllocator.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\descriptor\SrvHandle.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\texture\TextureManager.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\texture\TextureResource.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />
