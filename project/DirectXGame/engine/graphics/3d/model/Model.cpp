@@ -164,7 +164,8 @@ void Model::SetShininess(float shininess) {
 }
 
 void Model::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
-                 ID3D12Resource *directionalLightCB, ID3D12Resource *cameraCB) {
+                 ID3D12Resource *directionalLightCB, ID3D12Resource *cameraCB,
+                 ID3D12Resource *pointLightCB, ID3D12Resource *spotLightCB) {
   assert(dx_ && pipeline_);
 
   ID3D12GraphicsCommandList *cmd = dx_->GetCommandList();
@@ -192,6 +193,8 @@ void Model::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
   // 2: PS Texture Table(t0)
   // 3: PS DirectionalLight(b1)
   // 4: PS Camera(b2)
+  // 5: PS PointLight(b3)
+  // 6: PS SpotLight(b4)
   cmd->SetGraphicsRootConstantBufferView(0,
                                          cbMaterial_->GetGPUVirtualAddress());
   cmd->SetGraphicsRootConstantBufferView(1,
@@ -207,6 +210,14 @@ void Model::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
   }
   if (cameraCB) {
     cmd->SetGraphicsRootConstantBufferView(4, cameraCB->GetGPUVirtualAddress());
+  }
+  if (pointLightCB) {
+    cmd->SetGraphicsRootConstantBufferView(
+        5, pointLightCB->GetGPUVirtualAddress());
+  }
+  if (spotLightCB) {
+    cmd->SetGraphicsRootConstantBufferView(
+        6, spotLightCB->GetGPUVirtualAddress());
   }
 
   cmd->RSSetViewports(1, &dx_->GetViewport());

@@ -80,7 +80,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/graphics/3d/model;DirectXGame/engine/graphics/descriptor;DirectXGame/engine/graphics/particle;DirectXGame/engine/graphics/shader;DirectXGame/engine/graphics/texture;DirectXGame/engine/graphics/pipeline;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)externals\imgui</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>DirectXGame/engine;DirectXGame/engine/audio;DirectXGame/engine/base;DirectXGame/engine/math;DirectXGame/engine/base/input;DirectXGame/engine/camera;DirectXGame/engine/graphics;DirectXGame/engine/graphics/2d;DirectXGame/engine/graphics/3d;DirectXGame/engine/graphics/3d/model;DirectXGame/engine/graphics/descriptor;DirectXGame/engine/graphics/particle;DirectXGame/engine/graphics/shader;DirectXGame/engine/graphics/texture;DirectXGame/engine/graphics/pipeline;DirectXGame/engine/Type;DirectXGame/application;$(ProjectDir);$(SolutionDir)DirectXTex;$(SolutionDir)imgui</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

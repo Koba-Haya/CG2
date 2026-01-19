@@ -50,7 +50,8 @@ public:
   void SetShininess(float shininess);
 
   void Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
-            ID3D12Resource *directionalLightCB, ID3D12Resource *cameraCB);
+            ID3D12Resource *directionalLightCB, ID3D12Resource *cameraCB,
+            ID3D12Resource *pointLightCB, ID3D12Resource *spotLightCB);
 
 private:
   template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;

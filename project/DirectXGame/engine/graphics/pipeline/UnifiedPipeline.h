@@ -40,6 +40,10 @@ struct PipelineDesc {
 
   // カメラCB b2
   bool usePSCamera_b2 = false;
+  // 点光源CB b3
+  bool usePSPointLight_b3 = false;
+  // スポットライトCB b4
+  bool usePSSpotLight_b4 = false;
 
   // ラスタ/ブレンド/深度
   bool enableDepth = true;
