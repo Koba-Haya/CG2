@@ -7,7 +7,7 @@
 #include "DirectXCommon.h"
 #include "SrvAllocator.h"
 #include "TextureUtils.h"
-#include "externals/DirectXTex/DirectXTex.h"
+#include "externals/DirectXTex/DirectXTex.h" 
 
 static void TexResLog_(const std::string &msg) {
   OutputDebugStringA((msg + "\n").c_str());
