@@ -103,6 +103,7 @@ private:
   Sprite sprite_;
   Model emitterSphereModel_;
   Model emitterBoxModel_;
+  Model terrainModel_;
 
   // ===== Particle System =====
   static constexpr uint32_t kParticleCount_ = 300;
@@ -134,6 +135,7 @@ private:
   Transform transformSprite_;
   Transform uvTransformSprite_;
   Transform transform2_;
+  Transform terrainTransform_;
 
   Matrix4x4 view3D_;
   Matrix4x4 proj3D_;

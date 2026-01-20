@@ -503,6 +503,11 @@ void GameApp::Draw() {
         transform2_.scale, transform2_.rotate, transform2_.translate);
     planeModel_.SetWorldTransform(worldPlane);
 
+    terrainTransform_.translate = {0.0f, -3.0f, 0.0f};
+    Matrix4x4 worldTerrain = MakeAffineMatrix(terrainTransform_.scale, terrainTransform_.rotate,
+                         terrainTransform_.translate);
+    terrainModel_.SetWorldTransform(worldTerrain);
+
     cmdList->SetGraphicsRootSignature(objPipeline_.GetRootSignature());
     cmdList->SetPipelineState(objPipeline_.GetPipelineState());
 
@@ -513,6 +518,9 @@ void GameApp::Draw() {
                 cameraCB_.Get(), pointLightCB_.Get(), spotLightCB_.Get());
     planeModel_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
                      cameraCB_.Get(), pointLightCB_.Get(), spotLightCB_.Get());
+    terrainModel_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
+                       cameraCB_.Get(), pointLightCB_.Get(),
+                       spotLightCB_.Get());
   }
 
   {
@@ -533,7 +541,7 @@ void GameApp::Draw() {
     default:
       break;
     }
-    ParticleManager::GetInstance()->Draw(cmdList, currentParticlePipeline);
+    //ParticleManager::GetInstance()->Draw(cmdList, currentParticlePipeline);
   }
 
   {
@@ -572,7 +580,7 @@ void GameApp::Draw() {
     Matrix4x4 proj2D =
         MakeOrthographicMatrix(0.0f, 0.0f, screenW, screenH, 0.0f, 1.0f);
 
-    sprite_.Draw(view2D, proj2D);
+    //sprite_.Draw(view2D, proj2D);
   }
 
   {
@@ -723,6 +731,7 @@ void GameApp::InitResources_() {
   CheckFileExists_("resources/particle/circle.png");
   CheckFileExists_("resources/sound/select.mp3");
 
+  // 球モデル
   {
     Model::CreateInfo ci{};
     ci.dx = &dx;
@@ -734,6 +743,8 @@ void GameApp::InitResources_() {
     const bool okModel = model_.Initialize(ci);
     CheckBoolOrDie_(okModel, "model_.Initialize(sphere)");
   }
+
+  // 平面モデル
   {
     Model::CreateInfo ci{};
     ci.dx = &dx;
@@ -745,6 +756,8 @@ void GameApp::InitResources_() {
     const bool okPlane = planeModel_.Initialize(ci);
     CheckBoolOrDie_(okPlane, "planeModel_.Initialize(plane)");
   }
+
+  // エミッタギズモモデル(球)
   {
     Model::CreateInfo ci{};
     ci.dx = &dx;
@@ -756,6 +769,8 @@ void GameApp::InitResources_() {
     const bool ok = emitterSphereModel_.Initialize(ci);
     CheckBoolOrDie_(ok, "emitterSphereModel_.Initialize");
   }
+
+  // エミッタギズモモデル(箱)
   {
     Model::CreateInfo ci{};
     ci.dx = &dx;
@@ -768,6 +783,19 @@ void GameApp::InitResources_() {
     CheckBoolOrDie_(ok, "emitterBoxModel_.Initialize");
   }
 
+  // terrainモデル
+  {
+    Model::CreateInfo ci{};
+    ci.dx = &dx;
+    ci.pipeline = &objPipeline_;
+    ci.modelData = LoadObjFile("resources/terrain", "terrain.obj");
+    ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
+    ci.lightingMode = 1;
+    const bool ok = terrainModel_.Initialize(ci);
+    CheckBoolOrDie_(ok, "terrainModel_.Initialize");
+  }
+
+  // スプライト
   {
     Sprite::CreateInfo sprInfo{};
     sprInfo.dx = &dx;
@@ -780,7 +808,7 @@ void GameApp::InitResources_() {
     CheckBoolOrDie_(okSprite, "sprite_.Initialize");
   }
 
-  // ParticleManager は Framework で Initialize 済み
+  // パーティクル
   {
     const bool ok = ParticleManager::GetInstance()->CreateParticleGroup(
         particleGroupName_, "resources/particle/circle.png", kParticleCount_);
@@ -987,6 +1015,8 @@ void GameApp::InitCamera_() {
   uvTransformSprite_ = {
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
   transform2_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}};
+  terrainTransform_ = {
+      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
 
   if (camera_) {
     camera_->SetPerspective(
