@@ -2,13 +2,8 @@
 #include "GameApp.h"
 
 #include "DebugCamera.h"
-#include "DirectXResourceUtils.h"
 #include "GameCamera.h"
-#include "ModelManager.h"
-#include "ModelUtils.h"
-#include "TextureManager.h"
-#include "TextureResource.h"
-#include "TextureUtils.h"
+#include "AssetLoader.h"
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
@@ -210,13 +205,13 @@ void GameApp::Update() {
     pointLightData_->enabled = enablePointLight_ ? 1 : 0;
 
     if (enablePointLight_) {
-      ImGui::ColorEdit3("Color",
+      ImGui::ColorEdit3("PointColor",
                         reinterpret_cast<float *>(&pointLightData_->color));
-      ImGui::DragFloat3("Position",
+      ImGui::DragFloat3("PointPosition",
                         reinterpret_cast<float *>(&pointLightData_->position),
                         0.01f);
-      ImGui::SliderFloat("Radius", &pointLightData_->radius, 0.01f, 50.0f);
-      ImGui::SliderFloat("Decay", &pointLightData_->decay, 0.01f, 8.0f);
+      ImGui::SliderFloat("PointRadius", &pointLightData_->radius, 0.01f, 50.0f);
+      ImGui::SliderFloat("PointDecay", &pointLightData_->decay, 0.01f, 8.0f);
     }
   }
 
@@ -228,19 +223,19 @@ void GameApp::Update() {
     spotLightData_->enabled = enableSpotLight_ ? 1 : 0;
 
     if (enableSpotLight_) {
-      ImGui::ColorEdit3("Color",
+      ImGui::ColorEdit3("SpotColor",
                         reinterpret_cast<float *>(&spotLightData_->color));
-      ImGui::DragFloat3("Position",
+      ImGui::DragFloat3("SpotPosition",
                         reinterpret_cast<float *>(&spotLightData_->position),
                         0.01f);
 
       static float dir[3] = {0.0f, -1.0f, 0.0f};
-      if (ImGui::SliderFloat3("Direction", dir, -1.0f, 1.0f)) {
+      if (ImGui::SliderFloat3("SpotDirection", dir, -1.0f, 1.0f)) {
         spotLightData_->direction = Normalize(Vector3{dir[0], dir[1], dir[2]});
       }
 
-      ImGui::SliderFloat("Distance", &spotLightData_->distance, 0.01f, 50.0f);
-      ImGui::SliderFloat("Decay", &spotLightData_->decay, 0.01f, 8.0f);
+      ImGui::SliderFloat("SpotDistance", &spotLightData_->distance, 0.01f, 50.0f);
+      ImGui::SliderFloat("SpotDecay", &spotLightData_->decay, 0.01f, 8.0f);
 
       static float coneAngleDeg = 30.0f;
       if (ImGui::SliderFloat("Cone Angle (deg)", &coneAngleDeg, 1.0f, 89.0f)) {
@@ -725,18 +720,20 @@ void GameApp::InitResources_() {
   dx.GetDevice()->QueryInterface(IID_PPV_ARGS(&device));
 
   CheckFileExists_("resources/sphere/sphere.obj");
-  CheckFileExists_("resources/plane/plane.obj");
+  CheckFileExists_("resources/plane/plane.gltf");
   CheckFileExists_("resources/cube/cube.obj");
   CheckFileExists_("resources/uvChecker.png");
   CheckFileExists_("resources/particle/circle.png");
   CheckFileExists_("resources/sound/select.mp3");
+
+  auto *loader = AssetLoader::GetInstance();
 
   // 球モデル
   {
     Model::CreateInfo ci{};
     ci.dx = &dx;
     ci.pipeline = &objPipeline_;
-    ci.modelData = LoadObjFile("resources/sphere", "sphere.obj");
+    ci.modelData = loader->LoadModel("resources/sphere", "sphere.obj");
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
 
@@ -749,7 +746,7 @@ void GameApp::InitResources_() {
     Model::CreateInfo ci{};
     ci.dx = &dx;
     ci.pipeline = &objPipeline_;
-    ci.modelData = LoadObjFile("resources/plane", "plane.obj");
+    ci.modelData = loader->LoadModel("resources/plane", "plane.gltf");
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
 
@@ -762,7 +759,7 @@ void GameApp::InitResources_() {
     Model::CreateInfo ci{};
     ci.dx = &dx;
     ci.pipeline = &emitterGizmoPipelineWire_;
-    ci.modelData = LoadObjFile("resources/sphere", "sphere.obj");
+    ci.modelData = loader->LoadModel("resources/sphere", "sphere.obj");
     ci.baseColor = {0.3f, 0.8f, 1.0f, 0.3f};
     ci.lightingMode = 0;
 
@@ -775,7 +772,7 @@ void GameApp::InitResources_() {
     Model::CreateInfo ci{};
     ci.dx = &dx;
     ci.pipeline = &emitterGizmoPipelineWire_;
-    ci.modelData = LoadObjFile("resources/cube", "cube.obj");
+    ci.modelData = loader->LoadModel("resources/cube", "cube.obj");
     ci.baseColor = {1.0f, 0.8f, 0.2f, 0.3f};
     ci.lightingMode = 0;
 
@@ -788,7 +785,7 @@ void GameApp::InitResources_() {
     Model::CreateInfo ci{};
     ci.dx = &dx;
     ci.pipeline = &objPipeline_;
-    ci.modelData = LoadObjFile("resources/terrain", "terrain.obj");
+    ci.modelData = loader->LoadModel("resources/terrain", "terrain.obj");
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
     const bool ok = terrainModel_.Initialize(ci);

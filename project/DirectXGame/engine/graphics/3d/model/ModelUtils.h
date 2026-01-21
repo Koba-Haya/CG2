@@ -3,28 +3,56 @@
 #include <string>
 #include <vector>
 
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+
+#include "Matrix.h"
+#include "Method.h"
 #include "Vector.h"
 
 // ===== CPU側のモデルデータ（OBJ/MTL読み込み結果） =====
 
-// OBJ の頂点1つ分
 struct VertexData {
-	Vector4 position{};
-	Vector2 texcoord{};
-	Vector3 normal{};
+  Vector4 position{};
+  Vector2 texcoord{};
+  Vector3 normal{};
 };
 
-// MTL の最低限（map_Kd だけ）
 struct MaterialData {
-	std::string textureFilePath; // "dir/xxx.png" のようなパス（相対でもOK）
+  std::string textureFilePath;
 };
 
-// OBJ の読み込み結果
+struct MeshData {
+  std::vector<VertexData> vertices;
+  int materialIndex = -1;
+};
+
+struct Node {
+  Matrix4x4 localMatrix{};
+  std::string name;
+  std::vector<uint32_t> meshIndices;
+  std::vector<Node> children;
+};
+
 struct ModelData {
-	std::vector<VertexData> vertices;
-	MaterialData material;
+  std::vector<MeshData> meshes;
+  std::vector<MaterialData> materials;
+  Node rootNode;
 };
 
-// OBJ / MTL ローダ
-ModelData LoadObjFile(const std::string& directoryPath, const std::string& filename);
-MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
+Matrix4x4 ConvertAssimpMatrix(const aiMatrix4x4 &a);
+Matrix4x4 ConvertAssimpMatrixTransposed(const aiMatrix4x4 &a);
+
+struct UVFixupOptions {
+  bool flipU = false;
+  bool flipV = false;
+};
+
+VertexData FixupVertex_AssimpToEngine(const VertexData &v,
+                                      const UVFixupOptions &opt);
+
+void FlipTriangleWinding(VertexData &a, VertexData &b, VertexData &c);
+
+std::vector<VertexData> FlattenVertices(const ModelData &model);
+std::string PickDiffuseTexturePath(const ModelData &model);

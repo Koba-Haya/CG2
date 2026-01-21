@@ -2,27 +2,28 @@
 #include <string>
 #include <unordered_map>
 
-#include "ModelUtils.h" // ModelData / LoadObjFile
+#include "ModelUtils.h"
 
 class AssetLoader {
 public:
-    static AssetLoader* GetInstance() {
-        static AssetLoader inst;
-        return &inst;
-    }
+  static AssetLoader *GetInstance() {
+    static AssetLoader inst;
+    return &inst;
+  }
 
-    // dir + filename で読む（例: "resources/sphere", "sphere.obj"）
-    const ModelData& LoadObj(const std::string& directoryPath,
-        const std::string& filename);
+  const ModelData &LoadModel(const std::string &directoryPath,
+                             const std::string &filename);
 
-    void Clear();
+  void Clear() { cache_.clear(); }
 
 private:
-    AssetLoader() = default;
+  AssetLoader() = default;
 
-    std::string MakeKey_(const std::string& dir, const std::string& file) const {
-        return dir + "/" + file;
-    }
+  std::string MakeKey_(const std::string &dir, const std::string &file) const {
+    return dir + "/" + file;
+  }
 
-    std::unordered_map<std::string, ModelData> objCache_;
+  Node ReadNode_(const aiNode *node);
+
+  std::unordered_map<std::string, ModelData> cache_;
 };

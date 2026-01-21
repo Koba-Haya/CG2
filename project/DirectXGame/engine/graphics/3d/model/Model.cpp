@@ -57,26 +57,27 @@ bool Model::Initialize(const CreateInfo &ci) {
   dx_ = ci.dx;
   pipeline_ = ci.pipeline;
 
+  rootLocal_ = MakeIdentity4x4();
+
   if (!dx_ || !pipeline_) {
     ModelFatal_("[Model] dx_ or pipeline_ is null");
   }
 
-  vertexCount_ = static_cast<uint32_t>(ci.modelData.vertices.size());
+  const std::vector<VertexData> vertices = FlattenVertices(ci.modelData);
+
+  vertexCount_ = static_cast<uint32_t>(vertices.size());
   if (vertexCount_ == 0) {
-    ModelFatal_(
-        "[Model] modelData.vertices is empty. OBJ load failed or path wrong.");
+    ModelFatal_("[Model] vertices is empty. Assimp load failed or no meshes.");
   }
 
-  const size_t vbSize = sizeof(VertexData) * ci.modelData.vertices.size();
+  const size_t vbSize = sizeof(VertexData) * vertices.size();
 
   vb_ = CreateUploadBuffer(vbSize);
   if (!vb_) {
     ModelFatal_("[Model] vb_ CreateUploadBuffer failed");
   }
 
-  // CopyToUpload_ が Map を含むなら、そこで hr を見てない可能性があるので、
-  // CopyToUpload_ 内も HRESULT チェックにするのが理想。
-  CopyToUpload_(vb_.Get(), ci.modelData.vertices.data(), vbSize);
+  CopyToUpload_(vb_.Get(), vertices.data(), vbSize);
 
   vbv_.BufferLocation = vb_->GetGPUVirtualAddress();
   vbv_.StrideInBytes = sizeof(VertexData);
@@ -112,18 +113,17 @@ bool Model::Initialize(const CreateInfo &ci) {
 
   cbTransMapped_->World = MakeIdentity4x4();
   cbTransMapped_->WVP = MakeIdentity4x4();
+  cbTransMapped_->WorldInverseTranspose = MakeIdentity4x4();
 
-  // Texture
-  if (!ci.modelData.material.textureFilePath.empty()) {
-    texture_ = TextureManager::GetInstance()->Load(
-        ci.modelData.material.textureFilePath);
+  const std::string texPath = PickDiffuseTexturePath(ci.modelData);
+  if (!texPath.empty()) {
+    texture_ = TextureManager::GetInstance()->Load(texPath);
   } else {
     texture_ = TextureManager::GetInstance()->Load("resources/white1x1.png");
   }
 
   if (!texture_) {
-    ModelFatal_(
-        "[Model] texture load failed (TextureManager::Load returned null)");
+    ModelFatal_("[Model] texture load failed");
   }
 
   texSrvHandleGPU_ = texture_->GetSrvGpu();
@@ -171,13 +171,13 @@ void Model::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
   ID3D12GraphicsCommandList *cmd = dx_->GetCommandList();
 
   // Transform更新
-  const Matrix4x4 wvp = Multiply(world_, Multiply(view, proj));
-  cbTransMapped_->World = world_;
+  const Matrix4x4 worldWithRoot = Multiply(rootLocal_, world_);
+  const Matrix4x4 wvp = Multiply(worldWithRoot, Multiply(view, proj));
+  cbTransMapped_->World = worldWithRoot;
   cbTransMapped_->WVP = wvp;
 
   // worldの逆行列を計算して転置行列にする
-  const Matrix4x4 worldInv = Inverse(world_);
-  cbTransMapped_->WorldInverseTranspose = Transpose(worldInv);
+  cbTransMapped_->WorldInverseTranspose = Transpose(Inverse(worldWithRoot));
 
   // PSO / RootSignature
   cmd->SetPipelineState(pipeline_->GetPipelineState());
@@ -216,8 +216,8 @@ void Model::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
         5, pointLightCB->GetGPUVirtualAddress());
   }
   if (spotLightCB) {
-    cmd->SetGraphicsRootConstantBufferView(
-        6, spotLightCB->GetGPUVirtualAddress());
+    cmd->SetGraphicsRootConstantBufferView(6,
+                                           spotLightCB->GetGPUVirtualAddress());
   }
 
   cmd->RSSetViewports(1, &dx_->GetViewport());

@@ -275,22 +275,6 @@ void DirectXCommon::InitDXC_() {
   assert(SUCCEEDED(hr));
 }
 
-//void DirectXCommon::InitImGui_() {
-//  IMGUI_CHECKVERSION();
-//  ImGui::CreateContext();
-//  ImGui::StyleColorsDark();
-//
-//  ImGui_ImplWin32_Init(hwnd_);
-//  ImGui_ImplDX12_Init(device_.Get(), swapChainDesc_.BufferCount, rtvDesc_.Format,
-//                      srvDescriptorHeap_.Get(),
-//                      GetCPUDescriptorHandle(srvDescriptorHeap_.Get(), descriptorSizeSRV_, 0),
-//                      GetGPUDescriptorHandle(srvDescriptorHeap_.Get(), descriptorSizeSRV_, 0));
-//
-//  ImGuiIO &io = ImGui::GetIO();
-//  io.Fonts->AddFontFromFileTTF("resources/fonts/M_PLUS_1p/MPLUS1p-Regular.ttf", 22.0f,
-//                               nullptr, io.Fonts->GetGlyphRangesJapanese());
-//}
-
 void DirectXCommon::TransitionBackBufferToRenderTarget_() {
   UINT i = swapChain_->GetCurrentBackBufferIndex();
   D3D12_RESOURCE_BARRIER b{};

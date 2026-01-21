@@ -27,7 +27,7 @@ public:
 	DirectXCommon();
 	~DirectXCommon();
 
-	// スクショ相当の初期化（デバイス/コマンド/スワップチェーン/深度/各種ヒープ/RTV初期化/DSV初期化/フェンス/ビューポート/シザー/DCX/ImGui）
+	// スクショ相当の初期化（デバイス/コマンド/スワップチェーン/深度/各種ヒープ/RTV初期化/DSV初期化/フェンス/ビューポート/シザー/DCX）
 	void Initialize(const InitParams& params);
 
 	// フレームの最初と最後（必要なら使用）
@@ -79,7 +79,6 @@ private:
 	void CreateFenceAndEvent_();
 	void SetupViewportAndScissor_();
 	void InitDXC_();
-	/*void InitImGui_();*/
 	void TransitionBackBufferToRenderTarget_();
 	void TransitionBackBufferToPresent_();
 

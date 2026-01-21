@@ -75,4 +75,6 @@ private:
 
   Matrix4x4 world_ = MakeIdentity4x4();
   uint32_t vertexCount_ = 0;
+
+  Matrix4x4 rootLocal_ = MakeIdentity4x4();
 };
