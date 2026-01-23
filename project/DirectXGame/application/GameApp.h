@@ -124,12 +124,12 @@ private:
   ParticleEmitter particleEmitter_;
 
   // ===== Constant Buffer =====
+  ComPtr<ID3D12Resource> cameraCB_;
+  CameraForGPU *cameraData_ = nullptr;
+
   ComPtr<ID3D12Resource> directionalLightCB_;
   DirectionalLight *directionalLightData_ = nullptr;
   bool enableDirectionalLight_ = false;
-
-  ComPtr<ID3D12Resource> cameraCB_;
-  CameraForGPU *cameraData_ = nullptr;
 
   ComPtr<ID3D12Resource> pointLightCB_;
   PointLight *pointLightData_ = nullptr;
@@ -137,7 +137,7 @@ private:
 
   ComPtr<ID3D12Resource> spotLightCB_;
   SpotLight *spotLightData_ = nullptr;
-  bool enableSpotLight_ = true;
+  bool enableSpotLight_ = false;
 
   Transform transform_;
   Transform cameraTransform_;

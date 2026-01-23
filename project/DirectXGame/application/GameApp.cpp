@@ -170,7 +170,7 @@ void GameApp::Update() {
   static bool settingsOpen = true;
   ImGui::Begin("Settings", &settingsOpen);
 
-  ImGui::Text("Light");
+  ImGui::SeparatorText("directionalLight");
 
   if (directionalLightData_) {
     ImGui::Checkbox("Enable DirectionalLight", &enableDirectionalLight_);
@@ -197,8 +197,7 @@ void GameApp::Update() {
   }
 
   if (pointLightData_) {
-    ImGui::Separator();
-    ImGui::Text("PointLight");
+    ImGui::SeparatorText("PointLight");
 
     ImGui::Checkbox("Enable PointLight", &enablePointLight_);
     pointLightData_->enabled = enablePointLight_ ? 1 : 0;
@@ -215,8 +214,7 @@ void GameApp::Update() {
   }
 
   if (spotLightData_) {
-    ImGui::Separator();
-    ImGui::Text("SpotLight");
+    ImGui::SeparatorText("SpotLight");
 
     ImGui::Checkbox("Enable SpotLight", &enableSpotLight_);
     spotLightData_->enabled = enableSpotLight_ ? 1 : 0;
@@ -245,6 +243,7 @@ void GameApp::Update() {
     }
   }
 
+  ImGui::Separator();
   static float sphereCol[3] = {1.0f, 1.0f, 1.0f};
   ImGui::Text("ObjectColor");
   if (ImGui::ColorEdit3("SphereColor", sphereCol)) {
@@ -261,6 +260,7 @@ void GameApp::Update() {
     sprite_.SetColor({spriteCol[0], spriteCol[1], spriteCol[2], 1.0f});
   }
 
+  ImGui::Separator();
   ImGui::Text("Lighting Mode");
   ImGui::RadioButton("None", &lightingMode_, 0);
   ImGui::RadioButton("Lambert", &lightingMode_, 1);
@@ -445,9 +445,9 @@ void GameApp::Update() {
   accelerationField_.area.max.y =
       std::max(accelerationField_.area.min.y, accelerationField_.area.max.y);
   accelerationField_.area.max.z =
-      std::max(accelerationField_.area.min.z, accelerationField_.area.max.z);*/
+      std::max(accelerationField_.area.min.z, accelerationField_.area.max.z);
 
-  ImGui::End();
+  ImGui::End();*/
 
   GetImGui().End();
 #endif
@@ -978,7 +978,7 @@ void GameApp::InitResources_() {
     spotLightData_->padding[0] = 0.0f;
     spotLightData_->padding[1] = 0.0f;
 
-    enableSpotLight_ = true;
+    enableSpotLight_ = false;
   }
 
   {
