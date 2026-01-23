@@ -62,8 +62,13 @@ bool Model::Initialize(const CreateInfo &ci) {
   if (!dx_ || !pipeline_) {
     ModelFatal_("[Model] dx_ or pipeline_ is null");
   }
+  if (!ci.modelData) {
+    ModelFatal_("[Model] ci.modelData is null");
+  }
 
-  const std::vector<VertexData> vertices = FlattenVertices(ci.modelData);
+  const ModelData &md = *ci.modelData;
+
+  const std::vector<VertexData> vertices = FlattenVertices(md);
 
   vertexCount_ = static_cast<uint32_t>(vertices.size());
   if (vertexCount_ == 0) {
@@ -115,7 +120,7 @@ bool Model::Initialize(const CreateInfo &ci) {
   cbTransMapped_->WVP = MakeIdentity4x4();
   cbTransMapped_->WorldInverseTranspose = MakeIdentity4x4();
 
-  const std::string texPath = PickDiffuseTexturePath(ci.modelData);
+  const std::string texPath = PickDiffuseTexturePath(md);
   if (!texPath.empty()) {
     texture_ = TextureManager::GetInstance()->Load(texPath);
   } else {
@@ -170,31 +175,19 @@ void Model::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
 
   ID3D12GraphicsCommandList *cmd = dx_->GetCommandList();
 
-  // Transform更新
   const Matrix4x4 worldWithRoot = Multiply(rootLocal_, world_);
   const Matrix4x4 wvp = Multiply(worldWithRoot, Multiply(view, proj));
   cbTransMapped_->World = worldWithRoot;
   cbTransMapped_->WVP = wvp;
 
-  // worldの逆行列を計算して転置行列にする
   cbTransMapped_->WorldInverseTranspose = Transpose(Inverse(worldWithRoot));
 
-  // PSO / RootSignature
   cmd->SetPipelineState(pipeline_->GetPipelineState());
   cmd->SetGraphicsRootSignature(pipeline_->GetRootSignature());
 
-  // IA
   cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   cmd->IASetVertexBuffers(0, 1, &vbv_);
 
-  // RootParameter index は UnifiedPipeline の生成順に合わせる
-  // 0: PS Material(b0)
-  // 1: VS Transform(b0)
-  // 2: PS Texture Table(t0)
-  // 3: PS DirectionalLight(b1)
-  // 4: PS Camera(b2)
-  // 5: PS PointLight(b3)
-  // 6: PS SpotLight(b4)
   cmd->SetGraphicsRootConstantBufferView(0,
                                          cbMaterial_->GetGPUVirtualAddress());
   cmd->SetGraphicsRootConstantBufferView(1,

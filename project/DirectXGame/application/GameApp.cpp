@@ -3,7 +3,6 @@
 
 #include "DebugCamera.h"
 #include "GameCamera.h"
-#include "AssetLoader.h"
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
@@ -234,7 +233,8 @@ void GameApp::Update() {
         spotLightData_->direction = Normalize(Vector3{dir[0], dir[1], dir[2]});
       }
 
-      ImGui::SliderFloat("SpotDistance", &spotLightData_->distance, 0.01f, 50.0f);
+      ImGui::SliderFloat("SpotDistance", &spotLightData_->distance, 0.01f,
+                         50.0f);
       ImGui::SliderFloat("SpotDecay", &spotLightData_->decay, 0.01f, 8.0f);
 
       static float coneAngleDeg = 30.0f;
@@ -248,12 +248,12 @@ void GameApp::Update() {
   static float sphereCol[3] = {1.0f, 1.0f, 1.0f};
   ImGui::Text("ObjectColor");
   if (ImGui::ColorEdit3("SphereColor", sphereCol)) {
-    model_.SetColor({sphereCol[0], sphereCol[1], sphereCol[2], 1.0f});
+    modelSphere_.SetColor({sphereCol[0], sphereCol[1], sphereCol[2], 1.0f});
   }
 
   static float planeCol[3] = {1.0f, 1.0f, 1.0f};
   if (ImGui::ColorEdit3("PlaneColor", planeCol)) {
-    planeModel_.SetColor({planeCol[0], planeCol[1], planeCol[2], 1.0f});
+    modelPlane_.SetColor({planeCol[0], planeCol[1], planeCol[2], 1.0f});
   }
 
   static float spriteCol[3] = {1.0f, 1.0f, 1.0f};
@@ -329,7 +329,7 @@ void GameApp::Update() {
     }
   }
 
-  ImGui::Begin("Particles");
+  /*ImGui::Begin("Particles");
 
   auto &ep = particleEmitter_.GetParams();
 
@@ -378,9 +378,9 @@ void GameApp::Update() {
   ImGui::SliderFloat("Life Max", &ep.lifeMax, 0.01f, 20.0f);
   if (ep.lifeMax < ep.lifeMin) {
     ep.lifeMax = ep.lifeMin;
-  }
+  }*/
 
-  {
+  /*{
     int mode = static_cast<int>(ep.colorMode);
     const char *items[] = {"RandomRGB", "RangeRGB", "RangeHSV", "Fixed"};
     ImGui::Combo("Color Mode", &mode, items, 4);
@@ -403,9 +403,9 @@ void GameApp::Update() {
 
   if (ImGui::Button("Reset Particles")) {
     ParticleManager::GetInstance()->ClearParticleGroup(ep.groupName);
-  }
+  }*/
 
-  ImGui::SeparatorText("Manager");
+  /*ImGui::SeparatorText("Manager");
 
   static int maxInstances = 1000;
   ImGui::SliderInt("Max Particles", &maxInstances, 0,
@@ -445,7 +445,7 @@ void GameApp::Update() {
   accelerationField_.area.max.y =
       std::max(accelerationField_.area.min.y, accelerationField_.area.max.y);
   accelerationField_.area.max.z =
-      std::max(accelerationField_.area.min.z, accelerationField_.area.max.z);
+      std::max(accelerationField_.area.min.z, accelerationField_.area.max.z);*/
 
   ImGui::End();
 
@@ -488,32 +488,32 @@ void GameApp::Draw() {
   Matrix4x4 viewMatrix = view3D_;
   Matrix4x4 projectionMatrix = proj3D_;
 
-  {
+    {
     Matrix4x4 worldSphere = MakeAffineMatrix(
         transform_.scale, transform_.rotate, transform_.translate);
-    model_.SetWorldTransform(worldSphere);
-    model_.SetLightingMode(lightingMode_);
+    modelSphere_.SetWorld(worldSphere);
+    modelSphere_.SetLightingMode(lightingMode_);
+    modelSphere_.SetSpecularColor({1.0f, 1.0f, 1.0f});
+    modelSphere_.SetShininess(64.0f);
 
     Matrix4x4 worldPlane = MakeAffineMatrix(
         transform2_.scale, transform2_.rotate, transform2_.translate);
-    planeModel_.SetWorldTransform(worldPlane);
+    modelPlane_.SetWorld(worldPlane);
 
     terrainTransform_.translate = {0.0f, -3.0f, 0.0f};
-    Matrix4x4 worldTerrain = MakeAffineMatrix(terrainTransform_.scale, terrainTransform_.rotate,
+    Matrix4x4 worldTerrain =
+        MakeAffineMatrix(terrainTransform_.scale, terrainTransform_.rotate,
                          terrainTransform_.translate);
-    terrainModel_.SetWorldTransform(worldTerrain);
+    modelTerrain_.SetWorld(worldTerrain);
 
     cmdList->SetGraphicsRootSignature(objPipeline_.GetRootSignature());
     cmdList->SetPipelineState(objPipeline_.GetPipelineState());
 
-    model_.SetSpecularColor({1.0f, 1.0f, 1.0f});
-    model_.SetShininess(64.0f);
-
-    model_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
-                cameraCB_.Get(), pointLightCB_.Get(), spotLightCB_.Get());
-    planeModel_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
+    modelSphere_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
+                      cameraCB_.Get(), pointLightCB_.Get(), spotLightCB_.Get());
+    modelPlane_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
                      cameraCB_.Get(), pointLightCB_.Get(), spotLightCB_.Get());
-    terrainModel_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
+    modelTerrain_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
                        cameraCB_.Get(), pointLightCB_.Get(),
                        spotLightCB_.Get());
   }
@@ -536,7 +536,7 @@ void GameApp::Draw() {
     default:
       break;
     }
-    //ParticleManager::GetInstance()->Draw(cmdList, currentParticlePipeline);
+    // ParticleManager::GetInstance()->Draw(cmdList, currentParticlePipeline);
   }
 
   {
@@ -575,10 +575,10 @@ void GameApp::Draw() {
     Matrix4x4 proj2D =
         MakeOrthographicMatrix(0.0f, 0.0f, screenW, screenH, 0.0f, 1.0f);
 
-    //sprite_.Draw(view2D, proj2D);
+    // sprite_.Draw(view2D, proj2D);
   }
 
-  {
+    {
     if (showEmitterGizmo_) {
       const auto &ep = particleEmitter_.GetParams();
 
@@ -587,8 +587,8 @@ void GameApp::Draw() {
                          ep.extent.z * 2.0f};
         Matrix4x4 world =
             MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
-        emitterBoxModel_.SetWorldTransform(world);
-        emitterBoxModel_.Draw(viewMatrix, projectionMatrix,
+        modelEmitterBox_.SetWorld(world);
+        modelEmitterBox_.Draw(viewMatrix, projectionMatrix,
                               directionalLightCB_.Get(), cameraCB_.Get(),
                               pointLightCB_.Get(), spotLightCB_.Get());
       } else {
@@ -597,8 +597,8 @@ void GameApp::Draw() {
                          std::max(ep.extent.z, 0.001f)};
         Matrix4x4 world =
             MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
-        emitterSphereModel_.SetWorldTransform(world);
-        emitterSphereModel_.Draw(viewMatrix, projectionMatrix,
+        modelEmitterSphere_.SetWorld(world);
+        modelEmitterSphere_.Draw(viewMatrix, projectionMatrix,
                                  directionalLightCB_.Get(), cameraCB_.Get(),
                                  pointLightCB_.Get(), spotLightCB_.Get());
       }
@@ -719,77 +719,76 @@ void GameApp::InitResources_() {
   ComPtr<ID3D12Device> device;
   dx.GetDevice()->QueryInterface(IID_PPV_ARGS(&device));
 
-  CheckFileExists_("resources/sphere/sphere.obj");
-  CheckFileExists_("resources/plane/plane.gltf");
-  CheckFileExists_("resources/cube/cube.obj");
-  CheckFileExists_("resources/uvChecker.png");
+  // ===== ModelManager init =====
+  ModelManager::GetInstance()->Initialize(&dx);
+
+  // ===== Load shared resources =====
+  resSphere_ = ModelManager::GetInstance()->Load("resources/sphere/sphere.obj");
+  resPlane_ = ModelManager::GetInstance()->Load("resources/plane/plane.gltf");
+  resCube_ = ModelManager::GetInstance()->Load("resources/cube/cube.obj");
+  resTerrain_ =
+      ModelManager::GetInstance()->Load("resources/terrain/terrain.obj");
+
   CheckFileExists_("resources/particle/circle.png");
   CheckFileExists_("resources/sound/select.mp3");
 
-  auto *loader = AssetLoader::GetInstance();
-
-  // 球モデル
+  // ===== Create instances =====
   {
-    Model::CreateInfo ci{};
+    ModelInstance::CreateInfo ci{};
     ci.dx = &dx;
     ci.pipeline = &objPipeline_;
-    ci.modelData = loader->LoadModel("resources/sphere", "sphere.obj");
+    ci.resource = resSphere_;
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
-
-    const bool okModel = model_.Initialize(ci);
-    CheckBoolOrDie_(okModel, "model_.Initialize(sphere)");
+    const bool ok = modelSphere_.Initialize(ci);
+    CheckBoolOrDie_(ok, "modelSphere_.Initialize");
   }
 
-  // 平面モデル
   {
-    Model::CreateInfo ci{};
+    ModelInstance::CreateInfo ci{};
     ci.dx = &dx;
     ci.pipeline = &objPipeline_;
-    ci.modelData = loader->LoadModel("resources/plane", "plane.gltf");
+    ci.resource = resPlane_;
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
-
-    const bool okPlane = planeModel_.Initialize(ci);
-    CheckBoolOrDie_(okPlane, "planeModel_.Initialize(plane)");
+    const bool ok = modelPlane_.Initialize(ci);
+    CheckBoolOrDie_(ok, "modelPlane_.Initialize");
   }
 
-  // エミッタギズモモデル(球)
+  // エミッタギズモ(球) : sphere resource を共有、pipelineだけwireにする
   {
-    Model::CreateInfo ci{};
+    ModelInstance::CreateInfo ci{};
     ci.dx = &dx;
     ci.pipeline = &emitterGizmoPipelineWire_;
-    ci.modelData = loader->LoadModel("resources/sphere", "sphere.obj");
+    ci.resource = resSphere_;
     ci.baseColor = {0.3f, 0.8f, 1.0f, 0.3f};
     ci.lightingMode = 0;
-
-    const bool ok = emitterSphereModel_.Initialize(ci);
-    CheckBoolOrDie_(ok, "emitterSphereModel_.Initialize");
+    const bool ok = modelEmitterSphere_.Initialize(ci);
+    CheckBoolOrDie_(ok, "modelEmitterSphere_.Initialize");
   }
 
-  // エミッタギズモモデル(箱)
+  // エミッタギズモ(箱)
   {
-    Model::CreateInfo ci{};
+    ModelInstance::CreateInfo ci{};
     ci.dx = &dx;
     ci.pipeline = &emitterGizmoPipelineWire_;
-    ci.modelData = loader->LoadModel("resources/cube", "cube.obj");
+    ci.resource = resCube_;
     ci.baseColor = {1.0f, 0.8f, 0.2f, 0.3f};
     ci.lightingMode = 0;
-
-    const bool ok = emitterBoxModel_.Initialize(ci);
-    CheckBoolOrDie_(ok, "emitterBoxModel_.Initialize");
+    const bool ok = modelEmitterBox_.Initialize(ci);
+    CheckBoolOrDie_(ok, "modelEmitterBox_.Initialize");
   }
 
-  // terrainモデル
+  // terrain
   {
-    Model::CreateInfo ci{};
+    ModelInstance::CreateInfo ci{};
     ci.dx = &dx;
     ci.pipeline = &objPipeline_;
-    ci.modelData = loader->LoadModel("resources/terrain", "terrain.obj");
+    ci.resource = resTerrain_;
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
-    const bool ok = terrainModel_.Initialize(ci);
-    CheckBoolOrDie_(ok, "terrainModel_.Initialize");
+    const bool ok = modelTerrain_.Initialize(ci);
+    CheckBoolOrDie_(ok, "modelTerrain_.Initialize");
   }
 
   // スプライト

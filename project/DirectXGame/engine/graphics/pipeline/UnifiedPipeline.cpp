@@ -282,11 +282,22 @@ PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
 }
 
 PipelineDesc UnifiedPipeline::MakeEmitterWireDesc() {
-    return PipelineDesc();
+  PipelineDesc d = MakeObject3DDesc();
+  d.alphaBlend = false;
+  d.enableDepth = true;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.fillMode = D3D12_FILL_MODE_WIREFRAME;
+  return d;
 }
 
 PipelineDesc UnifiedPipeline::MakeEmitterAlphaDesc() {
-    return PipelineDesc();
+  PipelineDesc d = MakeObject3DDesc();
+  d.alphaBlend = true;
+  d.blendMode = BlendMode::Alpha;
+  d.enableDepth = true;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.fillMode = D3D12_FILL_MODE_SOLID;
+  return d;
 }
 
 PipelineDesc UnifiedPipeline::MakeParticleDesc() {

@@ -11,10 +11,11 @@
 
 bool ModelResource::Initialize(const CreateInfo &ci) {
   assert(ci.dx);
+  assert(ci.modelData);
+
   dx_ = ci.dx;
 
-  // 全メッシュ結合
-  const std::vector<VertexData> vertices = FlattenVertices(ci.modelData);
+  const std::vector<VertexData> vertices = FlattenVertices(*ci.modelData);
 
   vertexCount_ = static_cast<uint32_t>(vertices.size());
   const size_t vbSize = sizeof(VertexData) * vertices.size();
@@ -33,11 +34,10 @@ bool ModelResource::Initialize(const CreateInfo &ci) {
     vb_->Unmap(0, nullptr);
   }
 
-  // Texture
   if (ci.texture) {
     texture_ = ci.texture;
   } else {
-    const std::string texPath = PickDiffuseTexturePath(ci.modelData);
+    const std::string texPath = PickDiffuseTexturePath(*ci.modelData);
     if (!texPath.empty()) {
       texture_ = TextureManager::GetInstance()->Load(texPath);
     } else {

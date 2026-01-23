@@ -39,7 +39,7 @@ void AbsoluteFrameWork::InitializeEngine_() {
 
 	// Managers: Engine services
 	TextureManager::GetInstance()->Initialize(&dx_);
-	ModelManager::GetInstance()->Initialize(&dx_, &dx_.GetSrvAllocator());
+	ModelManager::GetInstance()->Initialize(&dx_);
 	ParticleManager::GetInstance()->Initialize(&dx_);
 
 	// ImGui / Input / Audio

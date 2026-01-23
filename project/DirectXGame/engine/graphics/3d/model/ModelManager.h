@@ -5,35 +5,32 @@
 
 class DirectXCommon;
 class ModelResource;
-class SrvAllocator;
 
 class ModelManager {
 public:
-    static ModelManager* GetInstance() {
-        static ModelManager inst;
-        return &inst;
-    }
+  static ModelManager *GetInstance() {
+    static ModelManager inst;
+    return &inst;
+  }
 
-    void Initialize(DirectXCommon* dx, SrvAllocator* srvAlloc) {
-        dx_ = dx;
-        srvAlloc_ = srvAlloc;
-    }
+  void Initialize(DirectXCommon *dx) { dx_ = dx; }
 
-    // dir + filename に合わせる
-    std::shared_ptr<ModelResource> LoadObj(const std::string& directoryPath,
-        const std::string& filename);
+  // 統一本命: フルパス1本
+  std::shared_ptr<ModelResource> Load(const std::string &path);
 
-    void ClearUnused();
+  // 互換ラッパ
+  std::shared_ptr<ModelResource>
+  LoadModelResource(const std::string &directoryPath,
+                    const std::string &filename) {
+    return Load(directoryPath + "/" + filename);
+  }
+
+  void ClearUnused();
 
 private:
-    ModelManager() = default;
+  ModelManager() = default;
 
-    std::string MakeKey_(const std::string& dir, const std::string& file) const {
-        return dir + "/" + file;
-    }
+  DirectXCommon *dx_ = nullptr;
 
-    DirectXCommon* dx_ = nullptr;
-    SrvAllocator* srvAlloc_ = nullptr;
-
-    std::unordered_map<std::string, std::weak_ptr<ModelResource>> cache_;
+  std::unordered_map<std::string, std::weak_ptr<ModelResource>> cache_;
 };

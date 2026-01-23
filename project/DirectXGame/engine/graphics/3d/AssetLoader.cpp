@@ -1,6 +1,7 @@
 #include "AssetLoader.h"
 #include <algorithm>
 #include <cassert>
+#include <filesystem>
 
 static std::string ToLower_(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(),
@@ -15,8 +16,9 @@ static std::string GetExtLower_(const std::string &filename) {
   return ToLower_(filename.substr(pos + 1));
 }
 
-const ModelData &AssetLoader::LoadModel(const std::string &directoryPath,
-                                        const std::string &filename) {
+std::shared_ptr<const ModelData>
+AssetLoader::LoadModel(const std::string &directoryPath,
+                       const std::string &filename) {
   const std::string key = MakeKey_(directoryPath, filename);
   if (auto it = cache_.find(key); it != cache_.end()) {
     return it->second;
@@ -33,7 +35,6 @@ const ModelData &AssetLoader::LoadModel(const std::string &directoryPath,
   assert(scene);
   assert(scene->mRootNode);
 
-  // ---------- UV補正ルール（ここが本丸） ----------
   const std::string ext = GetExtLower_(filename);
 
   UVFixupOptions uvOpt{};
@@ -41,22 +42,17 @@ const ModelData &AssetLoader::LoadModel(const std::string &directoryPath,
     uvOpt.flipV = false;
     uvOpt.flipU = false;
   } else if (ext == "gltf" || ext == "glb") {
-    // glTFはVを反転が必要なことが多い
     uvOpt.flipV = true;
-
-    // 「左右反転」だけが残るなら、ここを true にして確認
     uvOpt.flipU = true;
   } else {
-    // その他：とりあえず何もしない（必要ならここで拡張）
     uvOpt.flipV = false;
     uvOpt.flipU = false;
   }
-  // ---------------------------------------------
 
-  ModelData modelData;
+  auto modelData = std::make_shared<ModelData>();
 
-  // --- Materials ---
-  modelData.materials.resize(scene->mNumMaterials);
+  // Materials
+  modelData->materials.resize(scene->mNumMaterials);
   for (uint32_t i = 0; i < scene->mNumMaterials; ++i) {
     aiMaterial *mat = scene->mMaterials[i];
     MaterialData md{};
@@ -66,11 +62,11 @@ const ModelData &AssetLoader::LoadModel(const std::string &directoryPath,
       mat->GetTexture(aiTextureType_DIFFUSE, 0, &tex);
       md.textureFilePath = directoryPath + "/" + tex.C_Str();
     }
-    modelData.materials[i] = std::move(md);
+    modelData->materials[i] = std::move(md);
   }
 
-  // --- Meshes ---
-  modelData.meshes.resize(scene->mNumMeshes);
+  // Meshes
+  modelData->meshes.resize(scene->mNumMeshes);
   for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
     const aiMesh *mesh = scene->mMeshes[meshIndex];
     assert(mesh);
@@ -106,37 +102,39 @@ const ModelData &AssetLoader::LoadModel(const std::string &directoryPath,
         tri[e] = FixupVertex_AssimpToEngine(v, uvOpt);
       }
 
-      // ConvertToLeftHanded + D3D(Front=Clockwise) の組み合わせなら、
-      // ここで頂点順をいじらないのが基本
       meshData.vertices.push_back(tri[0]);
       meshData.vertices.push_back(tri[1]);
       meshData.vertices.push_back(tri[2]);
     }
 
-    modelData.meshes[meshIndex] = std::move(meshData);
+    modelData->meshes[meshIndex] = std::move(meshData);
   }
 
-  modelData.rootNode = ReadNode_(scene->mRootNode);
+  modelData->rootNode = ReadNode_(scene->mRootNode);
 
-  auto [it, inserted] = cache_.emplace(key, std::move(modelData));
-  (void)inserted;
-  return it->second;
+  cache_[key] = modelData;
+  return modelData;
+}
+
+std::shared_ptr<const ModelData>
+AssetLoader::LoadModel(const std::string &path) {
+  std::filesystem::path p(path);
+  const std::string dir = p.parent_path().string();
+  const std::string file = p.filename().string();
+  return LoadModel(dir, file);
 }
 
 Node AssetLoader::ReadNode_(const aiNode *node) {
   Node result{};
 
   result.localMatrix = ConvertAssimpMatrix(node->mTransformation);
-
   result.name = node->mName.C_Str();
 
-  // このノードが参照するメッシュ
   result.meshIndices.reserve(node->mNumMeshes);
   for (uint32_t i = 0; i < node->mNumMeshes; ++i) {
     result.meshIndices.push_back(node->mMeshes[i]);
   }
 
-  // children
   result.children.reserve(node->mNumChildren);
   for (uint32_t i = 0; i < node->mNumChildren; ++i) {
     result.children.push_back(ReadNode_(node->mChildren[i]));

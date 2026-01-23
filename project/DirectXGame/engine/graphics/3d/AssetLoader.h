@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -11,8 +12,11 @@ public:
     return &inst;
   }
 
-  const ModelData &LoadModel(const std::string &directoryPath,
-                             const std::string &filename);
+  std::shared_ptr<const ModelData> LoadModel(const std::string &directoryPath,
+                                             const std::string &filename);
+
+  // フルパス1本版
+  std::shared_ptr<const ModelData> LoadModel(const std::string &path);
 
   void Clear() { cache_.clear(); }
 
@@ -25,5 +29,5 @@ private:
 
   Node ReadNode_(const aiNode *node);
 
-  std::unordered_map<std::string, ModelData> cache_;
+  std::unordered_map<std::string, std::shared_ptr<ModelData>> cache_;
 };

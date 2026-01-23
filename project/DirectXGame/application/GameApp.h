@@ -4,7 +4,9 @@
 
 #include "Camera.h"
 #include "Matrix.h"
-#include "Model.h"
+#include "ModelInstance.h"
+#include "ModelManager.h"
+#include "ModelResource.h"
 #include "ShaderCompiler.h"
 #include "Sprite.h"
 #include "Transform.h"
@@ -21,10 +23,10 @@ class TextureResource;
 
 // ===== DirectionalLight =====
 struct DirectionalLight {
-  Vector4 color;     // ライトの色
-  Vector3 direction; // ライトの向き
-  float intensity;   // 光の強さ
-  int32_t enabled;   // 0:OFF 1:ON
+  Vector4 color;
+  Vector3 direction;
+  float intensity;
+  int32_t enabled;
 };
 
 // ===== Camera =====
@@ -35,26 +37,26 @@ struct CameraForGPU {
 
 // ===== PointLight =====
 struct PointLight {
-  Vector4 color;    // ライトの色
-  Vector3 position; // ライトの位置
-  float intensity;  // 光の強さ
-  float radius;     // 光の届く距離
-  float decay;      // 減衰率
-  int32_t enabled;  // 0:OFF 1:ON
-  float padding[2]; // パディング
+  Vector4 color;
+  Vector3 position;
+  float intensity;
+  float radius;
+  float decay;
+  int32_t enabled;
+  float padding[2];
 };
 
 // ===== SpotLight =====
 struct SpotLight {
-  Vector4 color;     // ライトの色
-  Vector3 position;  // ライトの位置
-  float intensity;   // 光の強さ
-  Vector3 direction; // ライトの向き
-  float distance;    // 光の届く距離
-  float decay;       // 減衰率
-  float cosAngle;    // ライトの余弦
-  int32_t enabled;   // 0:OFF 1:ON
-  float padding[2];  // パディング
+  Vector4 color;
+  Vector3 position;
+  float intensity;
+  Vector3 direction;
+  float distance;
+  float decay;
+  float cosAngle;
+  int32_t enabled;
+  float padding[2];
 };
 
 class GameApp final : public AbsoluteFrameWork {
@@ -66,7 +68,6 @@ public:
   ~GameApp() override;
 
 protected:
-  // Framework のフック
   void Initialize() override;
   void Finalize() override;
   void Update() override;
@@ -98,12 +99,20 @@ private:
   UnifiedPipeline particlePipelineMul_;
   UnifiedPipeline particlePipelineScreen_;
 
-  Model model_;
-  Model planeModel_;
+  // ===== Model Resources (shared) =====
+  std::shared_ptr<ModelResource> resSphere_;
+  std::shared_ptr<ModelResource> resPlane_;
+  std::shared_ptr<ModelResource> resCube_;
+  std::shared_ptr<ModelResource> resTerrain_;
+
+  // ===== Model Instances (per-object) =====
+  ModelInstance modelSphere_;
+  ModelInstance modelPlane_;
+  ModelInstance modelEmitterSphere_;
+  ModelInstance modelEmitterBox_;
+  ModelInstance modelTerrain_;
+
   Sprite sprite_;
-  Model emitterSphereModel_;
-  Model emitterBoxModel_;
-  Model terrainModel_;
 
   // ===== Particle System =====
   static constexpr uint32_t kParticleCount_ = 300;

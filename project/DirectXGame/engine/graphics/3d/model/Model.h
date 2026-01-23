@@ -33,7 +33,10 @@ public:
   struct CreateInfo {
     DirectXCommon *dx = nullptr;
     UnifiedPipeline *pipeline = nullptr;
-    ModelData modelData;
+
+    // ここを shared_ptr に変更（AssetLoader と一致）
+    std::shared_ptr<const ModelData> modelData;
+
     Vector4 baseColor = {1, 1, 1, 1};
     int32_t lightingMode = 1;
   };
