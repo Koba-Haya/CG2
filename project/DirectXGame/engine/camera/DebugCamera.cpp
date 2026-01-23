@@ -1,4 +1,6 @@
 #include "DebugCamera.h"
+#include <numbers>
+#include <algorithm>
 
 void DebugCamera::Initialize() {
     // projection_ は GameApp 側の camera_->SetPerspective(...) で設定する想定
@@ -60,11 +62,17 @@ void DebugCamera::Update(const Input& input) {
 
     // 右ドラッグ：Yaw 回転
     if (input.IsMouseDown(1)) {
-        float yaw = -mouse.dx * rotSpeedMouse;
-        rotDelta = Multiply(MakeRotateYMatrix(yaw), rotDelta);
+      yaw_ += mouse.dx * rotSpeedMouse;   // これが横回転
+      pitch_ += mouse.dy * rotSpeedMouse; // これが縦回転
     }
 
-    matRot_ = Multiply(rotDelta, matRot_);
+    const float limit = (std::numbers::pi_v<float> * 0.5f) - 0.001f;
+    pitch_ = std::clamp(pitch_, -limit, +limit);
+
+    Matrix4x4 rotY = MakeRotateYMatrix(yaw_);
+    Matrix4x4 rotX = MakeRotateXMatrix(pitch_);
+    Matrix4x4 rotZ = MakeRotateZMatrix(roll_);
+    matRot_ = Multiply(rotZ, Multiply(rotX, rotY));
 
     // ======================
     // View 行列更新

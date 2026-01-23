@@ -21,44 +21,91 @@
 
 class TextureResource;
 
-// ===== DirectionalLight =====
-struct DirectionalLight {
-  Vector4 color;
-  Vector3 direction;
-  float intensity;
-  int32_t enabled;
-};
-
 // ===== Camera =====
 struct CameraForGPU {
   Vector3 worldPosition{};
   float pad = 0.0f;
 };
 
-// ===== PointLight =====
-struct PointLight {
-  Vector4 color;
-  Vector3 position;
-  float intensity;
-  float radius;
-  float decay;
-  int32_t enabled;
-  float padding[2];
+// ===== DirectionalLight =====
+static constexpr int kMaxDirLights = 4;
+
+struct alignas(16) DirectionalLightCB {
+  float color[4];     // float4
+  float direction[3]; // float3
+  float intensity;    // float
+  int32_t enabled;    // int
+  float pad0[3];      // 16byte境界
 };
+
+static_assert(sizeof(DirectionalLightCB) == 48,
+              "DirectionalLightCB size mismatch");
+
+struct alignas(16) DirectionalLightGroupCB {
+  int32_t count;     // int
+  float padCount[3]; // float3
+  DirectionalLightCB lights[kMaxDirLights];
+  int32_t enabled;     // int
+  float padEnabled[3]; // float3
+};
+
+static_assert(sizeof(DirectionalLightGroupCB) == 16 + 48 * kMaxDirLights + 16,
+              "DirectionalLightGroupCB size mismatch");
+
+// ===== PointLight =====
+struct alignas(16) PointLightCB {
+  float color[4];    // float4
+  float position[3]; // float3
+  float intensity;   // float
+  float radius;      // float
+  float decay;       // float
+  int32_t enabled;   // int
+  float pad0;        // float (16byte揃え)
+};
+
+static constexpr int kMaxPointLights = 16;
+
+struct alignas(16) PointLightGroupCB {
+  int32_t count;     // int
+  float padCount[3]; // float3
+  PointLightCB lights[kMaxPointLights];
+  int32_t enabled;     // HLSLに合わせて追加
+  float padEnabled[3]; // 16byte揃え
+};
+
+// サイズチェック（環境依存ズレを潰す）
+static_assert(sizeof(PointLightCB) == 48,
+              "PointLightCB size mismatch (expect 48)");
+static_assert(sizeof(PointLightGroupCB) == 16 + 48 * kMaxPointLights + 16,
+              "PointLightGroupCB size mismatch");
 
 // ===== SpotLight =====
-struct SpotLight {
-  Vector4 color;
-  Vector3 position;
-  float intensity;
-  Vector3 direction;
-  float distance;
-  float decay;
-  float cosAngle;
-  int32_t enabled;
-  float padding[2];
+static constexpr int kMaxSpotLights = 8;
+
+struct alignas(16) SpotLightCB {
+  float color[4];     // float4
+  float position[3];  // float3
+  float intensity;    // float
+  float direction[3]; // float3
+  float distance;     // float
+  float decay;        // float
+  float cosAngle;     // float
+  int32_t enabled;    // int
+  float pad0;         // 16byte境界
 };
 
+static_assert(sizeof(SpotLightCB) == 64, "SpotLightCB size mismatch");
+
+struct alignas(16) SpotLightGroupCB {
+  int32_t count;     // int
+  float padCount[3]; // float3
+  SpotLightCB lights[kMaxSpotLights];
+  int32_t enabled;     // int
+  float padEnabled[3]; // float3
+};
+
+static_assert(sizeof(SpotLightGroupCB) == 16 + 64 * kMaxSpotLights + 16,
+              "SpotLightGroupCB size mismatch");
 class GameApp final : public AbsoluteFrameWork {
 public:
   template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
@@ -128,15 +175,15 @@ private:
   CameraForGPU *cameraData_ = nullptr;
 
   ComPtr<ID3D12Resource> directionalLightCB_;
-  DirectionalLight *directionalLightData_ = nullptr;
+  DirectionalLightGroupCB *directionalLightData_ = nullptr;
   bool enableDirectionalLight_ = false;
 
   ComPtr<ID3D12Resource> pointLightCB_;
-  PointLight *pointLightData_ = nullptr;
+  PointLightGroupCB *pointLightsData_ = nullptr;
   bool enablePointLight_ = true;
 
   ComPtr<ID3D12Resource> spotLightCB_;
-  SpotLight *spotLightData_ = nullptr;
+  SpotLightGroupCB *spotLightData_ = nullptr;
   bool enableSpotLight_ = false;
 
   Transform transform_;

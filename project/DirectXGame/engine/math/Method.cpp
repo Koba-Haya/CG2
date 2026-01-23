@@ -1,4 +1,9 @@
+#define NOMINMAX
+
 #include "Method.h"
+#include <algorithm>
+
+static float Clamp01(float x) { return std::max(0.0f, std::min(1.0f, x)); }
 
 Matrix4x4 MakeIdentity4x4() {
   Matrix4x4 result;

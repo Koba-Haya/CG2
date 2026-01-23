@@ -18,6 +18,8 @@
 #include <random>
 #include <string>
 
+static constexpr UINT Align256(UINT n) { return (n + 255u) & ~255u; }
+
 static void FatalBoxAndTerminate_(const std::string &msg) {
   MessageBoxA(nullptr, msg.c_str(), "Fatal", MB_OK | MB_ICONERROR);
   std::terminate();
@@ -173,73 +175,243 @@ void GameApp::Update() {
   ImGui::SeparatorText("directionalLight");
 
   if (directionalLightData_) {
-    ImGui::Checkbox("Enable DirectionalLight", &enableDirectionalLight_);
+    ImGui::SeparatorText("DirectionalLights");
+
+    ImGui::Checkbox("Enable DirectionalLights", &enableDirectionalLight_);
     directionalLightData_->enabled = enableDirectionalLight_ ? 1 : 0;
 
-    if (enableDirectionalLight_) {
-      static float lightDir[3] = {0.0f, -1.0f, 0.0f};
-      static bool lightDirInit = false;
-      if (!lightDirInit) {
-        lightDir[0] = directionalLightData_->direction.x;
-        lightDir[1] = directionalLightData_->direction.y;
-        lightDir[2] = directionalLightData_->direction.z;
-        lightDirInit = true;
+    int count = directionalLightData_->count;
+    ImGui::Text("Count: %d / %d", count, kMaxDirLights);
+
+    if (ImGui::Button("Add DirectionalLight")) {
+      if (directionalLightData_->count < kMaxDirLights) {
+        int idx = directionalLightData_->count++;
+        DirectionalLightCB &dl = directionalLightData_->lights[idx];
+
+        dl.color[0] = 1.0f;
+        dl.color[1] = 1.0f;
+        dl.color[2] = 1.0f;
+        dl.color[3] = 1.0f;
+        dl.direction[0] = 0.0f;
+        dl.direction[1] = -1.0f;
+        dl.direction[2] = 0.0f;
+        dl.intensity = 1.0f;
+        dl.enabled = enableDirectionalLight_ ? 1 : 0;
+        dl.pad0[0] = dl.pad0[1] = dl.pad0[2] = 0.0f;
+      }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Remove Last##Dir")) {
+      if (directionalLightData_->count > 0) {
+        directionalLightData_->count--;
+        directionalLightData_->lights[directionalLightData_->count].enabled = 0;
+      }
+    }
+
+    static int editDirIndex = 0;
+    if (directionalLightData_->count <= 0)
+      editDirIndex = 0;
+    else
+      editDirIndex =
+          std::clamp(editDirIndex, 0, directionalLightData_->count - 1);
+
+    ImGui::SliderInt("Edit Index##Dir", &editDirIndex, 0,
+                     std::max(0, directionalLightData_->count - 1));
+
+    if (directionalLightData_->count > 0) {
+      DirectionalLightCB &dl = directionalLightData_->lights[editDirIndex];
+
+      ImGui::PushID(editDirIndex);
+
+      bool en = (dl.enabled != 0);
+      if (ImGui::Checkbox("Enabled##Dir", &en))
+        dl.enabled = en ? 1 : 0;
+
+      ImGui::ColorEdit3("DirColor", dl.color);
+
+      if (ImGui::DragFloat3("DirDirection", dl.direction, 0.01f, -1.0f, 1.0f)) {
+        const float x = dl.direction[0];
+        const float y = dl.direction[1];
+        const float z = dl.direction[2];
+        const float lenSq = x * x + y * y + z * z;
+
+        // ゼロに近いとシェーダのnormalizeで不安定になるので保険
+        if (lenSq < 1e-6f) {
+          dl.direction[0] = 0.0f;
+          dl.direction[1] = -1.0f;
+          dl.direction[2] = 0.0f;
+        }
       }
 
-      if (ImGui::SliderFloat3("LightDirection", lightDir, -1.0f, 1.0f)) {
-        Vector3 dir = {lightDir[0], lightDir[1], lightDir[2]};
-        directionalLightData_->direction = Normalize(dir);
-      }
+      ImGui::SliderFloat("DirIntensity", &dl.intensity, 0.0f, 10.0f);
 
-      ImGui::ColorEdit3("LightColor", reinterpret_cast<float *>(
-                                          &directionalLightData_->color));
+      ImGui::PopID();
     }
   }
 
-  if (pointLightData_) {
-    ImGui::SeparatorText("PointLight");
+  if (pointLightsData_) {
+    ImGui::SeparatorText("PointLights");
 
-    ImGui::Checkbox("Enable PointLight", &enablePointLight_);
-    pointLightData_->enabled = enablePointLight_ ? 1 : 0;
+    ImGui::Checkbox("Enable PointLights", &enablePointLight_);
+    pointLightsData_->enabled = enablePointLight_ ? 1 : 0;
 
-    if (enablePointLight_) {
-      ImGui::ColorEdit3("PointColor",
-                        reinterpret_cast<float *>(&pointLightData_->color));
-      ImGui::DragFloat3("PointPosition",
-                        reinterpret_cast<float *>(&pointLightData_->position),
-                        0.01f);
-      ImGui::SliderFloat("PointRadius", &pointLightData_->radius, 0.01f, 50.0f);
-      ImGui::SliderFloat("PointDecay", &pointLightData_->decay, 0.01f, 8.0f);
+    int count = pointLightsData_->count;
+    ImGui::Text("Count: %d / %d", count, kMaxPointLights);
+
+    if (ImGui::Button("Add PointLight")) {
+      if (pointLightsData_->count < kMaxPointLights) {
+        int idx = pointLightsData_->count++;
+        PointLightCB &pl = pointLightsData_->lights[idx];
+
+        pl.color[0] = 1.0f;
+        pl.color[1] = 1.0f;
+        pl.color[2] = 1.0f;
+        pl.color[3] = 1.0f;
+        pl.position[0] = float(idx) * 2.0f;
+        pl.position[1] = 2.0f;
+        pl.position[2] = -2.0f;
+        pl.intensity = 1.0f;
+        pl.radius = 10.0f;
+        pl.decay = 2.0f;
+        pl.enabled = enablePointLight_ ? 1 : 0;
+        pl.pad0 = 0.0f;
+      }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Remove Last")) {
+      if (pointLightsData_->count > 0) {
+        pointLightsData_->count--;
+        pointLightsData_->lights[pointLightsData_->count].enabled = 0;
+      }
+    }
+
+    static int editIndex = 0;
+    if (pointLightsData_->count <= 0)
+      editIndex = 0;
+    else
+      editIndex = std::clamp(editIndex, 0, pointLightsData_->count - 1);
+
+    ImGui::SliderInt("Edit Index", &editIndex, 0,
+                     std::max(0, pointLightsData_->count - 1));
+
+    if (pointLightsData_->count > 0) {
+      PointLightCB &pl = pointLightsData_->lights[editIndex];
+
+      // 将来、複数ライトを同時表示するならPushIDが安全
+      ImGui::PushID(editIndex);
+
+      bool en = (pl.enabled != 0);
+      if (ImGui::Checkbox("Enabled", &en))
+        pl.enabled = en ? 1 : 0;
+
+      ImGui::ColorEdit3("PointColor", pl.color);
+      ImGui::DragFloat3("PointPosition", pl.position, 0.01f);
+      ImGui::SliderFloat("PointIntensity", &pl.intensity, 0.0f, 10.0f);
+      ImGui::SliderFloat("PointRadius", &pl.radius, 0.01f, 50.0f);
+      ImGui::SliderFloat("PointDecay", &pl.decay, 0.01f, 8.0f);
+
+      ImGui::PopID();
     }
   }
 
   if (spotLightData_) {
-    ImGui::SeparatorText("SpotLight");
+    ImGui::SeparatorText("SpotLights");
 
-    ImGui::Checkbox("Enable SpotLight", &enableSpotLight_);
+    ImGui::Checkbox("Enable SpotLights", &enableSpotLight_);
     spotLightData_->enabled = enableSpotLight_ ? 1 : 0;
 
-    if (enableSpotLight_) {
-      ImGui::ColorEdit3("SpotColor",
-                        reinterpret_cast<float *>(&spotLightData_->color));
-      ImGui::DragFloat3("SpotPosition",
-                        reinterpret_cast<float *>(&spotLightData_->position),
-                        0.01f);
+    int count = spotLightData_->count;
+    ImGui::Text("Count: %d / %d", count, kMaxSpotLights);
 
-      static float dir[3] = {0.0f, -1.0f, 0.0f};
-      if (ImGui::SliderFloat3("SpotDirection", dir, -1.0f, 1.0f)) {
-        spotLightData_->direction = Normalize(Vector3{dir[0], dir[1], dir[2]});
+    if (ImGui::Button("Add SpotLight")) {
+      if (spotLightData_->count < kMaxSpotLights) {
+        int idx = spotLightData_->count++;
+        SpotLightCB &sl = spotLightData_->lights[idx];
+
+        std::memset(&sl, 0, sizeof(SpotLightCB));
+
+        sl.color[0] = 1.0f;
+        sl.color[1] = 1.0f;
+        sl.color[2] = 1.0f;
+        sl.color[3] = 1.0f;
+        sl.position[0] = float(idx) * 2.0f;
+        sl.position[1] = 3.0f;
+        sl.position[2] = -2.0f;
+        sl.intensity = 1.0f;
+
+        sl.direction[0] = 0.0f;
+        sl.direction[1] = -1.0f;
+        sl.direction[2] = 0.0f;
+
+        sl.distance = 10.0f;
+        sl.decay = 2.0f;
+
+        const float pi = 3.14159265f;
+        float angleRad = 30.0f * (pi / 180.0f);
+        sl.cosAngle = std::cos(angleRad);
+
+        sl.enabled = enableSpotLight_ ? 1 : 0;
+      }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Remove Last##Spot")) {
+      if (spotLightData_->count > 0) {
+        spotLightData_->count--;
+        spotLightData_->lights[spotLightData_->count].enabled = 0;
+      }
+    }
+
+    static int editSpotIndex = 0;
+    if (spotLightData_->count <= 0)
+      editSpotIndex = 0;
+    else
+      editSpotIndex = std::clamp(editSpotIndex, 0, spotLightData_->count - 1);
+
+    ImGui::SliderInt("Edit Index##Spot", &editSpotIndex, 0,
+                     std::max(0, spotLightData_->count - 1));
+
+    if (spotLightData_->count > 0) {
+      SpotLightCB &sl = spotLightData_->lights[editSpotIndex];
+
+      ImGui::PushID(editSpotIndex);
+
+      bool en = (sl.enabled != 0);
+      if (ImGui::Checkbox("Enabled##Spot", &en))
+        sl.enabled = en ? 1 : 0;
+
+      ImGui::ColorEdit3("SpotColor", sl.color);
+      ImGui::DragFloat3("SpotPosition", sl.position, 0.01f);
+
+      if (ImGui::DragFloat3("SpotDirection", sl.direction, 0.01f, -1.0f,
+                            1.0f)) {
+        const float x = sl.direction[0];
+        const float y = sl.direction[1];
+        const float z = sl.direction[2];
+        const float lenSq = x * x + y * y + z * z;
+
+        if (lenSq < 1e-6f) {
+          sl.direction[0] = 0.0f;
+          sl.direction[1] = -1.0f;
+          sl.direction[2] = 0.0f;
+        }
       }
 
-      ImGui::SliderFloat("SpotDistance", &spotLightData_->distance, 0.01f,
-                         50.0f);
-      ImGui::SliderFloat("SpotDecay", &spotLightData_->decay, 0.01f, 8.0f);
+      ImGui::SliderFloat("SpotIntensity", &sl.intensity, 0.0f, 10.0f);
+      ImGui::SliderFloat("SpotDistance", &sl.distance, 0.01f, 50.0f);
+      ImGui::SliderFloat("SpotDecay", &sl.decay, 0.01f, 8.0f);
 
-      static float coneAngleDeg = 30.0f;
-      if (ImGui::SliderFloat("Cone Angle (deg)", &coneAngleDeg, 1.0f, 89.0f)) {
-        float rad = coneAngleDeg * (3.14159265f / 180.0f);
-        spotLightData_->cosAngle = std::cos(rad);
+      const float pi = 3.14159265f;
+      float cosA = std::max(-1.0f, std::min(1.0f, sl.cosAngle));
+      float coneDeg = std::acos(cosA) * (180.0f / pi);
+      if (ImGui::SliderFloat("Cone Angle (deg)", &coneDeg, 1.0f, 89.0f)) {
+        float rad = coneDeg * (pi / 180.0f);
+        sl.cosAngle = std::cos(rad);
       }
+
+      ImGui::PopID();
     }
   }
 
@@ -830,14 +1002,14 @@ void GameApp::InitResources_() {
     particleEmitter_.Burst(std::min(initialParticleCount_, kParticleCount_));
   }
 
-  // Directional Light CB
+  // Directional Light CB (group)
   {
     D3D12_HEAP_PROPERTIES heapProps{};
     heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
 
     D3D12_RESOURCE_DESC resDesc{};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = sizeof(DirectionalLight);
+    resDesc.Width = Align256(sizeof(DirectionalLightGroupCB));
     resDesc.Height = 1;
     resDesc.DepthOrArraySize = 1;
     resDesc.MipLevels = 1;
@@ -858,10 +1030,23 @@ void GameApp::InitResources_() {
       FatalBoxAndTerminate_("directionalLightData_ is null after Map");
     }
 
-    directionalLightData_->color = {1, 1, 1, 1};
-    directionalLightData_->direction = {0, -1, 0};
-    directionalLightData_->intensity = 1.0f;
+    std::memset(directionalLightData_, 0, sizeof(DirectionalLightGroupCB));
+
     directionalLightData_->enabled = 0;
+    directionalLightData_->count = 1;
+
+    DirectionalLightCB &dl0 = directionalLightData_->lights[0];
+    dl0.color[0] = 1.0f;
+    dl0.color[1] = 1.0f;
+    dl0.color[2] = 1.0f;
+    dl0.color[3] = 1.0f;
+    dl0.direction[0] = 0.0f;
+    dl0.direction[1] = -1.0f;
+    dl0.direction[2] = 0.0f;
+    dl0.intensity = 1.0f;
+    dl0.enabled = 1;
+
+    enableDirectionalLight_ = false;
   }
 
   // Camera CB
@@ -895,14 +1080,14 @@ void GameApp::InitResources_() {
     cameraData_->pad = 0.0f;
   }
 
-  // Point Light CB
+  // Point Light CB（複数対応）
   {
     D3D12_HEAP_PROPERTIES heapProps{};
     heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
 
     D3D12_RESOURCE_DESC resDesc{};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = sizeof(PointLight);
+    resDesc.Width = Align256(sizeof(PointLightGroupCB));
     resDesc.Height = 1;
     resDesc.DepthOrArraySize = 1;
     resDesc.MipLevels = 1;
@@ -917,31 +1102,43 @@ void GameApp::InitResources_() {
     CheckHROrDie_(hr, "CreateCommittedResource(pointLightCB_)");
 
     hr = pointLightCB_->Map(0, nullptr,
-                            reinterpret_cast<void **>(&pointLightData_));
+                            reinterpret_cast<void **>(&pointLightsData_));
     CheckHROrDie_(hr, "pointLightCB_->Map");
 
-    if (!pointLightData_) {
-      FatalBoxAndTerminate_("pointLightData_ is null after Map");
+    if (!pointLightsData_) {
+      FatalBoxAndTerminate_("pointLightsData_ is null after Map");
     }
 
-    pointLightData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
-    pointLightData_->position = {0.0f, 2.0f, -2.0f};
-    pointLightData_->intensity = 1.0f;
-    pointLightData_->radius = 10.0f;
-    pointLightData_->decay = 2.0f;
-    pointLightData_->padding[0] = 0.0f;
-    pointLightData_->padding[1] = 0.0f;
-    pointLightData_->enabled = 1;
+    std::memset(pointLightsData_, 0, sizeof(PointLightGroupCB));
+
+    pointLightsData_->enabled = 1;
+    pointLightsData_->count = 1;
+
+    PointLightCB &pl0 = pointLightsData_->lights[0];
+    pl0.color[0] = 1.0f;
+    pl0.color[1] = 1.0f;
+    pl0.color[2] = 1.0f;
+    pl0.color[3] = 1.0f;
+    pl0.position[0] = 0.0f;
+    pl0.position[1] = 2.0f;
+    pl0.position[2] = -2.0f;
+    pl0.intensity = 1.0f;
+    pl0.radius = 10.0f;
+    pl0.decay = 2.0f;
+    pl0.enabled = 1;
+    pl0.pad0 = 0.0f;
+
+    enablePointLight_ = true;
   }
 
-  // Spot Light CB
+  // Spot Light CB (group)
   {
     D3D12_HEAP_PROPERTIES heapProps{};
     heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
 
     D3D12_RESOURCE_DESC resDesc{};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = sizeof(SpotLight);
+    resDesc.Width = Align256(sizeof(SpotLightGroupCB));
     resDesc.Height = 1;
     resDesc.DepthOrArraySize = 1;
     resDesc.MipLevels = 1;
@@ -963,20 +1160,34 @@ void GameApp::InitResources_() {
       FatalBoxAndTerminate_("spotLightData_ is null after Map");
     }
 
-    spotLightData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
-    spotLightData_->position = {0.0f, 3.0f, -2.0f};
-    spotLightData_->intensity = 1.0f;
+    std::memset(spotLightData_, 0, sizeof(SpotLightGroupCB));
 
-    spotLightData_->direction = Normalize(Vector3{0.0f, -1.0f, 0.0f});
-    spotLightData_->distance = 10.0f;
-    spotLightData_->decay = 2.0f;
+    spotLightData_->enabled = 0;
+    spotLightData_->count = 1;
 
-    float angleRad = 30.0f * (3.14159265f / 180.0f);
-    spotLightData_->cosAngle = std::cos(angleRad);
+    SpotLightCB &sl0 = spotLightData_->lights[0];
+    sl0.color[0] = 1.0f;
+    sl0.color[1] = 1.0f;
+    sl0.color[2] = 1.0f;
+    sl0.color[3] = 1.0f;
 
-    spotLightData_->enabled = 1;
-    spotLightData_->padding[0] = 0.0f;
-    spotLightData_->padding[1] = 0.0f;
+    sl0.position[0] = 0.0f;
+    sl0.position[1] = 3.0f;
+    sl0.position[2] = -2.0f;
+    sl0.intensity = 1.0f;
+
+    sl0.direction[0] = 0.0f;
+    sl0.direction[1] = -1.0f;
+    sl0.direction[2] = 0.0f;
+
+    sl0.distance = 10.0f;
+    sl0.decay = 2.0f;
+
+    const float pi = 3.14159265f;
+    float angleRad = 30.0f * (pi / 180.0f);
+    sl0.cosAngle = std::cos(angleRad);
+
+    sl0.enabled = 1;
 
     enableSpotLight_ = false;
   }
