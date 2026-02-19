@@ -21,12 +21,31 @@ static void CheckHROrDie_(HRESULT hr, const char* what) {
 	}
 }
 
-void AbsoluteFrameWork::InitializeEngine_() {
-	// COM: Engine側で統一（GameAppからは消す）
-	HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-	CheckHROrDie_(hr, "CoInitializeEx failed");
+struct AbsoluteFrameWork::ComScope {
+	ComScope() {
+		HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		CheckHROrDie_(hr, "CoInitializeEx failed");
+	}
 
-	// Window / DX
+	~ComScope() {
+		CoUninitialize();
+	}
+
+	ComScope(const ComScope&) = delete;
+	ComScope& operator=(const ComScope&) = delete;
+	ComScope(ComScope&&) = delete;
+	ComScope& operator=(ComScope&&) = delete;
+};
+
+void AbsoluteFrameWork::DeleteComScope_(ComScope* p) noexcept {
+	delete p;
+}
+
+AbsoluteFrameWork::~AbsoluteFrameWork() = default;
+
+void AbsoluteFrameWork::InitializeEngine_() {
+	comScope_.reset(new ComScope());
+
 	winApp_.Initialize();
 
 	DirectXCommon::InitParams params{
@@ -37,12 +56,10 @@ void AbsoluteFrameWork::InitializeEngine_() {
 	};
 	dx_.Initialize(params);
 
-	// Managers: Engine services
 	TextureManager::GetInstance()->Initialize(&dx_);
 	ModelManager::GetInstance()->Initialize(&dx_);
 	ParticleManager::GetInstance()->Initialize(&dx_);
 
-	// ImGui / Input / Audio
 	imgui_.Initialize(&winApp_, &dx_);
 
 	const bool inputOk = input_.Initialize(winApp_.GetHInstance(), winApp_.GetHwnd());
@@ -53,24 +70,16 @@ void AbsoluteFrameWork::InitializeEngine_() {
 }
 
 void AbsoluteFrameWork::FinalizeEngine_() {
-	// App layer finalize first (game resources release)
-	// -> This function is called after OnFinalize(), so only engine services remain.
-
-	// ImGui first (uses DX)
 	imgui_.Finalize();
 
-	// Audio / Input
 	audio_.Shutdown();
 	input_.Finalize();
 
-	// Managers (release GPU resources before DX destruction)
 	ParticleManager::GetInstance()->Finalize();
 
-	// Window
 	winApp_.Finalize();
 
-	// COM
-	CoUninitialize();
+	comScope_.reset(nullptr);
 }
 
 void AbsoluteFrameWork::Run() {
@@ -80,7 +89,6 @@ void AbsoluteFrameWork::Run() {
 	Initialize();
 
 	while (!endRequest_) {
-		// Close button, etc.
 		if (!winApp_.ProcessMessage()) {
 			RequestEnd();
 			break;
@@ -96,13 +104,10 @@ void AbsoluteFrameWork::Run() {
 }
 
 void AbsoluteFrameWork::Initialize() {
-	// 何もしない（アプリ側がoverrideする）
 }
 
 void AbsoluteFrameWork::Finalize() {
-	// 何もしない（アプリ側がoverrideする）
 }
 
 void AbsoluteFrameWork::Update() {
-	// 何もしない（アプリ側がoverrideする）
 }

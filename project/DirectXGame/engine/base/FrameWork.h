@@ -3,19 +3,21 @@
 #include "DirectXCommon.h"
 #include "Input.h"
 #include "Audio.h"
-#include "ImGuiManager.h"
 
 // マネージャー群
+#include "ImGuiManager.h"
 #include "TextureManager.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
+
+#include <memory>
 
 class AbsoluteFrameWork {
 public:
 	// コンストラクタ
 	AbsoluteFrameWork() = default;
 	// 仮想デストラクタ
-	virtual ~AbsoluteFrameWork() = default;
+	virtual ~AbsoluteFrameWork();
 
 	// 実行
 	void Run();
@@ -50,8 +52,14 @@ private:
 	void FinalizeEngine_();
 
 private:
+	struct ComScope;
+	static void DeleteComScope_(ComScope* p) noexcept;
+
+private:
 	// 終了要求フラグ
 	bool endRequest_ = false;
+
+	std::unique_ptr<ComScope, void(*)(ComScope*)> comScope_{ nullptr, &DeleteComScope_ };
 
 	WinApp winApp_;
 	DirectXCommon dx_;

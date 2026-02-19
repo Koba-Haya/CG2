@@ -53,10 +53,10 @@ public:
 	const D3D12_VIEWPORT& GetViewport() const { return viewport_; }
 	const D3D12_RECT& GetScissorRect() const { return scissorRect_; }
 
-	IDxcUtils* GetDXCUtils() const { return dxc_.utils; }
-	IDxcCompiler3* GetDXCCompiler() const { return dxc_.compiler; }
+	IDxcUtils* GetDXCUtils() const { return dxc_.utils.Get(); }
+	IDxcCompiler3* GetDXCCompiler() const { return dxc_.compiler.Get(); }
 	IDxcIncludeHandler* GetDXCIncludeHandler() const {
-		return dxc_.includeHandler;
+		return dxc_.includeHandler.Get();
 	}
 
 	// SRV割当器取得
@@ -127,9 +127,9 @@ private:
 
 	// DXC
 	struct DXCBlock {
-		struct IDxcUtils* utils = nullptr;
-		struct IDxcCompiler3* compiler = nullptr;
-		struct IDxcIncludeHandler* includeHandler = nullptr;
+		ComPtr<IDxcUtils> utils;
+		ComPtr<IDxcCompiler3> compiler;
+		ComPtr<IDxcIncludeHandler> includeHandler;
 	} dxc_{};
 
 	// 一時

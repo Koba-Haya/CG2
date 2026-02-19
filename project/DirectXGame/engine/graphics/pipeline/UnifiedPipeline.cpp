@@ -4,6 +4,18 @@
 #include <d3dcompiler.h> // D3D12SerializeRootSignature
 #include "ShaderCompilerUtils.h"
 
+#include <Windows.h>
+#include <format>
+
+static void LogUnifiedPipelineError_(const std::wstring &msg) {
+  OutputDebugStringW((L"[UnifiedPipeline] " + msg + L"\n").c_str());
+}
+
+static void LogUnifiedPipelineHr_(const std::wstring &what, HRESULT hr) {
+  LogUnifiedPipelineError_(
+      std::format(L"{} failed. hr=0x{:08X}", what, (unsigned)hr));
+}
+
 static D3D12_BLEND_DESC MakeBlendDesc(const PipelineDesc &desc) {
   D3D12_BLEND_DESC b{};
   b.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
@@ -72,6 +84,23 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
                                  IDxcCompiler3 *dxcCompiler,
                                  IDxcIncludeHandler *includeHandler,
                                  const PipelineDesc &desc) {
+  if (!device) {
+    LogUnifiedPipelineError_(L"Initialize: device is null");
+    return false;
+  }
+  if (!dxcUtils) {
+    LogUnifiedPipelineError_(L"Initialize: dxcUtils is null");
+    return false;
+  }
+  if (!dxcCompiler) {
+    LogUnifiedPipelineError_(L"Initialize: dxcCompiler is null");
+    return false;
+  }
+  if (!includeHandler) {
+    LogUnifiedPipelineError_(L"Initialize: includeHandler is null");
+    return false;
+  }
+
   HRESULT hr = S_OK;
 
   // SRV range (PS: texture t0)
@@ -165,18 +194,24 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   hr = D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1,
                                    sig.GetAddressOf(), err.GetAddressOf());
   if (FAILED(hr)) {
-    if (err)
+    if (err) {
       OutputDebugStringA((const char *)err->GetBufferPointer());
+    }
+    LogUnifiedPipelineHr_(L"D3D12SerializeRootSignature", hr);
     assert(false);
     return false;
   }
+
   OutputDebugStringW(
       (L"CreatePSO: " + desc.vsPath + L" / " + desc.psPath + L"\n").c_str());
+
   hr = device->CreateRootSignature(0, sig->GetBufferPointer(),
                                    sig->GetBufferSize(),
                                    IID_PPV_ARGS(&rootSignature_));
-  if (FAILED(hr))
+  if (FAILED(hr)) {
+    LogUnifiedPipelineHr_(L"CreateRootSignature", hr);
     return false;
+  }
 
   // --- InputLayout ---
   D3D12_INPUT_LAYOUT_DESC layout{};
@@ -184,10 +219,30 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   layout.NumElements = (UINT)desc.inputElements.size();
 
   // --- Shaders ---
-  IDxcBlob *vs = CompileShader(desc.vsPath, desc.vsProfile, dxcUtils,
-                               dxcCompiler, includeHandler);
-  IDxcBlob *ps = CompileShader(desc.psPath, desc.psProfile, dxcUtils,
-                               dxcCompiler, includeHandler);
+  Microsoft::WRL::ComPtr<IDxcBlob> vs;
+  Microsoft::WRL::ComPtr<IDxcBlob> ps;
+
+  {
+    IDxcBlob *vsRaw = CompileShader(desc.vsPath, desc.vsProfile, dxcUtils,
+                                    dxcCompiler, includeHandler);
+    if (!vsRaw) {
+      LogUnifiedPipelineError_(
+          std::format(L"VS compile failed: {}", desc.vsPath));
+      return false;
+    }
+    vs.Attach(vsRaw);
+  }
+
+  {
+    IDxcBlob *psRaw = CompileShader(desc.psPath, desc.psProfile, dxcUtils,
+                                    dxcCompiler, includeHandler);
+    if (!psRaw) {
+      LogUnifiedPipelineError_(
+          std::format(L"PS compile failed: {}", desc.psPath));
+      return false;
+    }
+    ps.Attach(psRaw);
+  }
 
   // --- Raster / Blend / Depth ---
   D3D12_RASTERIZER_DESC rast{};
@@ -222,7 +277,11 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   pso.InputLayout.NumElements = (UINT)desc.inputElements.size();
 
   hr = device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&pso_));
-  return SUCCEEDED(hr);
+  if (FAILED(hr)) {
+    LogUnifiedPipelineHr_(L"CreateGraphicsPipelineState", hr);
+    return false;
+  }
+  return true;
 }
 
 // ===== プリセット =====

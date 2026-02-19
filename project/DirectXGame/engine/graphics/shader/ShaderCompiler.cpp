@@ -16,8 +16,8 @@ ShaderCompiler::Compile(const std::wstring &path, const wchar_t *profile,
                         const std::vector<LPCWSTR> &extraArgs) {
   assert(utils_ && compiler_ && include_);
 
-  IDxcBlobEncoding *shaderSource = nullptr;
-  HRESULT hr = utils_->LoadFile(path.c_str(), nullptr, &shaderSource);
+  ComPtr<IDxcBlobEncoding> shaderSource;
+  HRESULT hr = utils_->LoadFile(path.c_str(), nullptr, shaderSource.GetAddressOf());
   assert(SUCCEEDED(hr));
 
   DxcBuffer shaderSourceBuffer;
@@ -47,7 +47,6 @@ ShaderCompiler::Compile(const std::wstring &path, const wchar_t *profile,
                                nullptr);
   assert(SUCCEEDED(hr));
 
-  shaderSource->Release();
   return shaderBlob;
 }
 

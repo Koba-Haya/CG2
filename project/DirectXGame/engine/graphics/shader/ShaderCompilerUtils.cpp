@@ -1,24 +1,46 @@
+#include "ShaderCompilerUtils.h"
+
 #include "TextureUtils.h" // ConvertString が必要なら
 
 #include <Windows.h>
 #include <cassert>
 #include <format>
-// windows.hより後にdxcapi.hをincludeすること
-#include "ShaderCompilerUtils.h"
+#include <wrl.h>
 
-void Log(const std::string &message) { OutputDebugStringA(message.c_str()); }
+static void LogA_(const std::string &message) {
+  OutputDebugStringA(message.c_str());
+}
+
+static void LogW_(const std::wstring &message) {
+  OutputDebugStringW(message.c_str());
+}
+
+static void LogHr_(const wchar_t *what, HRESULT hr) {
+  LogW_(std::format(L"[DXC] {} failed. hr=0x{:08X}\n", what, (unsigned)hr));
+}
 
 IDxcBlob *CompileShader(const std::wstring &filePath, const wchar_t *profile,
                         IDxcUtils *dxcUtils, IDxcCompiler3 *dxcCompiler,
                         IDxcIncludeHandler *includeHandler) {
-  Log(ConvertString(std::format(L"Begin CompileShader,path:{},profile:{}\n",
-                                filePath, profile)));
+  using Microsoft::WRL::ComPtr;
 
-  IDxcBlobEncoding *shaderSource = nullptr;
-  HRESULT hr = dxcUtils->LoadFile(filePath.c_str(), nullptr, &shaderSource);
-  assert(SUCCEEDED(hr));
+  if (!dxcUtils || !dxcCompiler || !includeHandler) {
+    LogW_(L"[DXC] CompileShader: null dxc interface\n");
+    return nullptr;
+  }
 
-  DxcBuffer shaderSourceBuffer;
+  LogW_(std::format(L"[DXC] Begin CompileShader, path:{}, profile:{}\n", filePath,
+                    profile));
+
+  ComPtr<IDxcBlobEncoding> shaderSource;
+  HRESULT hr =
+      dxcUtils->LoadFile(filePath.c_str(), nullptr, shaderSource.GetAddressOf());
+  if (FAILED(hr) || !shaderSource) {
+    LogHr_(L"IDxcUtils::LoadFile", hr);
+    return nullptr;
+  }
+
+  DxcBuffer shaderSourceBuffer{};
   shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
   shaderSourceBuffer.Size = shaderSource->GetBufferSize();
   shaderSourceBuffer.Encoding = DXC_CP_UTF8;
@@ -28,29 +50,47 @@ IDxcBlob *CompileShader(const std::wstring &filePath, const wchar_t *profile,
       L"-Qembed_debug", L"-Od", L"-Zpr",
   };
 
-  IDxcResult *shaderResult = nullptr;
+  ComPtr<IDxcResult> shaderResult;
   hr = dxcCompiler->Compile(&shaderSourceBuffer, arguments, _countof(arguments),
-                            includeHandler, IID_PPV_ARGS(&shaderResult));
-  if (FAILED(hr)) {
-    OutputDebugStringA("Shader compile failed.\n");
+                            includeHandler,
+                            IID_PPV_ARGS(shaderResult.GetAddressOf()));
+  if (FAILED(hr) || !shaderResult) {
+    LogHr_(L"IDxcCompiler3::Compile", hr);
     return nullptr;
   }
 
-  IDxcBlobUtf8 *shaderError = nullptr;
-  shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
-  if (shaderError != nullptr && shaderError->GetStringLength() != 0) {
-    Log(shaderError->GetStringPointer());
-    assert(false);
+  // warnings/errors text
+  ComPtr<IDxcBlobUtf8> shaderError;
+  shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(shaderError.GetAddressOf()),
+                          nullptr);
+  if (shaderError && shaderError->GetStringLength() != 0) {
+    LogA_(std::string("[DXC] ") + shaderError->GetStringPointer() + "\n");
   }
 
-  IDxcBlob *shaderBlob = nullptr;
-  hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob),
-                               nullptr);
-  assert(SUCCEEDED(hr));
+  HRESULT status = E_FAIL;
+  hr = shaderResult->GetStatus(&status);
+  if (FAILED(hr)) {
+    LogHr_(L"IDxcResult::GetStatus", hr);
+    return nullptr;
+  }
+  if (FAILED(status)) {
+    LogHr_(L"Shader compilation (status)", status);
+    LogW_(std::format(L"[DXC] Failed shader: {}\n", filePath));
+    return nullptr;
+  }
 
-  Log(ConvertString(std::format(L"Compile Succeeded, path:{}, profile:{}\n",
-                                filePath, profile)));
-  shaderSource->Release();
-  shaderResult->Release();
-  return shaderBlob;
+  ComPtr<IDxcBlob> shaderBlob;
+  hr = shaderResult->GetOutput(DXC_OUT_OBJECT,
+                               IID_PPV_ARGS(shaderBlob.GetAddressOf()),
+                               nullptr);
+  if (FAILED(hr) || !shaderBlob) {
+    LogHr_(L"IDxcResult::GetOutput(DXC_OUT_OBJECT)", hr);
+    return nullptr;
+  }
+
+  LogW_(std::format(L"[DXC] Compile Succeeded, path:{}, profile:{}\n", filePath,
+                    profile));
+
+  shaderBlob->AddRef(); // 生ポインタ返却（呼び出し側がReleaseする契約）
+  return shaderBlob.Get();
 }
