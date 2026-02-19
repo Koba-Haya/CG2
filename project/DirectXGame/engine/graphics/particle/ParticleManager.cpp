@@ -43,6 +43,7 @@ bool ParticleManager::Initialize(DirectXCommon* dx) {
 
 void ParticleManager::Finalize() {
     groups_.clear();
+
     vb_.Reset();
     ib_.Reset();
     quadReady_ = false;

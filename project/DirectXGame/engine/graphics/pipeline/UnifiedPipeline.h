@@ -1,11 +1,10 @@
 #pragma once
 #include <d3d12.h>
-#include <dxcapi.h>
 #include <wrl.h>
 #include <vector>
 #include <string>
 
-// DXC 前方宣言（main.cpp の CompileShader を使う）
+// DXC 前方宣言
 struct IDxcUtils;
 struct IDxcCompiler3;
 struct IDxcIncludeHandler;
@@ -74,7 +73,7 @@ public:
   ID3D12RootSignature *GetRootSignature() const { return rootSignature_.Get(); }
   ID3D12PipelineState *GetPipelineState() const { return pso_.Get(); }
 
-  void SetPipelineState(ID3D12GraphicsCommandList* cmdList) const {
+  void SetPipelineState(ID3D12GraphicsCommandList *cmdList) const {
     cmdList->SetGraphicsRootSignature(rootSignature_.Get());
     cmdList->SetPipelineState(pso_.Get());
   }

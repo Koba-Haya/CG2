@@ -29,18 +29,6 @@ DirectXCommon::~DirectXCommon() {
     CloseHandle(fenceEvent_);
     fenceEvent_ = nullptr;
   }
-  if (dxc_.includeHandler) {
-    dxc_.includeHandler->Release();
-    dxc_.includeHandler = nullptr;
-  }
-  if (dxc_.compiler) {
-    dxc_.compiler->Release();
-    dxc_.compiler = nullptr;
-  }
-  if (dxc_.utils) {
-    dxc_.utils->Release();
-    dxc_.utils = nullptr;
-  }
 }
 
 void DirectXCommon::Initialize(const InitParams &params) {
@@ -267,11 +255,11 @@ void DirectXCommon::SetupViewportAndScissor_() {
 }
 
 void DirectXCommon::InitDXC_() {
-  HRESULT hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxc_.utils));
+  HRESULT hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(dxc_.utils.GetAddressOf()));
   assert(SUCCEEDED(hr));
-  hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxc_.compiler));
+  hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(dxc_.compiler.GetAddressOf()));
   assert(SUCCEEDED(hr));
-  hr = dxc_.utils->CreateDefaultIncludeHandler(&dxc_.includeHandler);
+  hr = dxc_.utils->CreateDefaultIncludeHandler(dxc_.includeHandler.GetAddressOf());
   assert(SUCCEEDED(hr));
 }
 

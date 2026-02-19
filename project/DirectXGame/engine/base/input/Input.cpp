@@ -80,25 +80,17 @@ bool Input::Initialize(HINSTANCE instanceHandle, HWND windowHandle) {
 // Finalize: DirectInput デバイスを解放
 //--------------------------------------------------------------------------------------
 void Input::Finalize() {
-  // マウスを最初に解放
   if (mouse_) {
-    mouse_->Unacquire(); // 入力の取得状態を解除
-    mouse_->Release();   // COM 参照カウントをデクリメント
-    mouse_ = nullptr;
+    mouse_->Unacquire();
+    mouse_.Reset();
   }
 
-  // キーボード解放
   if (keyboard_) {
     keyboard_->Unacquire();
-    keyboard_->Release();
-    keyboard_ = nullptr;
+    keyboard_.Reset();
   }
 
-  // DirectInput 本体解放
-  if (directInput_) {
-    directInput_->Release();
-    directInput_ = nullptr;
-  }
+  directInput_.Reset();
 
   isInitialized_ = false;
 }

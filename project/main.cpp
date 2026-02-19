@@ -1,5 +1,7 @@
 #include "GameApp.h"
 
+#include <memory>
+
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #include <wrl.h>
@@ -20,10 +22,8 @@ struct D3DResourceLeakChecker {
 #endif
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-	AbsoluteFrameWork* game = new GameApp();
-
+	auto game = std::make_unique<GameApp>();
 	game->Run();
-	delete game;
 
 #ifdef _DEBUG
 	D3DResourceLeakChecker leakChecker;

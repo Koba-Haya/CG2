@@ -21,13 +21,9 @@ void AudioManager::Shutdown() {
     if (v.voice) {
       v.voice->Stop();
       v.voice->FlushSourceBuffers();
-      v.voice->DestroyVoice(); // ← 正しい解放
-      v.voice = nullptr;
+      v.voice.reset(); // DestroyVoice()
     }
-    if (v.wfex) {
-      CoTaskMemFree(v.wfex);
-      v.wfex = nullptr;
-    }
+    v.wfex.reset(); // CoTaskMemFree()
     v.pcm.clear();
   }
   clips_.clear();
@@ -46,7 +42,7 @@ void AudioManager::Shutdown() {
 
 bool AudioManager::DecodeFileToPcm(const std::wstring &path,
                                    std::vector<BYTE> &outPcm,
-                                   WAVEFORMATEX **outWfex) {
+                                   AudioClip::WaveFormatPtr &outWfex) {
   ComPtr<IMFSourceReader> reader;
   HRESULT hr = MFCreateSourceReaderFromURL(path.c_str(), nullptr, &reader);
   if (FAILED(hr))
@@ -71,11 +67,13 @@ bool AudioManager::DecodeFileToPcm(const std::wstring &path,
   if (FAILED(hr))
     return false;
 
-  WAVEFORMATEX *wfex = nullptr;
+  WAVEFORMATEX *wfexRaw = nullptr;
   UINT32 cb = 0;
-  hr = MFCreateWaveFormatExFromMFMediaType(typeReal.Get(), &wfex, &cb);
+  hr = MFCreateWaveFormatExFromMFMediaType(typeReal.Get(), &wfexRaw, &cb);
   if (FAILED(hr))
     return false;
+
+  AudioClip::WaveFormatPtr wfex{wfexRaw};
 
   // 全サンプルを読みきって連結
   outPcm.clear();
@@ -85,7 +83,6 @@ bool AudioManager::DecodeFileToPcm(const std::wstring &path,
     hr = reader->ReadSample((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0,
                             nullptr, &flags, nullptr, &sample);
     if (FAILED(hr)) {
-      CoTaskMemFree(wfex);
       return false;
     }
     if (flags & MF_SOURCE_READERF_ENDOFSTREAM)
@@ -96,7 +93,6 @@ bool AudioManager::DecodeFileToPcm(const std::wstring &path,
     ComPtr<IMFMediaBuffer> buffer;
     hr = sample->ConvertToContiguousBuffer(&buffer);
     if (FAILED(hr)) {
-      CoTaskMemFree(wfex);
       return false;
     }
 
@@ -104,7 +100,6 @@ bool AudioManager::DecodeFileToPcm(const std::wstring &path,
     DWORD maxLen = 0, curLen = 0;
     hr = buffer->Lock(&pData, &maxLen, &curLen);
     if (FAILED(hr)) {
-      CoTaskMemFree(wfex);
       return false;
     }
 
@@ -115,14 +110,14 @@ bool AudioManager::DecodeFileToPcm(const std::wstring &path,
     buffer->Unlock();
   }
 
-  *outWfex = wfex;
+  outWfex = std::move(wfex);
   return true;
 }
 
 bool AudioManager::Load(const std::string &name, const std::wstring &path,
                         float defaultVolume) {
   AudioClip clip;
-  if (!DecodeFileToPcm(path, clip.pcm, &clip.wfex))
+  if (!DecodeFileToPcm(path, clip.pcm, clip.wfex))
     return false;
   clip.defaultVolume = defaultVolume;
   clips_[name] = std::move(clip);
@@ -135,12 +130,16 @@ bool AudioManager::Play(const std::string &name, bool loop, float volume) {
     return false;
   AudioClip &c = it->second;
 
+  if (!c.wfex) {
+    return false;
+  }
+
   if (!c.voice) {
     IXAudio2SourceVoice *v = nullptr;
-    HRESULT hr = xaudio_->CreateSourceVoice(&v, c.wfex);
+    HRESULT hr = xaudio_->CreateSourceVoice(&v, c.wfex.get());
     if (FAILED(hr))
       return false;
-    c.voice = v; // ← そのまま代入
+    c.voice.reset(v);
   }
 
   c.voice->Stop();
@@ -170,8 +169,6 @@ void AudioManager::Stop(const std::string &name) {
   if (it->second.voice) {
     it->second.voice->Stop();
     it->second.voice->FlushSourceBuffers();
-    // ボイス自体は再利用したいなら Destroy しない。再生ごとに作り直すなら
-    // Destroy して null に。
   }
 }
 

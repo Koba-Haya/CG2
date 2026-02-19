@@ -101,6 +101,52 @@ private:
 
 private:
     struct ParticleGroup {
+        ~ParticleGroup() {
+            if (instanceMapped && instanceBuffer) {
+                instanceBuffer->Unmap(0, nullptr);
+                instanceMapped = nullptr;
+            }
+            if (materialMapped && materialCB) {
+                materialCB->Unmap(0, nullptr);
+                materialMapped = nullptr;
+            }
+            instanceSrv.Reset();
+        }
+
+        ParticleGroup() = default;
+        ParticleGroup(const ParticleGroup&) = delete;
+        ParticleGroup& operator=(const ParticleGroup&) = delete;
+
+        ParticleGroup(ParticleGroup&& other) noexcept
+            : texture(std::move(other.texture)),
+              textureSrvGpu(other.textureSrvGpu),
+              particles(std::move(other.particles)),
+              maxInstances(other.maxInstances),
+              instanceLimit(other.instanceLimit),
+              activeInstanceCount(other.activeInstanceCount),
+              instanceBuffer(std::move(other.instanceBuffer)),
+              instanceMapped(other.instanceMapped),
+              instanceSrv(std::move(other.instanceSrv)),
+              instanceSrvGpu(other.instanceSrvGpu),
+              materialCB(std::move(other.materialCB)),
+              materialMapped(other.materialMapped) {
+            other.textureSrvGpu = {};
+            other.maxInstances = 0;
+            other.instanceLimit = 0;
+            other.activeInstanceCount = 0;
+            other.instanceMapped = nullptr;
+            other.instanceSrvGpu = {};
+            other.materialMapped = nullptr;
+        }
+
+        ParticleGroup& operator=(ParticleGroup&& other) noexcept {
+            if (this != &other) {
+                this->~ParticleGroup();
+                new (this) ParticleGroup(std::move(other));
+            }
+            return *this;
+        }
+
         std::shared_ptr<TextureResource> texture;
         D3D12_GPU_DESCRIPTOR_HANDLE textureSrvGpu{};
 

@@ -9,15 +9,36 @@
 #include <wrl.h>
 #include <xaudio2.h>
 
+#include <memory>
+
 #pragma comment(lib, "mfplat.lib")
 #pragma comment(lib, "Mfreadwrite.lib")
 #pragma comment(lib, "mfuuid.lib")
 
 struct AudioClip {
-  WAVEFORMATEX *wfex = nullptr;
+  struct WaveFormatDeleter {
+    void operator()(WAVEFORMATEX *p) const noexcept {
+      if (p) {
+        CoTaskMemFree(p);
+      }
+    }
+  };
+
+  struct SourceVoiceDeleter {
+    void operator()(IXAudio2SourceVoice *p) const noexcept {
+      if (p) {
+        p->DestroyVoice();
+      }
+    }
+  };
+
+  using WaveFormatPtr = std::unique_ptr<WAVEFORMATEX, WaveFormatDeleter>;
+  using SourceVoicePtr = std::unique_ptr<IXAudio2SourceVoice, SourceVoiceDeleter>;
+
+  WaveFormatPtr wfex{};
   std::vector<BYTE> pcm;
   float defaultVolume = 1.0f;
-  IXAudio2SourceVoice *voice = nullptr; // ← 生ポインタに
+  SourceVoicePtr voice{};
 };
 
 class AudioManager {
@@ -43,7 +64,7 @@ public:
 private:
   // MF SourceReader で全部 PCM へ落とす
   bool DecodeFileToPcm(const std::wstring &path, std::vector<BYTE> &outPcm,
-                       WAVEFORMATEX **outWfex);
+                       AudioClip::WaveFormatPtr &outWfex);
 
   ComPtr<IXAudio2> xaudio_;
   IXAudio2MasteringVoice *masterVoice_ = nullptr;
