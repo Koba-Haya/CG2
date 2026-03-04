@@ -107,7 +107,8 @@ void GameScene::Update() {
 #ifdef USE_IMGUI
   services_.imgui->Begin();
 
-  static bool settingsOpen = true;
+    static bool settingsOpen = true;
+  ImGui::SetNextWindowSize(ImVec2(500.0f, 100.0f), ImGuiCond_Always);
   ImGui::Begin("Settings", &settingsOpen);
 
   if (directionalLightData_) {
@@ -352,6 +353,7 @@ void GameScene::Update() {
   }
   ImGui::End();
 
+    ImGui::SetNextWindowSize(ImVec2(500.0f, 100.0f), ImGuiCond_Always);
   ImGui::Begin("Object", &settingsOpen);
   ImGui::Separator();
   static float sphereCol[3] = {1.0f, 1.0f, 1.0f};
