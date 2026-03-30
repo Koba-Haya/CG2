@@ -63,7 +63,7 @@ GetGPUDescriptorHandle(const ComPtr<ID3D12DescriptorHeap> &descriptorHeap,
   return h;
 }
 
-// ★ 追加実装
+// 追加実装
 ComPtr<ID3D12Resource> CreateBufferResource(const ComPtr<ID3D12Device> &device,
                                             size_t sizeInBytes) {
   D3D12_HEAP_PROPERTIES uploadHeapProperties{};
