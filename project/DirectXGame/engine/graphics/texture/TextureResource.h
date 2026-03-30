@@ -33,6 +33,7 @@ private:
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
     ComPtr<ID3D12Resource> texture_;
+    ComPtr<ID3D12Resource> intermediateResource_;
     SrvHandle srv_;
     D3D12_GPU_DESCRIPTOR_HANDLE srvGpu_{};
 };

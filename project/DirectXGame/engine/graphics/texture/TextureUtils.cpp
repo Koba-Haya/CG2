@@ -1,7 +1,9 @@
 #include "TextureUtils.h"
+#include "DirectXResourceUtils.h"
+
+#include <Windows.h>
 #include <cassert>
 #include <filesystem>
-#include <Windows.h>
 
 std::wstring ConvertString(const std::string &str) {
   if (str.empty()) {
@@ -28,7 +30,7 @@ std::string ConvertString(const std::wstring &str) {
   auto sizeNeeded =
       WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.size()),
                           NULL, 0, NULL, NULL);
-  if (sizeNeeded == 0) { 
+  if (sizeNeeded == 0) {
     return std::string();
   }
   std::string result(sizeNeeded, 0);
@@ -98,26 +100,77 @@ CreateTextureResource(const ComPtr<ID3D12Device> &device,
   resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(metadata.dimension);
 
   D3D12_HEAP_PROPERTIES heapProperties{};
-  heapProperties.Type = D3D12_HEAP_TYPE_CUSTOM;
-  heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
-  heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+  heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+  heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+  heapProperties.CreationNodeMask = 1;
+  heapProperties.VisibleNodeMask = 1;
 
   ComPtr<ID3D12Resource> resource = nullptr;
   HRESULT hr = device->CreateCommittedResource(
       &heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc,
-      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&resource));
+      D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&resource));
   assert(SUCCEEDED(hr));
   return resource;
 }
 
-void UploadTextureData(const ComPtr<ID3D12Resource> &texture,
-                       const DirectX::ScratchImage &mipImages) {
+// void UploadTextureData(const ComPtr<ID3D12Resource> &texture,
+//                        const DirectX::ScratchImage &mipImages) {
+//   const DirectX::TexMetadata &metadata = mipImages.GetMetadata();
+//   for (size_t mipLevel = 0; mipLevel < metadata.mipLevels; ++mipLevel) {
+//     const DirectX::Image *img = mipImages.GetImage(mipLevel, 0, 0);
+//     HRESULT hr =
+//         texture->WriteToSubresource(UINT(mipLevel), nullptr, img->pixels,
+//                                     UINT(img->rowPitch),
+//                                     UINT(img->slicePitch));
+//     assert(SUCCEEDED(hr));
+//   }
+// }
+
+[[nodiscard]]
+ComPtr<ID3D12Resource>
+UploadTextureData(const ComPtr<ID3D12Resource> &texture,
+                  const DirectX::ScratchImage &mipImages,
+                  const ComPtr<ID3D12Device> &device,
+                  const ComPtr<ID3D12GraphicsCommandList> &commandList) {
   const DirectX::TexMetadata &metadata = mipImages.GetMetadata();
-  for (size_t mipLevel = 0; mipLevel < metadata.mipLevels; ++mipLevel) {
-    const DirectX::Image *img = mipImages.GetImage(mipLevel, 0, 0);
-    HRESULT hr =
-        texture->WriteToSubresource(UINT(mipLevel), nullptr, img->pixels,
-                                    UINT(img->rowPitch), UINT(img->slicePitch));
-    assert(SUCCEEDED(hr));
+
+  std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+  subresources.reserve(
+      static_cast<size_t>(metadata.mipLevels * metadata.arraySize));
+
+  for (size_t item = 0; item < metadata.arraySize; ++item) {
+    for (size_t mip = 0; mip < metadata.mipLevels; ++mip) {
+      const DirectX::Image *img = mipImages.GetImage(mip, item, 0);
+      assert(img != nullptr);
+
+      D3D12_SUBRESOURCE_DATA subresource{};
+      subresource.pData = img->pixels;
+      subresource.RowPitch = static_cast<LONG_PTR>(img->rowPitch);
+      subresource.SlicePitch = static_cast<LONG_PTR>(img->slicePitch);
+      subresources.push_back(subresource);
+    }
   }
+
+  UINT64 intermediateSize = GetRequiredIntermediateSize(
+      texture.Get(), 0, static_cast<UINT>(subresources.size()));
+
+  ComPtr<ID3D12Resource> intermediateResource =
+      CreateBufferResource(device, static_cast<size_t>(intermediateSize));
+
+  UpdateSubresources(
+      commandList.Get(), texture.Get(), intermediateResource.Get(), 0, 0,
+      static_cast<UINT>(subresources.size()), subresources.data());
+
+  D3D12_RESOURCE_BARRIER barrier{};
+  barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+  barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+  barrier.Transition.pResource = texture.Get();
+  barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+  barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+  barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_GENERIC_READ;
+
+  commandList->ResourceBarrier(1, &barrier);
+
+  return intermediateResource;
 }

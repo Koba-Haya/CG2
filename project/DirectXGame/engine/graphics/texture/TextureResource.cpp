@@ -1,8 +1,8 @@
 #include "TextureResource.h"
 
 #include <Windows.h>
-#include <string>
 #include <filesystem>
+#include <string>
 
 #include "DirectXCommon.h"
 #include "SrvAllocator.h"
@@ -20,45 +20,81 @@ bool TextureResource::CreateFromFile(DirectXCommon *dx,
     return false;
   }
 
-  if (!std::filesystem::exists(filePath)) {
-    TexResLog_(std::string("[TextureResource] file not found: ") + filePath);
+  DirectX::ScratchImage mipImages = LoadTexture(filePath);
+  const DirectX::TexMetadata &meta = mipImages.GetMetadata();
+
+  if (mipImages.GetImageCount() == 0) {
+    TexResLog_(std::string("[TextureResource] failed to load texture: ") +
+               filePath);
     return false;
   }
 
-  DirectX::ScratchImage mipImages = LoadTexture(filePath);
-  const DirectX::TexMetadata &meta = mipImages.GetMetadata();
   return CreateFromMetadata(dx, mipImages, meta);
 }
 
 bool TextureResource::CreateFromMetadata(DirectXCommon *dx,
                                          const DirectX::ScratchImage &mipImages,
                                          const DirectX::TexMetadata &meta) {
-
   if (!dx) {
     TexResLog_("[TextureResource] dx is null");
     return false;
   }
 
-  ID3D12Device *device = dx->GetDevice();
-  if (!device) {
+  ID3D12Device *rawDevice = dx->GetDevice();
+  ID3D12GraphicsCommandList *rawCommandList = dx->GetCommandList();
+
+  if (!rawDevice) {
     TexResLog_("[TextureResource] device is null");
     return false;
   }
 
-  texture_ = CreateTextureResource(device, meta);
-  if (!texture_) {
-    TexResLog_(
-        "[TextureResource] CreateTextureResource failed (texture_ is null)");
+  if (!rawCommandList) {
+    TexResLog_("[TextureResource] commandList is null");
     return false;
   }
 
-  UploadTextureData(texture_, mipImages);
+  Microsoft::WRL::ComPtr<ID3D12Device> device(rawDevice);
+  Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList(rawCommandList);
+
+  texture_ = CreateTextureResource(device, meta);
+  if (!texture_) {
+    TexResLog_("[TextureResource] CreateTextureResource failed");
+    return false;
+  }
+
+  intermediateResource_ =
+      UploadTextureData(texture_, mipImages, device, commandList);
+  if (!intermediateResource_) {
+    TexResLog_("[TextureResource] UploadTextureData failed");
+    return false;
+  }
 
   D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
   srvDesc.Format = meta.format;
   srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-  srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-  srvDesc.Texture2D.MipLevels = static_cast<UINT>(meta.mipLevels);
+
+  if (meta.dimension == DirectX::TEX_DIMENSION_TEXTURE1D) {
+    if (meta.arraySize > 1) {
+      srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+      srvDesc.Texture1DArray.MipLevels = static_cast<UINT>(meta.mipLevels);
+      srvDesc.Texture1DArray.ArraySize = static_cast<UINT>(meta.arraySize);
+    } else {
+      srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+      srvDesc.Texture1D.MipLevels = static_cast<UINT>(meta.mipLevels);
+    }
+  } else if (meta.dimension == DirectX::TEX_DIMENSION_TEXTURE2D) {
+    if (meta.arraySize > 1) {
+      srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+      srvDesc.Texture2DArray.MipLevels = static_cast<UINT>(meta.mipLevels);
+      srvDesc.Texture2DArray.ArraySize = static_cast<UINT>(meta.arraySize);
+    } else {
+      srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+      srvDesc.Texture2D.MipLevels = static_cast<UINT>(meta.mipLevels);
+    }
+  } else {
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = static_cast<UINT>(meta.mipLevels);
+  }
 
   return CreateSrv_(dx, srvDesc);
 }
