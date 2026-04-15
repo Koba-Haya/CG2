@@ -12,6 +12,7 @@ CreateDescriptorHeap(const ComPtr<ID3D12Device> &device,
                      D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors,
                      bool shaderVisible);
 
+
 // DepthStencil 用テクスチャリソース作成
 ComPtr<ID3D12Resource>
 CreateDepthStencilTextureResource(const ComPtr<ID3D12Device> &device,
