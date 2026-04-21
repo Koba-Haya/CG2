@@ -36,6 +36,7 @@ struct PipelineDesc {
   bool usePSDirectionalLight_b1 = false; // PS: b1（Spriteは通常不要）
   bool useVSInstancingTable_t1 =
       false; // VS: t1 (SRVテーブル、インスタンシング用)
+  bool depthWrite = true; 
 
   // カメラCB b2
   bool usePSCamera_b2 = false;
@@ -58,6 +59,8 @@ struct PipelineDesc {
   // 出力フォーマット
   DXGI_FORMAT rtvFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
   DXGI_FORMAT dsvFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+  D3D12_COMPARISON_FUNC depthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 };
 
 class UnifiedPipeline {
@@ -84,6 +87,7 @@ public:
   static PipelineDesc MakeEmitterWireDesc();
   static PipelineDesc MakeEmitterAlphaDesc();
   static PipelineDesc MakeParticleDesc();
+  static PipelineDesc MakeSkyboxDesc();
 
 private:
   ComPtr<ID3D12RootSignature> rootSignature_;

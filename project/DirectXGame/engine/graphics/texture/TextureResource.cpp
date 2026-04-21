@@ -73,27 +73,35 @@ bool TextureResource::CreateFromMetadata(DirectXCommon *dx,
   srvDesc.Format = meta.format;
   srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-  if (meta.dimension == DirectX::TEX_DIMENSION_TEXTURE1D) {
-    if (meta.arraySize > 1) {
-      srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
-      srvDesc.Texture1DArray.MipLevels = static_cast<UINT>(meta.mipLevels);
-      srvDesc.Texture1DArray.ArraySize = static_cast<UINT>(meta.arraySize);
-    } else {
-      srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
-      srvDesc.Texture1D.MipLevels = static_cast<UINT>(meta.mipLevels);
-    }
-  } else if (meta.dimension == DirectX::TEX_DIMENSION_TEXTURE2D) {
-    if (meta.arraySize > 1) {
-      srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-      srvDesc.Texture2DArray.MipLevels = static_cast<UINT>(meta.mipLevels);
-      srvDesc.Texture2DArray.ArraySize = static_cast<UINT>(meta.arraySize);
+  if (meta.IsCubemap()) {
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    srvDesc.TextureCube.MostDetailedMip = 0;
+    srvDesc.TextureCube.MipLevels = UINT_MAX;
+    srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+  } else {
+
+    if (meta.dimension == DirectX::TEX_DIMENSION_TEXTURE1D) {
+      if (meta.arraySize > 1) {
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+        srvDesc.Texture1DArray.MipLevels = static_cast<UINT>(meta.mipLevels);
+        srvDesc.Texture1DArray.ArraySize = static_cast<UINT>(meta.arraySize);
+      } else {
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+        srvDesc.Texture1D.MipLevels = static_cast<UINT>(meta.mipLevels);
+      }
+    } else if (meta.dimension == DirectX::TEX_DIMENSION_TEXTURE2D) {
+      if (meta.arraySize > 1) {
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+        srvDesc.Texture2DArray.MipLevels = static_cast<UINT>(meta.mipLevels);
+        srvDesc.Texture2DArray.ArraySize = static_cast<UINT>(meta.arraySize);
+      } else {
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = static_cast<UINT>(meta.mipLevels);
+      }
     } else {
       srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
       srvDesc.Texture2D.MipLevels = static_cast<UINT>(meta.mipLevels);
     }
-  } else {
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = static_cast<UINT>(meta.mipLevels);
   }
 
   return CreateSrv_(dx, srvDesc);
