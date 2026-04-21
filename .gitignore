@@ -23,7 +23,7 @@ generated/
 Compiled/
 
 # Visual Studio / MSVC debug symbols
-external/**.pdb
+.pdb
 .dic
 
 # Visual Studio 2015/2017 cache/options directory
