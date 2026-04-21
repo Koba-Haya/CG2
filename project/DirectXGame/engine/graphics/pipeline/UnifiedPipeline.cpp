@@ -1,8 +1,8 @@
 #include "UnifiedPipeline.h"
+#include "ShaderCompilerUtils.h"
 #include <cassert>
 #include <d3d12.h>
 #include <d3dcompiler.h> // D3D12SerializeRootSignature
-#include "ShaderCompilerUtils.h"
 
 #include <Windows.h>
 #include <format>
@@ -251,11 +251,12 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
 
   D3D12_BLEND_DESC blend = MakeBlendDesc(desc);
 
+  // Initialize() 内 depth 設定だけ差し替え
   D3D12_DEPTH_STENCIL_DESC depth{};
   depth.DepthEnable = desc.enableDepth ? TRUE : FALSE;
-  depth.DepthWriteMask = desc.enableDepth ? D3D12_DEPTH_WRITE_MASK_ALL
-                                          : D3D12_DEPTH_WRITE_MASK_ZERO;
-  depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+  depth.DepthWriteMask = desc.depthWrite ? D3D12_DEPTH_WRITE_MASK_ALL
+                                         : D3D12_DEPTH_WRITE_MASK_ZERO;
+  depth.DepthFunc = desc.depthFunc;
 
   // --- PSO ---
   D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
@@ -305,7 +306,7 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
   d.usePSTextureTable_t0 = true;
   d.usePSDirectionalLight_b1 = true;
 
-  d.usePSCamera_b2 = true;// Phong 用に Camera を渡す
+  d.usePSCamera_b2 = true; // Phong 用に Camera を渡す
   d.usePSPointLight_b3 = true;
   d.usePSSpotLight_b4 = true;
 
@@ -320,9 +321,10 @@ PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
   PipelineDesc d{};
   d.inputElements = {
       {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
-       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
-       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
   d.vsPath = L"resources/shaders/Sprite.VS.hlsl";
   d.psPath = L"resources/shaders/Sprite.PS.hlsl";
@@ -363,20 +365,54 @@ PipelineDesc UnifiedPipeline::MakeParticleDesc() {
   PipelineDesc d{};
   d.inputElements = {
       {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
-       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
-       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
   d.vsPath = L"resources/shaders/Particle.VS.hlsl";
   d.psPath = L"resources/shaders/Particle.PS.hlsl";
   d.usePSMaterial_b0 = true;
-  d.useVSTransform_b0 = false;      // Instancingで行列はSRV
+  d.useVSTransform_b0 = false; // Instancingで行列はSRV
   d.usePSTextureTable_t0 = true;
   d.useVSInstancingTable_t1 = true; // t1 StructuredBuffer
   d.usePSDirectionalLight_b1 = false;
   d.enableDepth = false;
-  d.alphaBlend = true;              // ← 透過フェードのため有効化
-  d.blendMode = BlendMode::Alpha;   // ← 通常アルファ
+  d.alphaBlend = true;            // ← 透過フェードのため有効化
+  d.blendMode = BlendMode::Alpha; // ← 通常アルファ
   d.cullMode = D3D12_CULL_MODE_NONE;
+  return d;
+}
+
+// Skybox用パイプラインプリセット
+PipelineDesc UnifiedPipeline::MakeSkyboxDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      D3D12_INPUT_ELEMENT_DESC{"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+                               D3D12_APPEND_ALIGNED_ELEMENT,
+                               D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+  };
+
+  d.vsPath = L"resources/shaders/Skybox.VS.hlsl";
+  d.psPath = L"resources/shaders/Skybox.PS.hlsl";
+
+  // RootParameter: [0]=PS b0, [1]=VS b0, [2]=PS t0
+  d.usePSMaterial_b0 = true;
+  d.useVSTransform_b0 = true;
+  d.usePSTextureTable_t0 = true;
+
+  d.usePSDirectionalLight_b1 = false;
+  d.useVSInstancingTable_t1 = false;
+  d.usePSCamera_b2 = false;
+  d.usePSPointLight_b3 = false;
+  d.usePSSpotLight_b4 = false;
+
+  d.enableDepth = true;
+  d.depthWrite = false; // Skyboxは深度書き込み不要
+  d.depthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+
+  d.alphaBlend = false;
+  d.cullMode = D3D12_CULL_MODE_NONE; // キューブ内側を描く
+  d.fillMode = D3D12_FILL_MODE_SOLID;
   return d;
 }
