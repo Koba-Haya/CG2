@@ -108,6 +108,26 @@ void DirectXCommon::EndFrame() {
   assert(SUCCEEDED(hr));
 }
 
+void DirectXCommon::PreDraw() {
+  BeginFrame();
+
+  UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
+
+  float clearColor[] = {0.1f, 0.25f, 0.5f, 1.0f};
+  commandList_->ClearRenderTargetView(rtvHandles_[backBufferIndex], clearColor, 0, nullptr);
+
+  D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle =
+      GetCPUDescriptorHandle(dsvDescriptorHeap_.Get(), descriptorSizeDSV_, 0);
+  commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
+  commandList_->RSSetViewports(1, &viewport_);
+  commandList_->RSSetScissorRects(1, &scissorRect_);
+}
+
+void DirectXCommon::PostDraw() {
+  EndFrame();
+}
+
 void DirectXCommon::CreateDeviceAndFactory_() {
   HRESULT hr = CreateDXGIFactory(IID_PPV_ARGS(&dxgiFactory_));
   assert(SUCCEEDED(hr));

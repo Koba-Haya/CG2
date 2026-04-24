@@ -9,10 +9,9 @@
 static constexpr UINT Align256_(UINT n) { return (n + 255) & ~255u; }
 
 bool ModelInstance::Initialize(const CreateInfo &ci) {
-  assert(ci.dx && ci.pipeline && ci.resource);
+  assert(ci.dx && ci.resource);
 
   dx_ = ci.dx;
-  pipeline_ = ci.pipeline;
   resource_ = ci.resource;
 
   world_ = MakeIdentity4x4();
@@ -66,16 +65,12 @@ void ModelInstance::SetShininess(float s) {
   cbMatMapped_->shininess = s;
 }
 
-void ModelInstance::Draw(const Matrix4x4 &view, const Matrix4x4 &proj,
+void ModelInstance::Draw(ID3D12GraphicsCommandList *cmd, const Matrix4x4 &view, const Matrix4x4 &proj,
                          ID3D12Resource *directionalLightCB,
                          ID3D12Resource *cameraCB, ID3D12Resource *pointLightCB,
                          ID3D12Resource *spotLightCB) {
-  assert(dx_ && pipeline_ && resource_);
+  assert(dx_ && resource_);
   assert(cbMatMapped_ && cbTransMapped_);
-
-  ID3D12GraphicsCommandList *cmd = dx_->GetCommandList();
-
-  pipeline_->SetPipelineState(cmd);
 
   cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   const auto &vbv = resource_->GetVBV();

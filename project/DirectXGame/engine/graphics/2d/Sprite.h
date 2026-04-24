@@ -19,7 +19,6 @@ class Sprite {
 public:
     struct CreateInfo {
         DirectXCommon* dx = nullptr;
-        UnifiedPipeline* pipeline = nullptr;
         std::string texturePath;
         Vector2 size = { 640, 360 };
         Vector4 color = { 1, 1, 1, 1 };
@@ -31,8 +30,11 @@ public:
     void SetRotation(const Vector3& rot);
     void SetUVTransform(const Matrix4x4& uv);
     void SetColor(const Vector4& color);
-    void SetPipeline(UnifiedPipeline* pipeline) { pipeline_ = pipeline; }
-    void Draw(const Matrix4x4& view, const Matrix4x4& proj);
+    
+    void SetBlendMode(BlendMode mode) { blendMode_ = mode; }
+    BlendMode GetBlendMode() const { return blendMode_; }
+
+    void Draw(ID3D12GraphicsCommandList* cmdList, const Matrix4x4& view, const Matrix4x4& proj);
 
 private:
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
@@ -40,7 +42,7 @@ private:
 
 private:
     DirectXCommon* dx_ = nullptr;
-    UnifiedPipeline* pipeline_ = nullptr;
+    BlendMode blendMode_ = BlendMode::Alpha;
 
     std::shared_ptr<TextureResource> texture_;
     D3D12_GPU_DESCRIPTOR_HANDLE textureHandle_{};

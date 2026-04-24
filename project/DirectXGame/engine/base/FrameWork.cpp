@@ -95,8 +95,16 @@ void AbsoluteFrameWork::Run() {
 		}
 
 		input_.Update();
+		imgui_.Begin();
+
 		Update();
+
+		imgui_.End();
+
+		dx_.PreDraw();
 		Draw();
+		imgui_.Draw(dx_.GetCommandList());
+		dx_.PostDraw();
 	}
 
 	Finalize();

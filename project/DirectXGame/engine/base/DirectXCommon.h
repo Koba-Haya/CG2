@@ -34,6 +34,10 @@ public:
 	void BeginFrame();
 	void EndFrame();
 
+	// 描画前後の処理
+	void PreDraw();
+	void PostDraw();
+
 	// 参照用のゲッタ
 	ID3D12Device* GetDevice() const { return device_.Get(); }
 	ID3D12GraphicsCommandList* GetCommandList() const {

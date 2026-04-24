@@ -33,9 +33,8 @@ Sprite::CreateBufferResource(ID3D12Device* device, size_t sizeInBytes) {
 }
 
 bool Sprite::Initialize(const CreateInfo& info) {
-    assert(info.dx && info.pipeline);
+    assert(info.dx);
     dx_ = info.dx;
-    pipeline_ = info.pipeline;
     color_ = info.color;
 
     // TextureManager 経由（SRVはTextureResourceが所有して自動Free）
@@ -92,7 +91,8 @@ void Sprite::SetRotation(const Vector3& rot) { rotation_ = rot; }
 void Sprite::SetUVTransform(const Matrix4x4& uv) { uvMatrix_ = uv; }
 void Sprite::SetColor(const Vector4& color) { color_ = color; }
 
-void Sprite::Draw(const Matrix4x4& view, const Matrix4x4& proj) {
+void Sprite::Draw(ID3D12GraphicsCommandList *cmdList, const Matrix4x4 &view,
+                  const Matrix4x4 &proj) {
     worldMatrix_ = MakeAffineMatrix(scale_, rotation_, position_);
     Matrix4x4 wvp = Multiply(worldMatrix_, Multiply(view, proj));
 
@@ -102,20 +102,18 @@ void Sprite::Draw(const Matrix4x4& view, const Matrix4x4& proj) {
     materialMapped_->color = color_;
     materialMapped_->uvTransform = uvMatrix_;
 
-    ID3D12GraphicsCommandList* cmd = dx_->GetCommandList();
     ID3D12DescriptorHeap* heaps[] = { dx_->GetSRVHeap() };
-    cmd->SetDescriptorHeaps(1, heaps);
+    cmdList->SetDescriptorHeaps(1, heaps);
 
-    cmd->SetGraphicsRootSignature(pipeline_->GetRootSignature());
-    cmd->SetPipelineState(pipeline_->GetPipelineState());
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    cmdList->IASetVertexBuffers(0, 1, &vbView_);
+    cmdList->IASetIndexBuffer(&ibView_);
 
-    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    cmd->IASetVertexBuffers(0, 1, &vbView_);
-    cmd->IASetIndexBuffer(&ibView_);
+    cmdList->SetGraphicsRootConstantBufferView(
+        0, materialBuffer_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootConstantBufferView(
+        1, transformBuffer_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(2, textureHandle_);
 
-    cmd->SetGraphicsRootConstantBufferView(0, materialBuffer_->GetGPUVirtualAddress());
-    cmd->SetGraphicsRootConstantBufferView(1, transformBuffer_->GetGPUVirtualAddress());
-    cmd->SetGraphicsRootDescriptorTable(2, textureHandle_);
-
-    cmd->DrawIndexedInstanced(6, 1, 0, 0, 0);
+    cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 }
