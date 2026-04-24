@@ -68,22 +68,43 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
   }
 
   DirectX::ScratchImage image{};
-  HRESULT hr = DirectX::LoadFromWICFile(
-      candidate.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
-  if (FAILED(hr)) {
-    std::string msg = "LoadTexture: LoadFromWICFile failed: " + filePath + "\n";
-    OutputDebugStringA(msg.c_str());
-    return mipImages;
+  HRESULT hr;
+  // 拡張子でDDSかどうかを判断して読み込み方法を変える
+  if (candidate.extension() == L".dds" || candidate.extension() == L".DDS") {
+    hr = DirectX::LoadFromDDSFile(candidate.c_str(), DirectX::DDS_FLAGS_NONE,
+                                  nullptr, image);
+    if (FAILED(hr)) {
+      std::string msg =
+          "LoadTexture: LoadFromDDSFile failed: " + filePath + "\n";
+      OutputDebugStringA(msg.c_str());
+      return mipImages;
+    }
+  } else {
+    hr = DirectX::LoadFromWICFile(
+        candidate.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
+    if (FAILED(hr)) {
+      std::string msg =
+          "LoadTexture: LoadFromWICFile failed: " + filePath + "\n";
+      OutputDebugStringA(msg.c_str());
+      return mipImages;
+    }
   }
 
-  hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(),
-                                image.GetMetadata(), DirectX::TEX_FILTER_SRGB,
-                                0, mipImages);
-  if (FAILED(hr)) {
-    std::string msg = "LoadTexture: GenerateMipMaps failed: " + filePath + "\n";
-    OutputDebugStringA(msg.c_str());
-    return mipImages;
+  // 圧縮フォーマットかどうか調べる
+  if (DirectX::IsCompressed(image.GetMetadata().format)) {
+    mipImages = std::move(image);
+  } else {
+    hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(),
+                                  image.GetMetadata(), DirectX::TEX_FILTER_SRGB,
+                                  0, mipImages);
+    if (FAILED(hr)) {
+      std::string msg =
+          "LoadTexture: GenerateMipMaps failed: " + filePath + "\n";
+      OutputDebugStringA(msg.c_str());
+      return DirectX::ScratchImage{};
+    }
   }
+
   return mipImages;
 }
 

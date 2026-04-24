@@ -3,6 +3,8 @@
 
 #include "DebugCamera.h"
 #include "GameCamera.h"
+#include "TextureManager.h"
+#include "TextureResource.h"
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
@@ -12,11 +14,35 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <format>
 #include <random>
 
 static constexpr UINT Align256_(UINT n) { return (n + 255u) & ~255u; }
+
+static Microsoft::WRL::ComPtr<ID3D12Resource>
+CreateUploadBuffer_(ID3D12Device *device, size_t size) {
+  Microsoft::WRL::ComPtr<ID3D12Resource> res;
+
+  D3D12_HEAP_PROPERTIES heapProps{};
+  heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+  D3D12_RESOURCE_DESC desc{};
+  desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+  desc.Width = static_cast<UINT64>(size);
+  desc.Height = 1;
+  desc.DepthOrArraySize = 1;
+  desc.MipLevels = 1;
+  desc.SampleDesc.Count = 1;
+  desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+  HRESULT hr = device->CreateCommittedResource(
+      &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&res));
+  assert(SUCCEEDED(hr));
+  return res;
+}
 
 static void FatalBoxAndTerminate_(const std::string &msg) {
   MessageBoxA(nullptr, msg.c_str(), "Fatal", MB_OK | MB_ICONERROR);
@@ -638,6 +664,15 @@ void GameScene::Draw(ID3D12GraphicsCommandList *cmdList) {
     }
   }
 
+  {
+    Matrix4x4 invView = Inverse(viewMatrix);
+    Vector3 camPos = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+
+    skybox_.Update(viewMatrix, projectionMatrix, camPos,
+                   {100.0f, 100.0f, 100.0f});
+    skybox_.Draw(cmdList);
+  }
+
 #ifdef USE_IMGUI
   services_.imgui->Draw(cmdList);
 #endif
@@ -740,6 +775,11 @@ void GameScene::InitPipelines_() {
   CheckBoolOrDie_(particlePipelineScreen_.Initialize(
                       device, dxcUtils, dxcCompiler, includeHandler, pScr),
                   "particlePipelineScreen_.Initialize");
+
+  PipelineDesc skyboxDesc = UnifiedPipeline::MakeSkyboxDesc();
+  CheckBoolOrDie_(skyboxPipeline_.Initialize(device, dxcUtils, dxcCompiler,
+                                             includeHandler, skyboxDesc),
+                  "skyboxPipeline_.Initialize");
 }
 
 void GameScene::InitResources_() {
@@ -806,10 +846,16 @@ void GameScene::InitResources_() {
   {
     Sprite::CreateInfo sprInfo{};
     sprInfo.dx = services_.dx;
-    sprInfo.texturePath = "resources/uvChecker.png";
+    sprInfo.texturePath = "resources/dds/dds.dds";
     sprInfo.size = {640.0f, 360.0f};
     sprInfo.color = {1.0f, 1.0f, 1.0f, 1.0f};
-    CheckBoolOrDie_(sprite_.Initialize(sprInfo), "sprite_.Initialize");
+
+    bool spriteInitOk = sprite_.Initialize(sprInfo);
+    OutputDebugStringA(spriteInitOk
+                           ? "[DDS CHECK] sprite_.Initialize success\n"
+                           : "[DDS CHECK] sprite_.Initialize failed\n");
+
+    CheckBoolOrDie_(spriteInitOk, "sprite_.Initialize");
   }
 
   {
@@ -836,6 +882,13 @@ void GameScene::InitResources_() {
 
     particleEmitter_.Initialize(ParticleManager::GetInstance(), params);
     particleEmitter_.Burst(std::min(initialParticleCount_, kParticleCount_));
+  }
+
+  {
+    CheckBoolOrDie_(
+        skybox_.Initialize(services_.dx, &skyboxPipeline_,
+                                       "resources/dds/dds.dds"),
+        "skybox_.Initialize");
   }
 
   {

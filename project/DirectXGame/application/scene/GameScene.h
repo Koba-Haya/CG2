@@ -8,6 +8,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "BaseScene.h"
 
@@ -28,6 +29,8 @@
 #include "Transform.h"
 #include "UnifiedPipeline.h"
 #include "Vector.h"
+
+#include "Skybox.h"
 
 // ===== Camera =====
 struct CameraForGPU {
@@ -147,6 +150,8 @@ private:
   UnifiedPipeline particlePipelineMul_;
   UnifiedPipeline particlePipelineScreen_;
 
+  UnifiedPipeline skyboxPipeline_;
+
   std::shared_ptr<ModelResource> resSphere_;
   std::shared_ptr<ModelResource> resPlane_;
   std::shared_ptr<ModelResource> resCube_;
@@ -159,6 +164,8 @@ private:
   ModelInstance modelTerrain_;
 
   Sprite sprite_;
+
+    Skybox skybox_;
 
   static constexpr uint32_t kParticleCount_ = 300;
   std::string particleGroupName_ = "default";
