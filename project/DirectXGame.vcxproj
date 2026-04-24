@@ -261,6 +261,8 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     </ClCompile>
     <ClCompile Include="DirectXGame\application\scene\TitleScene.cpp" />
     <ClCompile Include="DirectXGame\application\scene\SceneFactory.cpp" />
+    <ClCompile Include="DirectXGame\application\actor\Player.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\Renderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DirectXGame\engine\scene\BaseScene.h" />
@@ -319,6 +321,8 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <ClInclude Include="DirectXGame\application\scene\SceneFactory.h" />
     <ClInclude Include="DirectXGame\application\scene\SceneIds.h" />
     <ClInclude Include="DirectXGame\engine\scene\SceneServices.h" />
+    <ClInclude Include="DirectXGame\application\actor\Player.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\Renderer.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />

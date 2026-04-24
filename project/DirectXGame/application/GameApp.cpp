@@ -39,33 +39,9 @@ void GameApp::Update() {
 }
 
 void GameApp::Draw() {
-  auto &dx = GetDX();
-
-  dx.BeginFrame();
-  auto *cmdList = dx.GetCommandList();
-
-  UINT backBufferIndex = dx.GetSwapChain()->GetCurrentBackBufferIndex();
-  D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = dx.GetRTVHandle(backBufferIndex);
-  D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle =
-      dx.GetDSVHeap()->GetCPUDescriptorHandleForHeapStart();
-
-  cmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-
-  float clearColor[] = {0.1f, 0.25f, 0.5f, 1.0f};
-  cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-  cmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0,
-                                 nullptr);
-
-  cmdList->RSSetViewports(1, &dx.GetViewport());
-  cmdList->RSSetScissorRects(1, &dx.GetScissorRect());
+  auto *cmdList = GetCmdList();
 
   if (sceneManager_) {
     sceneManager_->Draw(cmdList);
   }
-
-#ifdef USE_IMGUI
-  GetImGui().Draw(cmdList);
-#endif
-
-  dx.EndFrame();
 }

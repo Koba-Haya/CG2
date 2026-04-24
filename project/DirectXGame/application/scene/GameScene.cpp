@@ -105,8 +105,6 @@ void GameScene::Update() {
   }
 
 #ifdef USE_IMGUI
-  services_.imgui->Begin();
-
     static bool settingsOpen = true;
   ImGui::SetNextWindowSize(ImVec2(500.0f, 100.0f), ImGuiCond_Always);
   ImGui::Begin("Settings", &settingsOpen);
@@ -560,8 +558,6 @@ void GameScene::Update() {
       std::max(accelerationField_.area.min.z, accelerationField_.area.max.z);
 
   ImGui::End();*/
-
-  services_.imgui->End();
 #endif
 
   const float deltaTime = 1.0f / 60.0f;
@@ -602,11 +598,13 @@ void GameScene::Draw(ID3D12GraphicsCommandList *cmdList) {
     cmdList->SetGraphicsRootSignature(objPipeline_.GetRootSignature());
     cmdList->SetPipelineState(objPipeline_.GetPipelineState());
 
-    modelSphere_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
+    modelSphere_.Draw(cmdList,viewMatrix, projectionMatrix, directionalLightCB_.Get(),
                       cameraCB_.Get(), pointLightCB_.Get(), spotLightCB_.Get());
-    modelPlane_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
+    modelPlane_.Draw(cmdList, viewMatrix, projectionMatrix,
+                     directionalLightCB_.Get(),
                      cameraCB_.Get(), pointLightCB_.Get(), spotLightCB_.Get());
-    modelTerrain_.Draw(viewMatrix, projectionMatrix, directionalLightCB_.Get(),
+    modelTerrain_.Draw(cmdList, viewMatrix, projectionMatrix,
+                       directionalLightCB_.Get(),
                        cameraCB_.Get(), pointLightCB_.Get(),
                        spotLightCB_.Get());
   }
@@ -624,7 +622,7 @@ void GameScene::Draw(ID3D12GraphicsCommandList *cmdList) {
       Matrix4x4 world =
           MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
       modelEmitterBox_.SetWorld(world);
-      modelEmitterBox_.Draw(viewMatrix, projectionMatrix,
+      modelEmitterBox_.Draw(cmdList, viewMatrix, projectionMatrix,
                             directionalLightCB_.Get(), cameraCB_.Get(),
                             pointLightCB_.Get(), spotLightCB_.Get());
     } else {
@@ -634,7 +632,7 @@ void GameScene::Draw(ID3D12GraphicsCommandList *cmdList) {
       Matrix4x4 world =
           MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
       modelEmitterSphere_.SetWorld(world);
-      modelEmitterSphere_.Draw(viewMatrix, projectionMatrix,
+      modelEmitterSphere_.Draw(cmdList, viewMatrix, projectionMatrix,
                                directionalLightCB_.Get(), cameraCB_.Get(),
                                pointLightCB_.Get(), spotLightCB_.Get());
     }
@@ -761,7 +759,6 @@ void GameScene::InitResources_() {
   {
     ModelInstance::CreateInfo ci{};
     ci.dx = services_.dx;
-    ci.pipeline = &objPipeline_;
     ci.resource = resSphere_;
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
@@ -771,7 +768,6 @@ void GameScene::InitResources_() {
   {
     ModelInstance::CreateInfo ci{};
     ci.dx = services_.dx;
-    ci.pipeline = &objPipeline_;
     ci.resource = resPlane_;
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
@@ -781,7 +777,6 @@ void GameScene::InitResources_() {
   {
     ModelInstance::CreateInfo ci{};
     ci.dx = services_.dx;
-    ci.pipeline = &emitterGizmoPipelineWire_;
     ci.resource = resSphere_;
     ci.baseColor = {0.3f, 0.8f, 1.0f, 0.3f};
     ci.lightingMode = 0;
@@ -792,7 +787,6 @@ void GameScene::InitResources_() {
   {
     ModelInstance::CreateInfo ci{};
     ci.dx = services_.dx;
-    ci.pipeline = &emitterGizmoPipelineWire_;
     ci.resource = resCube_;
     ci.baseColor = {1.0f, 0.8f, 0.2f, 0.3f};
     ci.lightingMode = 0;
@@ -803,7 +797,6 @@ void GameScene::InitResources_() {
   {
     ModelInstance::CreateInfo ci{};
     ci.dx = services_.dx;
-    ci.pipeline = &objPipeline_;
     ci.resource = resTerrain_;
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
@@ -813,7 +806,6 @@ void GameScene::InitResources_() {
   {
     Sprite::CreateInfo sprInfo{};
     sprInfo.dx = services_.dx;
-    sprInfo.pipeline = &spritePipelineAlpha_;
     sprInfo.texturePath = "resources/uvChecker.png";
     sprInfo.size = {640.0f, 360.0f};
     sprInfo.color = {1.0f, 1.0f, 1.0f, 1.0f};

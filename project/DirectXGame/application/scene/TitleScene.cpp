@@ -17,16 +17,12 @@ void TitleScene::Finalize() {}
 
 void TitleScene::Update() {
 #ifdef USE_IMGUI
-  services_.imgui->Begin();
-
   ImGui::SetNextWindowSize(ImVec2(500.0f, 100.0f), ImGuiCond_Always);
   ImGui::Begin("Title");
   if (ImGui::Button("Start")) {
     RequestSceneChange(SceneId::Game);
   }
   ImGui::End();
-
-  services_.imgui->End();
 #endif
 }
 
