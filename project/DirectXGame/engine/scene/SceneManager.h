@@ -16,7 +16,7 @@ public:
   void Finalize();
 
   void Update();
-  void Draw(ID3D12GraphicsCommandList *cmdList);
+  void Draw();
 
   void SetFactory(std::unique_ptr<ISceneFactory> factory);
   void Start(const std::string &firstSceneId);

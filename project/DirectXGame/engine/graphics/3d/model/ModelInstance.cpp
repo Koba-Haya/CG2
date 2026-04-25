@@ -5,13 +5,15 @@
 #include "DirectXCommon.h"
 #include "ModelResource.h"
 #include "UnifiedPipeline.h"
+#include "Renderer.h"
+#include "UnifiedPipeline.h"
 
 static constexpr UINT Align256_(UINT n) { return (n + 255) & ~255u; }
 
 bool ModelInstance::Initialize(const CreateInfo &ci) {
-  assert(ci.dx && ci.resource);
+  dx_ = Renderer::GetInstance()->GetDX();
+  assert(dx_ && ci.resource);
 
-  dx_ = ci.dx;
   resource_ = ci.resource;
 
   world_ = MakeIdentity4x4();
@@ -65,10 +67,11 @@ void ModelInstance::SetShininess(float s) {
   cbMatMapped_->shininess = s;
 }
 
-void ModelInstance::Draw(ID3D12GraphicsCommandList *cmd, const Matrix4x4 &view, const Matrix4x4 &proj,
-                         ID3D12Resource *directionalLightCB,
-                         ID3D12Resource *cameraCB, ID3D12Resource *pointLightCB,
-                         ID3D12Resource *spotLightCB) {
+void ModelInstance::Draw() {
+  Renderer::GetInstance()->DrawModel(this);
+}
+
+void ModelInstance::DrawInternal(ID3D12GraphicsCommandList *cmd, const Matrix4x4 &view, const Matrix4x4 &proj) {
   assert(dx_ && resource_);
   assert(cbMatMapped_ && cbTransMapped_);
 
@@ -95,28 +98,8 @@ void ModelInstance::Draw(ID3D12GraphicsCommandList *cmd, const Matrix4x4 &view, 
   cmd->SetDescriptorHeaps(1, heaps);
   cmd->SetGraphicsRootDescriptorTable(2, resource_->GetTextureHandleGPU());
 
-  // 3: PS b1 DirectionalLight
-  if (directionalLightCB) {
-    cmd->SetGraphicsRootConstantBufferView(
-        3, directionalLightCB->GetGPUVirtualAddress());
-  }
+  // 3-6: DirLight, Camera, PointLight, SpotLight are set by Renderer
 
-  // 4: PS b2 Camera
-  if (cameraCB) {
-    cmd->SetGraphicsRootConstantBufferView(4, cameraCB->GetGPUVirtualAddress());
-  }
-
-  // 5: PS b3 PointLight
-  if (pointLightCB) {
-    cmd->SetGraphicsRootConstantBufferView(
-        5, pointLightCB->GetGPUVirtualAddress());
-  }
-
-  // 6: PS b4 SpotLight
-  if (spotLightCB) {
-    cmd->SetGraphicsRootConstantBufferView(6,
-                                           spotLightCB->GetGPUVirtualAddress());
-  }
 
   cmd->RSSetViewports(1, &dx_->GetViewport());
   cmd->RSSetScissorRects(1, &dx_->GetScissorRect());

@@ -77,6 +77,12 @@ public:
   ID3D12PipelineState *GetPipelineState() const { return pso_.Get(); }
 
   void SetPipelineState(ID3D12GraphicsCommandList *cmdList) const {
+    if (!cmdList || !rootSignature_ || !pso_) {
+      char buf[256];
+      sprintf_s(buf, "[UnifiedPipeline] SetPipelineState failed! cmdList=%p, rootSig=%p, pso_=%p\n", cmdList, rootSignature_.Get(), pso_.Get());
+      OutputDebugStringA(buf);
+      return;
+    }
     cmdList->SetGraphicsRootSignature(rootSignature_.Get());
     cmdList->SetPipelineState(pso_.Get());
   }

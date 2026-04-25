@@ -1,5 +1,4 @@
 #pragma once
-#include <d3d12.h>
 #include <string>
 
 #include "SceneServices.h"
@@ -17,7 +16,7 @@ public:
   }
   virtual void Finalize() {}
   virtual void Update() {}
-  virtual void Draw(ID3D12GraphicsCommandList *cmdList) = 0;
+  virtual void Draw() = 0;
 
 protected:
   void RequestSceneChange(const std::string &sceneId);

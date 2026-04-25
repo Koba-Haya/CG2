@@ -15,7 +15,7 @@ public:
   void Initialize(const SceneServices &services) override;
   void Finalize() override;
   void Update() override;
-  void Draw(ID3D12GraphicsCommandList *cmdList) override;
+  void Draw() override;
 
 private:
   bool startRequested_ = false;

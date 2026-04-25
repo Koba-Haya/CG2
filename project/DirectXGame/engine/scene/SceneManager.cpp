@@ -58,9 +58,9 @@ void SceneManager::Update() {
   }
 }
 
-void SceneManager::Draw(ID3D12GraphicsCommandList *cmdList) {
+void SceneManager::Draw() {
   if (current_) {
-    current_->Draw(cmdList);
+    current_->Draw();
   }
 }
 

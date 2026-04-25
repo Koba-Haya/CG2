@@ -26,4 +26,4 @@ void TitleScene::Update() {
 #endif
 }
 
-void TitleScene::Draw(ID3D12GraphicsCommandList *cmdList) { (void)cmdList; }
+void TitleScene::Draw() {}

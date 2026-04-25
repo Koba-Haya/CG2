@@ -35,13 +35,13 @@ public:
   Skybox() = default;
   ~Skybox() = default;
 
-  bool Initialize(DirectXCommon *dx, UnifiedPipeline *pipeline,
-                  const std::string &texturePath);
+  bool Initialize(const std::string &texturePath);
 
   void Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix,
               const Vector3 &cameraPosition, const Vector3 &scale);
 
-  void Draw(ID3D12GraphicsCommandList *cmdList);
+  void Draw();
+  void DrawInternal(ID3D12GraphicsCommandList *cmdList);
 
   void SetColor(const Vector4 &color) {
     if (materialMapped_) {
@@ -60,7 +60,6 @@ private:
 
 private:
   DirectXCommon *dx_ = nullptr;
-  UnifiedPipeline *pipeline_ = nullptr;
 
   ComPtr<ID3D12Resource> vb_;
   D3D12_VERTEX_BUFFER_VIEW vbView_{};

@@ -9,6 +9,7 @@
 #include "TextureResource.h"
 #include "UnifiedPipeline.h"
 #include "Method.h"
+#include "Renderer.h"
 
 #include <algorithm>
 #include <cassert>
@@ -166,7 +167,10 @@ void ParticleManager::Emit(const std::string& name, const Vector3& position, con
     g.particles.push_back(p);
 }
 
-void ParticleManager::Update(const Matrix4x4& view, const Matrix4x4& proj, float deltaTime) {
+void ParticleManager::Update(float deltaTime) {
+    const Matrix4x4& view = Renderer::GetInstance()->GetViewMatrix();
+    const Matrix4x4& proj = Renderer::GetInstance()->GetProjectionMatrix();
+
     for (auto& kv : groups_) {
         ParticleGroup& g = kv.second;
         if (!g.instanceMapped) {
@@ -215,14 +219,14 @@ void ParticleManager::Update(const Matrix4x4& view, const Matrix4x4& proj, float
     }
 }
 
-void ParticleManager::Draw(ID3D12GraphicsCommandList* cmdList, UnifiedPipeline* pipeline) {
+void ParticleManager::Draw(BlendMode blendMode) {
+    Renderer::GetInstance()->DrawParticles(this, blendMode);
+}
+
+void ParticleManager::DrawInternal(ID3D12GraphicsCommandList* cmdList) {
     assert(dx_);
     assert(cmdList);
-    assert(pipeline);
     EnsureQuadGeometry_();
-
-    cmdList->SetGraphicsRootSignature(pipeline->GetRootSignature());
-    cmdList->SetPipelineState(pipeline->GetPipelineState());
 
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     cmdList->IASetVertexBuffers(0, 1, &vbView_);

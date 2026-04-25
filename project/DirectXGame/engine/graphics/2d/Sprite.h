@@ -18,7 +18,6 @@ class TextureResource;
 class Sprite {
 public:
     struct CreateInfo {
-        DirectXCommon* dx = nullptr;
         std::string texturePath;
         Vector2 size = { 640, 360 };
         Vector4 color = { 1, 1, 1, 1 };
@@ -34,7 +33,10 @@ public:
     void SetBlendMode(BlendMode mode) { blendMode_ = mode; }
     BlendMode GetBlendMode() const { return blendMode_; }
 
-    void Draw(ID3D12GraphicsCommandList* cmdList, const Matrix4x4& view, const Matrix4x4& proj);
+    void Draw();
+
+    // Called by Renderer
+    void DrawInternal(ID3D12GraphicsCommandList* cmdList, const Matrix4x4& view, const Matrix4x4& proj);
 
 private:
     template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;

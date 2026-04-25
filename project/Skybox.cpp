@@ -1,4 +1,5 @@
 #include "Skybox.h"
+#include "Renderer.h"
 
 #include <cassert>
 #include <cstring>
@@ -117,14 +118,11 @@ void Skybox::CreateVertices_(std::vector<Vertex> &vertices,
   vertices[23].position = {1.0f, -1.0f, -1.0f, 1.0f};
 }
 
-bool Skybox::Initialize(DirectXCommon *dx, UnifiedPipeline *pipeline,
-                        const std::string &texturePath) {
-  if (!dx || !pipeline) {
+bool Skybox::Initialize(const std::string &texturePath) {
+  dx_ = Renderer::GetInstance()->GetDX();
+  if (!dx_) {
     return false;
   }
-
-  dx_ = dx;
-  pipeline_ = pipeline;
 
   ID3D12Device *device = dx_->GetDevice();
   if (!device) {
@@ -229,13 +227,15 @@ void Skybox::Update(const Matrix4x4 &viewMatrix,
   transformMapped_->WorldInverseTranspose = Transpose(Inverse(worldMatrix));
 }
 
-void Skybox::Draw(ID3D12GraphicsCommandList *cmdList) {
-  if (!cmdList || !pipeline_ || !dx_ || !vb_ || !ib_ || !materialCB_ ||
+void Skybox::Draw() {
+  Renderer::GetInstance()->DrawSkybox(this);
+}
+
+void Skybox::DrawInternal(ID3D12GraphicsCommandList *cmdList) {
+  if (!cmdList || !dx_ || !vb_ || !ib_ || !materialCB_ ||
       !transformCB_ || !texture_) {
     return;
   }
-
-  pipeline_->SetPipelineState(cmdList);
 
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   cmdList->IASetVertexBuffers(0, 1, &vbView_);

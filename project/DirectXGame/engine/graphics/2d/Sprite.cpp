@@ -1,6 +1,7 @@
 #include "Sprite.h"
 #include "TextureManager.h"
 #include "TextureResource.h"
+#include "Renderer.h"
 #include <cstring>
 
 struct SpriteVertex {
@@ -33,8 +34,8 @@ Sprite::CreateBufferResource(ID3D12Device* device, size_t sizeInBytes) {
 }
 
 bool Sprite::Initialize(const CreateInfo& info) {
-    assert(info.dx);
-    dx_ = info.dx;
+    dx_ = Renderer::GetInstance()->GetDX();
+    assert(dx_);
     color_ = info.color;
 
     // TextureManager 経由（SRVはTextureResourceが所有して自動Free）
@@ -91,7 +92,11 @@ void Sprite::SetRotation(const Vector3& rot) { rotation_ = rot; }
 void Sprite::SetUVTransform(const Matrix4x4& uv) { uvMatrix_ = uv; }
 void Sprite::SetColor(const Vector4& color) { color_ = color; }
 
-void Sprite::Draw(ID3D12GraphicsCommandList *cmdList, const Matrix4x4 &view,
+void Sprite::Draw() {
+    Renderer::GetInstance()->DrawSprite(this);
+}
+
+void Sprite::DrawInternal(ID3D12GraphicsCommandList *cmdList, const Matrix4x4 &view,
                   const Matrix4x4 &proj) {
     worldMatrix_ = MakeAffineMatrix(scale_, rotation_, position_);
     Matrix4x4 wvp = Multiply(worldMatrix_, Multiply(view, proj));

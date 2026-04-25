@@ -17,7 +17,7 @@
 
 class DirectXCommon;
 class TextureResource;
-class UnifiedPipeline;
+#include "UnifiedPipeline.h"
 
 // 加速度フィールド（範囲内の粒子に加速度を与える）
 struct AccelerationField {
@@ -73,11 +73,13 @@ public:
         const Vector3& scale, float lifetime, const Vector4& color);
 
     // Update: 粒子更新 + インスタンスデータ書き込み
-    void Update(const Matrix4x4& view, const Matrix4x4& proj, float deltaTime);
+    void Update(float deltaTime);
 
     // Draw: グループごとに DrawIndexedInstanced
-    // - pipeline: Particle用パイプライン（blendごとに差し替え可能）
-    void Draw(ID3D12GraphicsCommandList* cmdList, UnifiedPipeline* pipeline);
+    void Draw(BlendMode blendMode = BlendMode::Alpha);
+
+    // Called by Renderer
+    void DrawInternal(ID3D12GraphicsCommandList* cmdList);
 
     // パラメータ
     void SetAccelerationField(const AccelerationField& field) { accelerationField_ = field; }

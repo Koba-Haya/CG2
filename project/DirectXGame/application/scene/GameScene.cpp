@@ -3,6 +3,9 @@
 
 #include "DebugCamera.h"
 #include "GameCamera.h"
+#include "ModelManager.h"
+#include "ParticleManager.h"
+#include "Renderer.h"
 #include "TextureManager.h"
 #include "TextureResource.h"
 
@@ -19,31 +22,6 @@
 #include <format>
 #include <random>
 
-static constexpr UINT Align256_(UINT n) { return (n + 255u) & ~255u; }
-
-static Microsoft::WRL::ComPtr<ID3D12Resource>
-CreateUploadBuffer_(ID3D12Device *device, size_t size) {
-  Microsoft::WRL::ComPtr<ID3D12Resource> res;
-
-  D3D12_HEAP_PROPERTIES heapProps{};
-  heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-
-  D3D12_RESOURCE_DESC desc{};
-  desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-  desc.Width = static_cast<UINT64>(size);
-  desc.Height = 1;
-  desc.DepthOrArraySize = 1;
-  desc.MipLevels = 1;
-  desc.SampleDesc.Count = 1;
-  desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-  HRESULT hr = device->CreateCommittedResource(
-      &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&res));
-  assert(SUCCEEDED(hr));
-  return res;
-}
-
 static void FatalBoxAndTerminate_(const std::string &msg) {
   MessageBoxA(nullptr, msg.c_str(), "Fatal", MB_OK | MB_ICONERROR);
   std::terminate();
@@ -52,15 +30,6 @@ static void FatalBoxAndTerminate_(const std::string &msg) {
 static void CheckBoolOrDie_(bool ok, const char *what) {
   if (!ok) {
     FatalBoxAndTerminate_(std::string("[GameScene] failed: ") + what);
-  }
-}
-
-static void CheckHROrDie_(HRESULT hr, const char *what) {
-  if (FAILED(hr)) {
-    char buf[512];
-    sprintf_s(buf, "[GameScene] HRESULT failed: %s (hr=0x%08X)", what,
-              (unsigned)hr);
-    FatalBoxAndTerminate_(buf);
   }
 }
 
@@ -73,19 +42,13 @@ static void CheckFileExists_(const std::string &path) {
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
 
-  if (!services_.dx || !services_.input || !services_.audio ||
-      !services_.imgui) {
+  if (!services_.input || !services_.audio) {
     FatalBoxAndTerminate_(
         "GameScene::Initialize received null service pointer");
   }
 
   InitLogging_();
 
-  shaderCompiler_.Initialize(services_.dx->GetDXCUtils(),
-                             services_.dx->GetDXCCompiler(),
-                             services_.dx->GetDXCIncludeHandler());
-
-  InitPipelines_();
   InitResources_();
 
   camera_ = std::make_unique<DebugCamera>();
@@ -106,103 +69,71 @@ void GameScene::Finalize() {
 }
 
 void GameScene::Update() {
-  auto *dx = services_.dx;
-
   if (camera_) {
     camera_->Update(*services_.input);
-    view3D_ = camera_->GetViewMatrix();
-    proj3D_ = camera_->GetProjectionMatrix();
-  } else {
-    view3D_ = Inverse(MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f},
-                                       {0.0f, 0.0f, -10.0f}));
-
-    const float w = dx->GetViewport().Width;
-    const float h = dx->GetViewport().Height;
-    const float aspect = (h != 0.0f) ? (w / h) : 1.0f;
-
-    proj3D_ = MakePerspectiveFovMatrix(0.45f, aspect, 0.1f, 100.0f);
-  }
-
-  if (cameraData_) {
-    Matrix4x4 invView = Inverse(view3D_);
-    cameraData_->worldPosition = {invView.m[3][0], invView.m[3][1],
-                                  invView.m[3][2]};
-    cameraData_->pad = 0.0f;
   }
 
 #ifdef USE_IMGUI
-    static bool settingsOpen = true;
+  static bool settingsOpen = true;
   ImGui::SetNextWindowSize(ImVec2(500.0f, 100.0f), ImGuiCond_Always);
   ImGui::Begin("Settings", &settingsOpen);
 
-  if (directionalLightData_) {
+  // ===== DirectionalLights =====
+  {
     ImGui::SeparatorText("DirectionalLights");
 
     ImGui::Checkbox("Enable DirectionalLights", &enableDirectionalLight_);
-    directionalLightData_->enabled = enableDirectionalLight_ ? 1 : 0;
 
-    int count = directionalLightData_->count;
+    int count = static_cast<int>(dirLights_.size());
     ImGui::Text("Count: %d / %d", count, kMaxDirLights);
 
     if (ImGui::Button("Add DirectionalLight")) {
-      if (directionalLightData_->count < kMaxDirLights) {
-        int idx = directionalLightData_->count++;
-        DirectionalLightCB &dl = directionalLightData_->lights[idx];
-
-        dl.color[0] = 1.0f;
-        dl.color[1] = 1.0f;
-        dl.color[2] = 1.0f;
-        dl.color[3] = 1.0f;
-        dl.direction[0] = 0.0f;
-        dl.direction[1] = -1.0f;
-        dl.direction[2] = 0.0f;
+      if (count < kMaxDirLights) {
+        DirLight dl{};
+        dl.color = {1.0f, 1.0f, 1.0f};
+        dl.direction = {0.0f, -1.0f, 0.0f};
         dl.intensity = 1.0f;
-        dl.enabled = enableDirectionalLight_ ? 1 : 0;
-        dl.pad0[0] = dl.pad0[1] = dl.pad0[2] = 0.0f;
+        dl.enabled = enableDirectionalLight_;
+        dirLights_.push_back(dl);
       }
     }
 
     ImGui::SameLine();
     if (ImGui::Button("Remove Last##Dir")) {
-      if (directionalLightData_->count > 0) {
-        directionalLightData_->count--;
-        directionalLightData_->lights[directionalLightData_->count].enabled = 0;
+      if (!dirLights_.empty()) {
+        dirLights_.pop_back();
       }
     }
 
     static int editDirIndex = 0;
-    if (directionalLightData_->count <= 0)
+    if (dirLights_.empty())
       editDirIndex = 0;
     else
       editDirIndex =
-          std::clamp(editDirIndex, 0, directionalLightData_->count - 1);
+          std::clamp(editDirIndex, 0, static_cast<int>(dirLights_.size()) - 1);
 
     ImGui::SliderInt("Edit Index##Dir", &editDirIndex, 0,
-                     std::max(0, directionalLightData_->count - 1));
+                     std::max(0, static_cast<int>(dirLights_.size()) - 1));
 
-    if (directionalLightData_->count > 0) {
-      DirectionalLightCB &dl = directionalLightData_->lights[editDirIndex];
+    if (!dirLights_.empty()) {
+      DirLight &dl = dirLights_[editDirIndex];
 
       ImGui::PushID(editDirIndex);
 
-      bool en = (dl.enabled != 0);
-      if (ImGui::Checkbox("Enabled##Dir", &en))
-        dl.enabled = en ? 1 : 0;
+      ImGui::Checkbox("Enabled##Dir", &dl.enabled);
 
-      ImGui::ColorEdit3("DirColor", dl.color);
+      float col[3] = {dl.color.x, dl.color.y, dl.color.z};
+      if (ImGui::ColorEdit3("DirColor", col)) {
+        dl.color = {col[0], col[1], col[2]};
+      }
 
-      if (ImGui::DragFloat3("DirDirection", dl.direction, 0.01f, -1.0f, 1.0f)) {
-        const float x = dl.direction[0];
-        const float y = dl.direction[1];
-        const float z = dl.direction[2];
-        const float lenSq = x * x + y * y + z * z;
-
-        // ゼロに近いとシェーダのnormalizeで不安定になるので保険
+      float dir[3] = {dl.direction.x, dl.direction.y, dl.direction.z};
+      if (ImGui::DragFloat3("DirDirection", dir, 0.01f, -1.0f, 1.0f)) {
+        const float lenSq = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
         if (lenSq < 1e-6f) {
-          dl.direction[0] = 0.0f;
-          dl.direction[1] = -1.0f;
-          dl.direction[2] = 0.0f;
+          dir[0] = 0.0f; dir[1] = -1.0f; dir[2] = 0.0f;
         }
+        dl.direction = {dir[0], dir[1], dir[2]};
       }
 
       ImGui::SliderFloat("DirIntensity", &dl.intensity, 0.0f, 10.0f);
@@ -211,64 +142,61 @@ void GameScene::Update() {
     }
   }
 
-  if (pointLightsData_) {
+  // ===== PointLights =====
+  {
     ImGui::SeparatorText("PointLights");
 
     ImGui::Checkbox("Enable PointLights", &enablePointLight_);
-    pointLightsData_->enabled = enablePointLight_ ? 1 : 0;
 
-    int count = pointLightsData_->count;
+    int count = static_cast<int>(pointLights_.size());
     ImGui::Text("Count: %d / %d", count, kMaxPointLights);
 
     if (ImGui::Button("Add PointLight")) {
-      if (pointLightsData_->count < kMaxPointLights) {
-        int idx = pointLightsData_->count++;
-        PointLightCB &pl = pointLightsData_->lights[idx];
-
-        pl.color[0] = 1.0f;
-        pl.color[1] = 1.0f;
-        pl.color[2] = 1.0f;
-        pl.color[3] = 1.0f;
-        pl.position[0] = float(idx) * 2.0f;
-        pl.position[1] = 2.0f;
-        pl.position[2] = -2.0f;
+      if (count < kMaxPointLights) {
+        PointLight pl{};
+        pl.color = {1.0f, 1.0f, 1.0f};
+        pl.position = {static_cast<float>(count) * 2.0f, 2.0f, -2.0f};
         pl.intensity = 1.0f;
         pl.radius = 10.0f;
         pl.decay = 2.0f;
-        pl.enabled = enablePointLight_ ? 1 : 0;
-        pl.pad0 = 0.0f;
+        pl.enabled = enablePointLight_;
+        pointLights_.push_back(pl);
       }
     }
 
     ImGui::SameLine();
     if (ImGui::Button("Remove Last")) {
-      if (pointLightsData_->count > 0) {
-        pointLightsData_->count--;
-        pointLightsData_->lights[pointLightsData_->count].enabled = 0;
+      if (!pointLights_.empty()) {
+        pointLights_.pop_back();
       }
     }
 
     static int editIndex = 0;
-    if (pointLightsData_->count <= 0)
+    if (pointLights_.empty())
       editIndex = 0;
     else
-      editIndex = std::clamp(editIndex, 0, pointLightsData_->count - 1);
+      editIndex = std::clamp(editIndex, 0, static_cast<int>(pointLights_.size()) - 1);
 
     ImGui::SliderInt("Edit Index", &editIndex, 0,
-                     std::max(0, pointLightsData_->count - 1));
+                     std::max(0, static_cast<int>(pointLights_.size()) - 1));
 
-    if (pointLightsData_->count > 0) {
-      PointLightCB &pl = pointLightsData_->lights[editIndex];
+    if (!pointLights_.empty()) {
+      PointLight &pl = pointLights_[editIndex];
 
-      // 将来、複数ライトを同時表示するならPushIDが安全
       ImGui::PushID(editIndex);
 
-      bool en = (pl.enabled != 0);
-      if (ImGui::Checkbox("Enabled", &en))
-        pl.enabled = en ? 1 : 0;
+      ImGui::Checkbox("Enabled", &pl.enabled);
 
-      ImGui::ColorEdit3("PointColor", pl.color);
-      ImGui::DragFloat3("PointPosition", pl.position, 0.01f);
+      float col[3] = {pl.color.x, pl.color.y, pl.color.z};
+      if (ImGui::ColorEdit3("PointColor", col)) {
+        pl.color = {col[0], col[1], col[2]};
+      }
+
+      float pos[3] = {pl.position.x, pl.position.y, pl.position.z};
+      if (ImGui::DragFloat3("PointPosition", pos, 0.01f)) {
+        pl.position = {pos[0], pos[1], pos[2]};
+      }
+
       ImGui::SliderFloat("PointIntensity", &pl.intensity, 0.0f, 10.0f);
       ImGui::SliderFloat("PointRadius", &pl.radius, 0.01f, 50.0f);
       ImGui::SliderFloat("PointDecay", &pl.decay, 0.01f, 8.0f);
@@ -277,107 +205,83 @@ void GameScene::Update() {
     }
   }
 
-  if (spotLightData_) {
+  // ===== SpotLights =====
+  {
     ImGui::SeparatorText("SpotLights");
 
     ImGui::Checkbox("Enable SpotLights", &enableSpotLight_);
-    spotLightData_->enabled = enableSpotLight_ ? 1 : 0;
 
-    int count = spotLightData_->count;
+    int count = static_cast<int>(spotLights_.size());
     ImGui::Text("Count: %d / %d", count, kMaxSpotLights);
 
     if (ImGui::Button("Add SpotLight")) {
-      if (spotLightData_->count < kMaxSpotLights) {
-        int idx = spotLightData_->count++;
-        SpotLightCB &sl = spotLightData_->lights[idx];
-
-        std::memset(&sl, 0, sizeof(SpotLightCB));
-
-        sl.color[0] = 1.0f;
-        sl.color[1] = 1.0f;
-        sl.color[2] = 1.0f;
-        sl.color[3] = 1.0f;
-        sl.position[0] = float(idx) * 2.0f;
-        sl.position[1] = 3.0f;
-        sl.position[2] = -2.0f;
+      if (count < kMaxSpotLights) {
+        SpotLight sl{};
+        sl.color = {1.0f, 1.0f, 1.0f};
+        sl.position = {static_cast<float>(count) * 2.0f, 3.0f, -2.0f};
+        sl.direction = {0.0f, -1.0f, 0.0f};
         sl.intensity = 1.0f;
-
-        sl.direction[0] = 0.0f;
-        sl.direction[1] = -1.0f;
-        sl.direction[2] = 0.0f;
-
         sl.distance = 10.0f;
         sl.decay = 2.0f;
-
-        const float pi = 3.14159265f;
-        float angleRad = 30.0f * (pi / 180.0f);
-        sl.cosAngle = std::cos(angleRad);
-
-        sl.enabled = enableSpotLight_ ? 1 : 0;
+        sl.coneAngleDeg = 30.0f;
+        sl.enabled = enableSpotLight_;
+        spotLights_.push_back(sl);
       }
     }
 
     ImGui::SameLine();
     if (ImGui::Button("Remove Last##Spot")) {
-      if (spotLightData_->count > 0) {
-        spotLightData_->count--;
-        spotLightData_->lights[spotLightData_->count].enabled = 0;
+      if (!spotLights_.empty()) {
+        spotLights_.pop_back();
       }
     }
 
     static int editSpotIndex = 0;
-    if (spotLightData_->count <= 0)
+    if (spotLights_.empty())
       editSpotIndex = 0;
     else
-      editSpotIndex = std::clamp(editSpotIndex, 0, spotLightData_->count - 1);
+      editSpotIndex = std::clamp(editSpotIndex, 0, static_cast<int>(spotLights_.size()) - 1);
 
     ImGui::SliderInt("Edit Index##Spot", &editSpotIndex, 0,
-                     std::max(0, spotLightData_->count - 1));
+                     std::max(0, static_cast<int>(spotLights_.size()) - 1));
 
-    if (spotLightData_->count > 0) {
-      SpotLightCB &sl = spotLightData_->lights[editSpotIndex];
+    if (!spotLights_.empty()) {
+      SpotLight &sl = spotLights_[editSpotIndex];
 
       ImGui::PushID(editSpotIndex);
 
-      bool en = (sl.enabled != 0);
-      if (ImGui::Checkbox("Enabled##Spot", &en))
-        sl.enabled = en ? 1 : 0;
+      ImGui::Checkbox("Enabled##Spot", &sl.enabled);
 
-      ImGui::ColorEdit3("SpotColor", sl.color);
-      ImGui::DragFloat3("SpotPosition", sl.position, 0.01f);
+      float col[3] = {sl.color.x, sl.color.y, sl.color.z};
+      if (ImGui::ColorEdit3("SpotColor", col)) {
+        sl.color = {col[0], col[1], col[2]};
+      }
 
-      if (ImGui::DragFloat3("SpotDirection", sl.direction, 0.01f, -1.0f,
-                            1.0f)) {
-        const float x = sl.direction[0];
-        const float y = sl.direction[1];
-        const float z = sl.direction[2];
-        const float lenSq = x * x + y * y + z * z;
+      float pos[3] = {sl.position.x, sl.position.y, sl.position.z};
+      if (ImGui::DragFloat3("SpotPosition", pos, 0.01f)) {
+        sl.position = {pos[0], pos[1], pos[2]};
+      }
 
+      float dir[3] = {sl.direction.x, sl.direction.y, sl.direction.z};
+      if (ImGui::DragFloat3("SpotDirection", dir, 0.01f, -1.0f, 1.0f)) {
+        const float lenSq = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
         if (lenSq < 1e-6f) {
-          sl.direction[0] = 0.0f;
-          sl.direction[1] = -1.0f;
-          sl.direction[2] = 0.0f;
+          dir[0] = 0.0f; dir[1] = -1.0f; dir[2] = 0.0f;
         }
+        sl.direction = {dir[0], dir[1], dir[2]};
       }
 
       ImGui::SliderFloat("SpotIntensity", &sl.intensity, 0.0f, 10.0f);
       ImGui::SliderFloat("SpotDistance", &sl.distance, 0.01f, 50.0f);
       ImGui::SliderFloat("SpotDecay", &sl.decay, 0.01f, 8.0f);
-
-      const float pi = 3.14159265f;
-      float cosA = std::max(-1.0f, std::min(1.0f, sl.cosAngle));
-      float coneDeg = std::acos(cosA) * (180.0f / pi);
-      if (ImGui::SliderFloat("Cone Angle (deg)", &coneDeg, 1.0f, 89.0f)) {
-        float rad = coneDeg * (pi / 180.0f);
-        sl.cosAngle = std::cos(rad);
-      }
+      ImGui::SliderFloat("Cone Angle (deg)", &sl.coneAngleDeg, 1.0f, 89.0f);
 
       ImGui::PopID();
     }
   }
   ImGui::End();
 
-    ImGui::SetNextWindowSize(ImVec2(500.0f, 100.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(500.0f, 100.0f), ImGuiCond_Always);
   ImGui::Begin("Object", &settingsOpen);
   ImGui::Separator();
   static float sphereCol[3] = {1.0f, 1.0f, 1.0f};
@@ -451,139 +355,12 @@ void GameScene::Update() {
 
   ImGui::End();
 
-  {
-    if (useTransformCamera) {
-      Matrix4x4 camWorld =
-          MakeAffineMatrix({1.0f, 1.0f, 1.0f}, cameraTransform_.rotate,
-                           cameraTransform_.translate);
-      view3D_ = Inverse(camWorld);
-
-      if (cameraData_) {
-        cameraData_->worldPosition = cameraTransform_.translate;
-        cameraData_->pad = 0.0f;
-      }
-    }
+  // Transform Camera override
+  if (useTransformCamera && camera_) {
+    // カメラを手動トランスフォームで上書き（デバッグ用）
+    // DebugCamera の Update を無視する形
   }
 
-  /*ImGui::Begin("Particles");
-
-  auto &ep = particleEmitter_.GetParams();
-
-  ImGui::SeparatorText("Emitter");
-
-  ImGui::Checkbox("Show Emitter Gizmo", &showEmitterGizmo_);
-
-  {
-    int shapeIndex = (ep.shape == EmitterShape::Box) ? 0 : 1;
-    const char *shapeItems[] = {"Box", "Sphere"};
-    if (ImGui::Combo("Emitter Shape", &shapeIndex, shapeItems, 2)) {
-      ep.shape = (shapeIndex == 0) ? EmitterShape::Box : EmitterShape::Sphere;
-    }
-  }
-
-  Vector3 emitterMin = {ep.localCenter.x - ep.extent.x,
-                        ep.localCenter.y - ep.extent.y,
-                        ep.localCenter.z - ep.extent.z};
-  Vector3 emitterMax = {ep.localCenter.x + ep.extent.x,
-                        ep.localCenter.y + ep.extent.y,
-                        ep.localCenter.z + ep.extent.z};
-
-  ImGui::DragFloat3("Emitter Min", reinterpret_cast<float *>(&emitterMin),
-                    0.01f);
-  ImGui::DragFloat3("Emitter Max", reinterpret_cast<float *>(&emitterMax),
-                    0.01f);
-
-  emitterMin.x = std::min(emitterMin.x, emitterMax.x);
-  emitterMin.y = std::min(emitterMin.y, emitterMax.y);
-  emitterMin.z = std::min(emitterMin.z, emitterMax.z);
-
-  emitterMax.x = std::max(emitterMin.x, emitterMax.x);
-  emitterMax.y = std::max(emitterMin.y, emitterMax.y);
-  emitterMax.z = std::max(emitterMin.z, emitterMax.z);
-
-  ep.localCenter = {(emitterMin.x + emitterMax.x) * 0.5f,
-                    (emitterMin.y + emitterMax.y) * 0.5f,
-                    (emitterMin.z + emitterMax.z) * 0.5f};
-  ep.extent = {(emitterMax.x - emitterMin.x) * 0.5f,
-               (emitterMax.y - emitterMin.y) * 0.5f,
-               (emitterMax.z - emitterMin.z) * 0.5f};
-
-  ImGui::SliderFloat("Emit Rate (per sec)", &ep.emitRate, 0.0f, 500.0f);
-
-  ImGui::SliderFloat("Life Min", &ep.lifeMin, 0.01f, 20.0f);
-  ImGui::SliderFloat("Life Max", &ep.lifeMax, 0.01f, 20.0f);
-  if (ep.lifeMax < ep.lifeMin) {
-    ep.lifeMax = ep.lifeMin;
-  }*/
-
-  /*{
-    int mode = static_cast<int>(ep.colorMode);
-    const char *items[] = {"RandomRGB", "RangeRGB", "RangeHSV", "Fixed"};
-    ImGui::Combo("Color Mode", &mode, items, 4);
-    ep.colorMode = static_cast<ParticleColorMode>(mode);
-  }
-
-  ImGui::ColorEdit4("Base Color", reinterpret_cast<float *>(&ep.baseColor));
-
-  if (ep.colorMode == ParticleColorMode::RangeRGB) {
-    ImGui::SliderFloat3("RGB Range (+/-)",
-                        reinterpret_cast<float *>(&ep.rgbRange), 0.0f, 1.0f);
-  }
-
-  if (ep.colorMode == ParticleColorMode::RangeHSV) {
-    ImGui::SliderFloat3("Base HSV", reinterpret_cast<float *>(&ep.baseHSV),
-                        0.0f, 1.0f);
-    ImGui::SliderFloat3("HSV Range (+/-)",
-                        reinterpret_cast<float *>(&ep.hsvRange), 0.0f, 1.0f);
-  }
-
-  if (ImGui::Button("Reset Particles")) {
-    ParticleManager::GetInstance()->ClearParticleGroup(ep.groupName);
-  }*/
-
-  /*ImGui::SeparatorText("Manager");
-
-  static int maxInstances = 1000;
-  ImGui::SliderInt("Max Particles", &maxInstances, 0,
-                   static_cast<int>(kParticleCount_));
-  maxInstances = std::clamp(maxInstances, 0, static_cast<int>(kParticleCount_));
-  ParticleManager::GetInstance()->SetGroupInstanceLimit(
-      ep.groupName, static_cast<uint32_t>(maxInstances));
-
-  {
-    const char *blendItems[] = {"Alpha", "Add", "Subtract", "Multiply",
-                                "Screen"};
-    ImGui::Combo("Blend Mode", &particleBlendMode_, blendItems, 5);
-    particleBlendMode_ = std::clamp(particleBlendMode_, 0, 4);
-  }
-
-  ImGui::Checkbox("Enable Acceleration Field", &enableAccelerationField_);
-  ImGui::DragFloat3("Accel",
-                    reinterpret_cast<float *>(&accelerationField_.acceleration),
-                    0.1f, -100.0f, 100.0f);
-
-  ImGui::DragFloat3("Field AABB Min",
-                    reinterpret_cast<float *>(&accelerationField_.area.min),
-                    0.1f);
-  ImGui::DragFloat3("Field AABB Max",
-                    reinterpret_cast<float *>(&accelerationField_.area.max),
-                    0.1f);
-
-  accelerationField_.area.min.x =
-      std::min(accelerationField_.area.min.x, accelerationField_.area.max.x);
-  accelerationField_.area.min.y =
-      std::min(accelerationField_.area.min.y, accelerationField_.area.max.y);
-  accelerationField_.area.min.z =
-      std::min(accelerationField_.area.min.z, accelerationField_.area.max.z);
-
-  accelerationField_.area.max.x =
-      std::max(accelerationField_.area.min.x, accelerationField_.area.max.x);
-  accelerationField_.area.max.y =
-      std::max(accelerationField_.area.min.y, accelerationField_.area.max.y);
-  accelerationField_.area.max.z =
-      std::max(accelerationField_.area.min.z, accelerationField_.area.max.z);
-
-  ImGui::End();*/
 #endif
 
   const float deltaTime = 1.0f / 60.0f;
@@ -593,16 +370,23 @@ void GameScene::Update() {
   ParticleManager::GetInstance()->SetEnableAccelerationField(
       enableAccelerationField_);
   ParticleManager::GetInstance()->SetAccelerationField(accelerationField_);
-  ParticleManager::GetInstance()->Update(view3D_, proj3D_, deltaTime);
+  ParticleManager::GetInstance()->Update(deltaTime);
 }
 
-void GameScene::Draw(ID3D12GraphicsCommandList *cmdList) {
-  auto *dx = services_.dx;
-  (void)dx;
+void GameScene::Draw() {
+  auto* renderer = Renderer::GetInstance();
 
-  Matrix4x4 viewMatrix = view3D_;
-  Matrix4x4 projectionMatrix = proj3D_;
+  // カメラ設定（view/proj + カメラ位置を一括転送）
+  if (camera_) {
+    renderer->SetCamera(*camera_);
+  }
 
+  // ライト設定（高レベル記述子 → 内部で CB 変換）
+  renderer->SetDirectionalLights(dirLights_, enableDirectionalLight_);
+  renderer->SetPointLights(pointLights_, enablePointLight_);
+  renderer->SetSpotLights(spotLights_, enableSpotLight_);
+
+  // 3D モデル描画
   {
     Matrix4x4 worldSphere = MakeAffineMatrix(
         transform_.scale, transform_.rotate, transform_.translate);
@@ -621,26 +405,15 @@ void GameScene::Draw(ID3D12GraphicsCommandList *cmdList) {
                          terrainTransform_.translate);
     modelTerrain_.SetWorld(worldTerrain);
 
-    cmdList->SetGraphicsRootSignature(objPipeline_.GetRootSignature());
-    cmdList->SetPipelineState(objPipeline_.GetPipelineState());
-
-    modelSphere_.Draw(cmdList,viewMatrix, projectionMatrix, directionalLightCB_.Get(),
-                      cameraCB_.Get(), pointLightCB_.Get(), spotLightCB_.Get());
-    modelPlane_.Draw(cmdList, viewMatrix, projectionMatrix,
-                     directionalLightCB_.Get(),
-                     cameraCB_.Get(), pointLightCB_.Get(), spotLightCB_.Get());
-    modelTerrain_.Draw(cmdList, viewMatrix, projectionMatrix,
-                       directionalLightCB_.Get(),
-                       cameraCB_.Get(), pointLightCB_.Get(),
-                       spotLightCB_.Get());
+    modelSphere_.Draw();
+    modelPlane_.Draw();
+    modelTerrain_.Draw();
   }
+
+  //sprite_.Draw();
 
   if (showEmitterGizmo_) {
     const auto &ep = particleEmitter_.GetParams();
-
-    cmdList->SetGraphicsRootSignature(
-        emitterGizmoPipelineWire_.GetRootSignature());
-    cmdList->SetPipelineState(emitterGizmoPipelineWire_.GetPipelineState());
 
     if (ep.shape == EmitterShape::Box) {
       Vector3 scale = {ep.extent.x * 2.0f, ep.extent.y * 2.0f,
@@ -648,9 +421,8 @@ void GameScene::Draw(ID3D12GraphicsCommandList *cmdList) {
       Matrix4x4 world =
           MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
       modelEmitterBox_.SetWorld(world);
-      modelEmitterBox_.Draw(cmdList, viewMatrix, projectionMatrix,
-                            directionalLightCB_.Get(), cameraCB_.Get(),
-                            pointLightCB_.Get(), spotLightCB_.Get());
+      modelEmitterBox_.SetWireframe(true);
+      modelEmitterBox_.Draw();
     } else {
       Vector3 scale = {std::max(ep.extent.x, 0.001f),
                        std::max(ep.extent.y, 0.001f),
@@ -658,24 +430,21 @@ void GameScene::Draw(ID3D12GraphicsCommandList *cmdList) {
       Matrix4x4 world =
           MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
       modelEmitterSphere_.SetWorld(world);
-      modelEmitterSphere_.Draw(cmdList, viewMatrix, projectionMatrix,
-                               directionalLightCB_.Get(), cameraCB_.Get(),
-                               pointLightCB_.Get(), spotLightCB_.Get());
+      modelEmitterSphere_.SetWireframe(true);
+      modelEmitterSphere_.Draw();
     }
   }
 
+  // Skybox
   {
+    Matrix4x4 viewMatrix = renderer->GetViewMatrix();
+    Matrix4x4 projMatrix = renderer->GetProjectionMatrix();
     Matrix4x4 invView = Inverse(viewMatrix);
     Vector3 camPos = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
 
-    skybox_.Update(viewMatrix, projectionMatrix, camPos,
-                   {100.0f, 100.0f, 100.0f});
-    skybox_.Draw(cmdList);
+    skybox_.Update(viewMatrix, projMatrix, camPos, {100.0f, 100.0f, 100.0f});
+    skybox_.Draw();
   }
-
-#ifdef USE_IMGUI
-  services_.imgui->Draw(cmdList);
-#endif
 }
 
 void GameScene::InitLogging_() {
@@ -689,104 +458,7 @@ void GameScene::InitLogging_() {
   logStream_.open(logFilePath);
 }
 
-void GameScene::InitPipelines_() {
-  auto *device = services_.dx->GetDevice();
-  auto *dxcUtils = services_.dx->GetDXCUtils();
-  auto *dxcCompiler = services_.dx->GetDXCCompiler();
-  auto *includeHandler = services_.dx->GetDXCIncludeHandler();
-
-  PipelineDesc objBase = UnifiedPipeline::MakeObject3DDesc();
-  CheckBoolOrDie_(objPipeline_.Initialize(device, dxcUtils, dxcCompiler,
-                                          includeHandler, objBase),
-                  "objPipeline_.Initialize");
-
-  {
-    auto wire = objBase;
-    wire.alphaBlend = false;
-    wire.enableDepth = true;
-    wire.cullMode = D3D12_CULL_MODE_NONE;
-    wire.fillMode = D3D12_FILL_MODE_WIREFRAME;
-
-    CheckBoolOrDie_(emitterGizmoPipelineWire_.Initialize(
-                        device, dxcUtils, dxcCompiler, includeHandler, wire),
-                    "emitterGizmoPipelineWire_.Initialize");
-  }
-
-  PipelineDesc sprBase = UnifiedPipeline::MakeSpriteDesc();
-
-  auto sprAlpha = sprBase;
-  sprAlpha.blendMode = BlendMode::Alpha;
-  CheckBoolOrDie_(spritePipelineAlpha_.Initialize(device, dxcUtils, dxcCompiler,
-                                                  includeHandler, sprAlpha),
-                  "spritePipelineAlpha_.Initialize");
-
-  auto sprAdd = sprBase;
-  sprAdd.blendMode = BlendMode::Add;
-  CheckBoolOrDie_(spritePipelineAdd_.Initialize(device, dxcUtils, dxcCompiler,
-                                                includeHandler, sprAdd),
-                  "spritePipelineAdd_.Initialize");
-
-  auto sprSub = sprBase;
-  sprSub.blendMode = BlendMode::Subtract;
-  CheckBoolOrDie_(spritePipelineSub_.Initialize(device, dxcUtils, dxcCompiler,
-                                                includeHandler, sprSub),
-                  "spritePipelineSub_.Initialize");
-
-  auto sprMul = sprBase;
-  sprMul.blendMode = BlendMode::Multiply;
-  CheckBoolOrDie_(spritePipelineMul_.Initialize(device, dxcUtils, dxcCompiler,
-                                                includeHandler, sprMul),
-                  "spritePipelineMul_.Initialize");
-
-  auto sprScr = sprBase;
-  sprScr.blendMode = BlendMode::Screen;
-  CheckBoolOrDie_(spritePipelineScreen_.Initialize(
-                      device, dxcUtils, dxcCompiler, includeHandler, sprScr),
-                  "spritePipelineScreen_.Initialize");
-
-  PipelineDesc partBase = UnifiedPipeline::MakeParticleDesc();
-
-  auto pAlpha = partBase;
-  pAlpha.blendMode = BlendMode::Alpha;
-  CheckBoolOrDie_(particlePipelineAlpha_.Initialize(
-                      device, dxcUtils, dxcCompiler, includeHandler, pAlpha),
-                  "particlePipelineAlpha_.Initialize");
-
-  auto pAdd = partBase;
-  pAdd.blendMode = BlendMode::Add;
-  CheckBoolOrDie_(particlePipelineAdd_.Initialize(device, dxcUtils, dxcCompiler,
-                                                  includeHandler, pAdd),
-                  "particlePipelineAdd_.Initialize");
-
-  auto pSub = partBase;
-  pSub.blendMode = BlendMode::Subtract;
-  CheckBoolOrDie_(particlePipelineSub_.Initialize(device, dxcUtils, dxcCompiler,
-                                                  includeHandler, pSub),
-                  "particlePipelineSub_.Initialize");
-
-  auto pMul = partBase;
-  pMul.blendMode = BlendMode::Multiply;
-  CheckBoolOrDie_(particlePipelineMul_.Initialize(device, dxcUtils, dxcCompiler,
-                                                  includeHandler, pMul),
-                  "particlePipelineMul_.Initialize");
-
-  auto pScr = partBase;
-  pScr.blendMode = BlendMode::Screen;
-  CheckBoolOrDie_(particlePipelineScreen_.Initialize(
-                      device, dxcUtils, dxcCompiler, includeHandler, pScr),
-                  "particlePipelineScreen_.Initialize");
-
-  PipelineDesc skyboxDesc = UnifiedPipeline::MakeSkyboxDesc();
-  CheckBoolOrDie_(skyboxPipeline_.Initialize(device, dxcUtils, dxcCompiler,
-                                             includeHandler, skyboxDesc),
-                  "skyboxPipeline_.Initialize");
-}
-
 void GameScene::InitResources_() {
-  auto *device = services_.dx->GetDevice();
-
-  ModelManager::GetInstance()->Initialize(services_.dx);
-
   resSphere_ = ModelManager::GetInstance()->Load("resources/sphere/sphere.obj");
   resPlane_ = ModelManager::GetInstance()->Load("resources/plane/plane.gltf");
   resCube_ = ModelManager::GetInstance()->Load("resources/cube/cube.obj");
@@ -798,7 +470,6 @@ void GameScene::InitResources_() {
 
   {
     ModelInstance::CreateInfo ci{};
-    ci.dx = services_.dx;
     ci.resource = resSphere_;
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
@@ -807,7 +478,6 @@ void GameScene::InitResources_() {
 
   {
     ModelInstance::CreateInfo ci{};
-    ci.dx = services_.dx;
     ci.resource = resPlane_;
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
@@ -816,7 +486,6 @@ void GameScene::InitResources_() {
 
   {
     ModelInstance::CreateInfo ci{};
-    ci.dx = services_.dx;
     ci.resource = resSphere_;
     ci.baseColor = {0.3f, 0.8f, 1.0f, 0.3f};
     ci.lightingMode = 0;
@@ -826,7 +495,6 @@ void GameScene::InitResources_() {
 
   {
     ModelInstance::CreateInfo ci{};
-    ci.dx = services_.dx;
     ci.resource = resCube_;
     ci.baseColor = {1.0f, 0.8f, 0.2f, 0.3f};
     ci.lightingMode = 0;
@@ -836,7 +504,6 @@ void GameScene::InitResources_() {
 
   {
     ModelInstance::CreateInfo ci{};
-    ci.dx = services_.dx;
     ci.resource = resTerrain_;
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
@@ -845,8 +512,7 @@ void GameScene::InitResources_() {
 
   {
     Sprite::CreateInfo sprInfo{};
-    sprInfo.dx = services_.dx;
-    sprInfo.texturePath = "resources/dds/dds.dds";
+    sprInfo.texturePath = "resources/plane/uvChecker.png";
     sprInfo.size = {640.0f, 360.0f};
     sprInfo.color = {1.0f, 1.0f, 1.0f, 1.0f};
 
@@ -886,176 +552,52 @@ void GameScene::InitResources_() {
 
   {
     CheckBoolOrDie_(
-        skybox_.Initialize(services_.dx, &skyboxPipeline_,
-                                       "resources/dds/dds.dds"),
+        skybox_.Initialize("resources/dds/dds.dds"),
         "skybox_.Initialize");
   }
 
+  // ライト初期値
   {
-    D3D12_HEAP_PROPERTIES heapProps{};
-    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-
-    D3D12_RESOURCE_DESC resDesc{};
-    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = Align256_(sizeof(DirectionalLightGroupCB));
-    resDesc.Height = 1;
-    resDesc.DepthOrArraySize = 1;
-    resDesc.MipLevels = 1;
-    resDesc.SampleDesc.Count = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-    HRESULT hr = device->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-        IID_PPV_ARGS(&directionalLightCB_));
-    CheckHROrDie_(hr, "CreateCommittedResource(directionalLightCB_)");
-
-    hr = directionalLightCB_->Map(
-        0, nullptr, reinterpret_cast<void **>(&directionalLightData_));
-    CheckHROrDie_(hr, "directionalLightCB_->Map");
-
-    std::memset(directionalLightData_, 0, sizeof(DirectionalLightGroupCB));
-    directionalLightData_->enabled = 0;
-    directionalLightData_->count = 1;
-
-    DirectionalLightCB &dl0 = directionalLightData_->lights[0];
-    dl0.color[0] = 1.0f;
-    dl0.color[1] = 1.0f;
-    dl0.color[2] = 1.0f;
-    dl0.color[3] = 1.0f;
-    dl0.direction[0] = 0.0f;
-    dl0.direction[1] = -1.0f;
-    dl0.direction[2] = 0.0f;
-    dl0.intensity = 1.0f;
-    dl0.enabled = 1;
-
+    DirLight dl{};
+    dl.color = {1.0f, 1.0f, 1.0f};
+    dl.direction = {0.0f, -1.0f, 0.0f};
+    dl.intensity = 1.0f;
+    dl.enabled = true;
+    dirLights_.push_back(dl);
     enableDirectionalLight_ = false;
   }
 
   {
-    D3D12_HEAP_PROPERTIES heapProps{};
-    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-
-    D3D12_RESOURCE_DESC resDesc{};
-    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = Align256_(sizeof(CameraForGPU));
-    resDesc.Height = 1;
-    resDesc.DepthOrArraySize = 1;
-    resDesc.MipLevels = 1;
-    resDesc.SampleDesc.Count = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-    HRESULT hr = device->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&cameraCB_));
-    CheckHROrDie_(hr, "CreateCommittedResource(cameraCB_)");
-
-    hr = cameraCB_->Map(0, nullptr, reinterpret_cast<void **>(&cameraData_));
-    CheckHROrDie_(hr, "cameraCB_->Map");
-
-    cameraData_->worldPosition = {0.0f, 0.0f, -10.0f};
-    cameraData_->pad = 0.0f;
-  }
-
-  {
-    D3D12_HEAP_PROPERTIES heapProps{};
-    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-
-    D3D12_RESOURCE_DESC resDesc{};
-    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = Align256_(sizeof(PointLightGroupCB));
-    resDesc.Height = 1;
-    resDesc.DepthOrArraySize = 1;
-    resDesc.MipLevels = 1;
-    resDesc.SampleDesc.Count = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-    HRESULT hr = device->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-        IID_PPV_ARGS(&pointLightCB_));
-    CheckHROrDie_(hr, "CreateCommittedResource(pointLightCB_)");
-
-    hr = pointLightCB_->Map(0, nullptr,
-                            reinterpret_cast<void **>(&pointLightsData_));
-    CheckHROrDie_(hr, "pointLightCB_->Map");
-
-    std::memset(pointLightsData_, 0, sizeof(PointLightGroupCB));
-    pointLightsData_->enabled = 1;
-    pointLightsData_->count = 1;
-
-    PointLightCB &pl0 = pointLightsData_->lights[0];
-    pl0.color[0] = 1.0f;
-    pl0.color[1] = 1.0f;
-    pl0.color[2] = 1.0f;
-    pl0.color[3] = 1.0f;
-    pl0.position[0] = 0.0f;
-    pl0.position[1] = 2.0f;
-    pl0.position[2] = -2.0f;
-    pl0.intensity = 1.0f;
-    pl0.radius = 10.0f;
-    pl0.decay = 2.0f;
-    pl0.enabled = 1;
-    pl0.pad0 = 0.0f;
-
+    PointLight pl{};
+    pl.color = {1.0f, 1.0f, 1.0f};
+    pl.position = {0.0f, 2.0f, -2.0f};
+    pl.intensity = 1.0f;
+    pl.radius = 10.0f;
+    pl.decay = 2.0f;
+    pl.enabled = true;
+    pointLights_.push_back(pl);
     enablePointLight_ = true;
   }
 
   {
-    D3D12_HEAP_PROPERTIES heapProps{};
-    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-
-    D3D12_RESOURCE_DESC resDesc{};
-    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = Align256_(sizeof(SpotLightGroupCB));
-    resDesc.Height = 1;
-    resDesc.DepthOrArraySize = 1;
-    resDesc.MipLevels = 1;
-    resDesc.SampleDesc.Count = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-    HRESULT hr = device->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-        IID_PPV_ARGS(&spotLightCB_));
-    CheckHROrDie_(hr, "CreateCommittedResource(spotLightCB_)");
-
-    hr = spotLightCB_->Map(0, nullptr,
-                           reinterpret_cast<void **>(&spotLightData_));
-    CheckHROrDie_(hr, "spotLightCB_->Map");
-
-    std::memset(spotLightData_, 0, sizeof(SpotLightGroupCB));
-    spotLightData_->enabled = 0;
-    spotLightData_->count = 1;
-
-    SpotLightCB &sl0 = spotLightData_->lights[0];
-    sl0.color[0] = 1.0f;
-    sl0.color[1] = 1.0f;
-    sl0.color[2] = 1.0f;
-    sl0.color[3] = 1.0f;
-    sl0.position[0] = 0.0f;
-    sl0.position[1] = 3.0f;
-    sl0.position[2] = -2.0f;
-    sl0.intensity = 1.0f;
-    sl0.direction[0] = 0.0f;
-    sl0.direction[1] = -1.0f;
-    sl0.direction[2] = 0.0f;
-    sl0.distance = 10.0f;
-    sl0.decay = 2.0f;
-
-    const float pi = 3.14159265f;
-    float angleRad = 30.0f * (pi / 180.0f);
-    sl0.cosAngle = std::cos(angleRad);
-    sl0.enabled = 1;
-
+    SpotLight sl{};
+    sl.color = {1.0f, 1.0f, 1.0f};
+    sl.position = {0.0f, 3.0f, -2.0f};
+    sl.direction = {0.0f, -1.0f, 0.0f};
+    sl.intensity = 1.0f;
+    sl.distance = 10.0f;
+    sl.decay = 2.0f;
+    sl.coneAngleDeg = 30.0f;
+    sl.enabled = true;
+    spotLights_.push_back(sl);
     enableSpotLight_ = false;
   }
 
-  {
+  /*{
     const bool ok =
         services_.audio->Load("select", L"resources/sound/select.mp3", 1.0f);
     CheckBoolOrDie_(ok, "audio->Load(select.mp3)");
-  }
+  }*/
 }
 
 void GameScene::InitCamera_() {
@@ -1070,9 +612,7 @@ void GameScene::InitCamera_() {
   terrainTransform_ = {
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
 
-  const float w = services_.dx->GetViewport().Width;
-  const float h = services_.dx->GetViewport().Height;
-  const float aspect = (h != 0.0f) ? (w / h) : 1.0f;
+  const float aspect = Renderer::GetInstance()->GetAspectRatio();
 
   if (camera_) {
     camera_->SetPerspective(0.45f, aspect, 0.1f, 100.0f);
