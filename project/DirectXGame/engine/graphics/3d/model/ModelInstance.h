@@ -15,6 +15,7 @@ public:
     int32_t lightingMode = 1;
     Vector3 specularColor = {1.0f, 1.0f, 1.0f};
     float shininess = 32.0f;
+    float environmentCoefficient = 0.0f; // デフォルトを 0.0f (OFF) に
   };
 
   // HLSL 定数バッファ構造体 (Renderer が書き込むために公開)
@@ -24,8 +25,10 @@ public:
     Vector3 specularColor{1.0f, 1.0f, 1.0f};
     Matrix4x4 uvTransform = MakeIdentity4x4();
     float shininess = 32.0f;
-    float pad[3] = {0, 0, 0};
+    float environmentCoefficient = 0.0f;
+    float pad[2] = {0, 0};
   };
+
   struct TransformCB {
     Matrix4x4 WVP = MakeIdentity4x4();
     Matrix4x4 World = MakeIdentity4x4();
@@ -33,32 +36,29 @@ public:
   };
 
   ModelInstance();
-  ~ModelInstance(); // 重要：実装は .cpp へ
+  ~ModelInstance();
 
   bool Initialize(const CreateInfo &ci);
 
-  // トランスフォーム設定
   void SetWorld(const Matrix4x4 &world);
   const Matrix4x4 &GetWorld() const { return world_; }
 
-  // マテリアル設定
   void SetColor(const Vector4 &c);
   void SetLightingMode(int32_t m);
   void SetUVTransform(const Matrix4x4 &uv);
   void SetSpecularColor(const Vector3 &c);
   void SetShininess(float s);
+  void SetEnvironmentCoefficient(float c);
 
   void SetWireframe(bool wireframe) { isWireframe_ = wireframe; }
   bool IsWireframe() const { return isWireframe_; }
 
   void Draw();
 
-  // Renderer 用アクセサ
   unsigned long long GetMaterialCBAddress() const;
   unsigned long long GetTransformCBAddress() const;
   ModelResource *GetResource() const;
 
-  // Renderer が WVP を最終合成・転送するためのポインタ取得
   TransformCB *GetTransformMapped();
 
 private:

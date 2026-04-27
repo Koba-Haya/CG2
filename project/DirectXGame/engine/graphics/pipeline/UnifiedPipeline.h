@@ -1,9 +1,11 @@
+// UnifiedPipeline.h (省略なし)
+
 #pragma once
 #include "BlendMode.h"
 #include <d3d12.h>
-#include <wrl.h>
-#include <vector>
 #include <string>
+#include <vector>
+#include <wrl.h>
 
 // DXC 前方宣言
 struct IDxcUtils;
@@ -25,10 +27,11 @@ struct PipelineDesc {
   bool usePSMaterial_b0 = true;          // PS: b0
   bool useVSTransform_b0 = true;         // VS: b0
   bool usePSTextureTable_t0 = true;      // PS: t0 (SRVテーブル)
-  bool usePSDirectionalLight_b1 = false; // PS: b1（Spriteは通常不要）
-  bool useVSInstancingTable_t1 =
-      false; // VS: t1 (SRVテーブル、インスタンシング用)
-  bool depthWrite = true; 
+  bool usePSDirectionalLight_b1 = false; // PS: b1
+  bool useVSInstancingTable_t1 = false;  // VS: t1
+  bool usePSEnvironmentMap_t1 =
+      false; // ★追加: PS: t1 (環境マップ用SRVテーブル)
+  bool depthWrite = true;
 
   // カメラCB b2
   bool usePSCamera_b2 = false;
@@ -41,23 +44,17 @@ struct PipelineDesc {
   bool enableDepth = true;
   bool alphaBlend = false;
   D3D12_CULL_MODE cullMode = D3D12_CULL_MODE_BACK;
-
-  // ラスタライザのFillMode（ソリッド・ワイヤーフレーム）
   D3D12_FILL_MODE fillMode = D3D12_FILL_MODE_SOLID;
-
-  // ブレンドモード
   BlendMode blendMode = BlendMode::Opaque;
 
   // 出力フォーマット
   DXGI_FORMAT rtvFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
   DXGI_FORMAT dsvFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-
   D3D12_COMPARISON_FUNC depthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 };
 
 class UnifiedPipeline {
 public:
-  // namespace省略
   template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 public:
@@ -71,7 +68,10 @@ public:
   void SetPipelineState(ID3D12GraphicsCommandList *cmdList) const {
     if (!cmdList || !rootSignature_ || !pso_) {
       char buf[256];
-      sprintf_s(buf, "[UnifiedPipeline] SetPipelineState failed! cmdList=%p, rootSig=%p, pso_=%p\n", cmdList, rootSignature_.Get(), pso_.Get());
+      sprintf_s(buf,
+                "[UnifiedPipeline] SetPipelineState failed! cmdList=%p, "
+                "rootSig=%p, pso_=%p\n",
+                cmdList, rootSignature_.Get(), pso_.Get());
       OutputDebugStringA(buf);
       return;
     }
@@ -79,7 +79,6 @@ public:
     cmdList->SetPipelineState(pso_.Get());
   }
 
-  // お手軽プリセット
   static PipelineDesc MakeObject3DDesc();
   static PipelineDesc MakeSpriteDesc();
   static PipelineDesc MakeEmitterWireDesc();

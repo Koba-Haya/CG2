@@ -10,10 +10,11 @@
 #include "Sprite.h"
 #include "SpriteResource.h"
 #include "TextureResource.h"
+#include "UnifiedPipeline.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
-#include <d3d12.h> // 必須：ComPtr の Release を呼ぶために実体が必要
+#include <d3d12.h>
 #include <stdexcept>
 
 #define CHECK_INIT(call)                                                       \
@@ -260,9 +261,16 @@ void Renderer::DrawModel(ModelInstance *instance) {
   // 4. テクスチャ設定
   ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
   cmdList->SetDescriptorHeaps(1, heaps);
+
+  // 通常テクスチャ
   D3D12_GPU_DESCRIPTOR_HANDLE texHandle{};
   texHandle.ptr = resource->GetTextureHandleGPUAsUInt64();
   cmdList->SetGraphicsRootDescriptorTable(2, texHandle);
+
+  // t1: 環境マップ 
+  if (environmentMap_) {
+    cmdList->SetGraphicsRootDescriptorTable(7, environmentMap_->GetSrvGpu());
+  }
 
   // 5. ライト・カメラ設定
   cmdList->SetGraphicsRootConstantBufferView(

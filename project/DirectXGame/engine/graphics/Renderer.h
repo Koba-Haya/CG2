@@ -7,8 +7,9 @@
 #include "LightTypes.h"
 #include "Matrix.h"
 #include "Method.h"
-#include "UnifiedPipeline.h"
+#include "BlendMode.h"
 
+class UnifiedPipeline;
 class DirectXCommon;
 class ModelInstance;
 class Sprite;
@@ -16,6 +17,7 @@ class Skybox;
 class ParticleManager;
 class Camera;
 struct ID3D12Resource;
+class TextureResource;
 
 // GPU 定数バッファ型
 struct CameraForGPU {
@@ -107,6 +109,11 @@ public:
   ComPtr<ID3D12Resource> CreateBuffer(size_t size);
   ComPtr<ID3D12Resource> CreateUploadBuffer(size_t size);
 
+  // 環境マップ設定（CubeMap）を追加
+  void SetEnvironmentMap(std::shared_ptr<TextureResource> texture) {
+    environmentMap_ = texture;
+  }
+
   // 描画メソッド群
   void DrawModel(ModelInstance *model);
   void DrawSprite(Sprite *sprite);
@@ -154,4 +161,6 @@ private:
 
   UnifiedPipeline *GetSpritePipeline_(BlendMode mode);
   UnifiedPipeline *GetParticlePipeline_(BlendMode mode);
+
+  std::shared_ptr<TextureResource> environmentMap_;
 };

@@ -1,13 +1,10 @@
 #define NOMINMAX
 #include "GameScene.h"
-
 #include "DebugCamera.h"
-#include "GameCamera.h"
+#include "Renderer.h"
+#include "TextureResource.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
-#include "Renderer.h"
-#include "TextureManager.h"
-#include "TextureResource.h"
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
@@ -75,7 +72,6 @@ void GameScene::Update() {
 
 #ifdef USE_IMGUI
   static bool settingsOpen = true;
-  ImGui::SetNextWindowSize(ImVec2(500.0f, 100.0f), ImGuiCond_Always);
   ImGui::Begin("Settings", &settingsOpen);
 
   // ===== DirectionalLights =====
@@ -281,18 +277,20 @@ void GameScene::Update() {
   }
   ImGui::End();
 
-  ImGui::SetNextWindowSize(ImVec2(500.0f, 100.0f), ImGuiCond_Always);
   ImGui::Begin("Object", &settingsOpen);
   ImGui::Separator();
+
+  // 反射設定
+  ImGui::SeparatorText("Environment Reflection");
+  ImGui::Checkbox("Enable Reflection", &enableReflection_);
+  if (enableReflection_) {
+    ImGui::SliderFloat("Weight", &reflectionWeight_, 0.0f, 1.0f);
+  }
+
   static float sphereCol[3] = {1.0f, 1.0f, 1.0f};
   ImGui::Text("ObjectColor");
   if (ImGui::ColorEdit3("SphereColor", sphereCol)) {
     modelSphere_.SetColor({sphereCol[0], sphereCol[1], sphereCol[2], 1.0f});
-  }
-
-  static float planeCol[3] = {1.0f, 1.0f, 1.0f};
-  if (ImGui::ColorEdit3("PlaneColor", planeCol)) {
-    modelPlane_.SetColor({planeCol[0], planeCol[1], planeCol[2], 1.0f});
   }
 
   static float spriteCol[3] = {1.0f, 1.0f, 1.0f};
@@ -332,12 +330,6 @@ void GameScene::Update() {
                     reinterpret_cast<float *>(&transform_.rotate), 0.01f);
   ImGui::DragFloat3("SphereScale", reinterpret_cast<float *>(&transform_.scale),
                     0.01f, 0.0f, 5.0f);
-
-  ImGui::Separator();
-  ImGui::Text("Plane");
-  ImGui::DragFloat3("PlaneTranslate", &transform2_.translate.x, 0.01f);
-  ImGui::DragFloat3("PlaneRotate", &transform2_.rotate.x, 0.01f);
-  ImGui::DragFloat3("PlaneScale", &transform2_.scale.x, 0.01f, 0.0f, 5.0f);
 
   ImGui::Separator();
   ImGui::Text("Sprite");
@@ -381,6 +373,9 @@ void GameScene::Draw() {
     renderer->SetCamera(*camera_);
   }
 
+  // 環境マップをRendererにセット (Skyboxのテクスチャを流用)
+  renderer->SetEnvironmentMap(skybox_.GetTexture());
+
   // ライト設定（高レベル記述子 → 内部で CB 変換）
   renderer->SetDirectionalLights(dirLights_, enableDirectionalLight_);
   renderer->SetPointLights(pointLights_, enablePointLight_);
@@ -395,19 +390,11 @@ void GameScene::Draw() {
     modelSphere_.SetSpecularColor({1.0f, 1.0f, 1.0f});
     modelSphere_.SetShininess(64.0f);
 
-    Matrix4x4 worldPlane = MakeAffineMatrix(
-        transform2_.scale, transform2_.rotate, transform2_.translate);
-    modelPlane_.SetWorld(worldPlane);
-
-    terrainTransform_.translate = {0.0f, -3.0f, 0.0f};
-    Matrix4x4 worldTerrain =
-        MakeAffineMatrix(terrainTransform_.scale, terrainTransform_.rotate,
-                         terrainTransform_.translate);
-    modelTerrain_.SetWorld(worldTerrain);
+    // 反射の有効/無効と強さを設定
+    float finalCoeff = enableReflection_ ? reflectionWeight_ : 0.0f;
+    modelSphere_.SetEnvironmentCoefficient(finalCoeff);
 
     modelSphere_.Draw();
-    modelPlane_.Draw();
-    modelTerrain_.Draw();
   }
 
   //    sprite_.Draw();
@@ -460,10 +447,7 @@ void GameScene::InitLogging_() {
 
 void GameScene::InitResources_() {
   resSphere_ = ModelManager::GetInstance()->Load("resources/sphere/sphere.obj");
-  resPlane_ = ModelManager::GetInstance()->Load("resources/plane/plane.gltf");
   resCube_ = ModelManager::GetInstance()->Load("resources/cube/cube.obj");
-  resTerrain_ =
-      ModelManager::GetInstance()->Load("resources/terrain/terrain.obj");
 
   CheckFileExists_("resources/particle/circle.png");
   CheckFileExists_("resources/sound/select.mp3");
@@ -474,14 +458,6 @@ void GameScene::InitResources_() {
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 1;
     CheckBoolOrDie_(modelSphere_.Initialize(ci), "modelSphere_.Initialize");
-  }
-
-  {
-    ModelInstance::CreateInfo ci{};
-    ci.resource = resPlane_;
-    ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
-    ci.lightingMode = 1;
-    CheckBoolOrDie_(modelPlane_.Initialize(ci), "modelPlane_.Initialize");
   }
 
   {
@@ -500,14 +476,6 @@ void GameScene::InitResources_() {
     ci.lightingMode = 0;
     CheckBoolOrDie_(modelEmitterBox_.Initialize(ci),
                     "modelEmitterBox_.Initialize");
-  }
-
-  {
-    ModelInstance::CreateInfo ci{};
-    ci.resource = resTerrain_;
-    ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
-    ci.lightingMode = 1;
-    CheckBoolOrDie_(modelTerrain_.Initialize(ci), "modelTerrain_.Initialize");
   }
 
   {
@@ -607,9 +575,6 @@ void GameScene::InitCamera_() {
   transformSprite_ = {
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
   uvTransformSprite_ = {
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-  transform2_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}};
-  terrainTransform_ = {
       {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
 
   const float aspect = Renderer::GetInstance()->GetAspectRatio();

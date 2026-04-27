@@ -9,7 +9,6 @@ namespace {
 static constexpr UINT Align256_(UINT n) { return (n + 255u) & ~255u; }
 } // namespace
 
-// DirectX 依存のメンバを隠蔽する構造体
 struct ModelInstance::Impl {
   Microsoft::WRL::ComPtr<ID3D12Resource> cbMaterial;
   Microsoft::WRL::ComPtr<ID3D12Resource> cbTransform;
@@ -28,27 +27,25 @@ bool ModelInstance::Initialize(const CreateInfo &ci) {
 
   world_ = MakeIdentity4x4();
 
-  // 1. マテリアルバッファ作成 (Renderer に依頼)
   pImpl_->cbMaterial =
       renderer->CreateUploadBuffer(Align256_(sizeof(MaterialCB)));
   pImpl_->cbMaterial->Map(0, nullptr,
                           reinterpret_cast<void **>(&pImpl_->cbMatMapped));
 
-  // 2. トランスフォームバッファ作成
   pImpl_->cbTransform =
       renderer->CreateUploadBuffer(Align256_(sizeof(TransformCB)));
   pImpl_->cbTransform->Map(0, nullptr,
                            reinterpret_cast<void **>(&pImpl_->cbTransMapped));
 
-  // 3. 初期値の設定
   *pImpl_->cbMatMapped = {};
   pImpl_->cbMatMapped->color = ci.baseColor;
   pImpl_->cbMatMapped->enableLighting = ci.lightingMode;
   pImpl_->cbMatMapped->specularColor = ci.specularColor;
   pImpl_->cbMatMapped->uvTransform = MakeIdentity4x4();
   pImpl_->cbMatMapped->shininess = ci.shininess;
+  pImpl_->cbMatMapped->environmentCoefficient =
+      ci.environmentCoefficient; // 追加
 
-  // 行列の初期設定
   SetWorld(MakeIdentity4x4());
 
   return true;
@@ -57,7 +54,6 @@ bool ModelInstance::Initialize(const CreateInfo &ci) {
 void ModelInstance::SetWorld(const Matrix4x4 &world) {
   world_ = world;
   if (pImpl_->cbTransMapped) {
-    // CPU 側の変数に基づき、GPU 側の World 行列を即座に更新
     pImpl_->cbTransMapped->World = world_;
     pImpl_->cbTransMapped->WorldInverseTranspose = Transpose(Inverse(world_));
   }
@@ -82,6 +78,10 @@ void ModelInstance::SetSpecularColor(const Vector3 &c) {
 void ModelInstance::SetShininess(float s) {
   if (pImpl_->cbMatMapped)
     pImpl_->cbMatMapped->shininess = s;
+}
+void ModelInstance::SetEnvironmentCoefficient(float c) { // 追加
+  if (pImpl_->cbMatMapped)
+    pImpl_->cbMatMapped->environmentCoefficient = c;
 }
 
 void ModelInstance::Draw() { Renderer::GetInstance()->DrawModel(this); }
