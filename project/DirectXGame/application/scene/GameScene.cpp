@@ -410,7 +410,7 @@ void GameScene::Draw() {
     modelTerrain_.Draw();
   }
 
-  //sprite_.Draw();
+  //    sprite_.Draw();
 
   if (showEmitterGizmo_) {
     const auto &ep = particleEmitter_.GetParams();

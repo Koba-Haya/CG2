@@ -1,134 +1,103 @@
 #include "ModelInstance.h"
-
-#include <cassert>
-
-#include "DirectXCommon.h"
 #include "ModelResource.h"
-#include "UnifiedPipeline.h"
 #include "Renderer.h"
-#include "UnifiedPipeline.h"
+#include <cassert>
+#include <d3d12.h>
+#include <wrl/client.h>
 
-static constexpr UINT Align256_(UINT n) { return (n + 255) & ~255u; }
+namespace {
+static constexpr UINT Align256_(UINT n) { return (n + 255u) & ~255u; }
+} // namespace
+
+// DirectX 依存のメンバを隠蔽する構造体
+struct ModelInstance::Impl {
+  Microsoft::WRL::ComPtr<ID3D12Resource> cbMaterial;
+  Microsoft::WRL::ComPtr<ID3D12Resource> cbTransform;
+  MaterialCB *cbMatMapped = nullptr;
+  TransformCB *cbTransMapped = nullptr;
+  std::shared_ptr<ModelResource> resource;
+};
+
+ModelInstance::ModelInstance() : pImpl_(std::make_unique<Impl>()) {}
+ModelInstance::~ModelInstance() = default;
 
 bool ModelInstance::Initialize(const CreateInfo &ci) {
-  dx_ = Renderer::GetInstance()->GetDX();
-  assert(dx_ && ci.resource);
-
-  resource_ = ci.resource;
+  auto *renderer = Renderer::GetInstance();
+  assert(renderer && ci.resource);
+  pImpl_->resource = ci.resource;
 
   world_ = MakeIdentity4x4();
 
-  cbMaterial_ = CreateUploadBuffer_(Align256_(sizeof(MaterialCB)));
-  HRESULT hr =
-      cbMaterial_->Map(0, nullptr, reinterpret_cast<void **>(&cbMatMapped_));
-  assert(SUCCEEDED(hr));
-  assert(cbMatMapped_);
+  // 1. マテリアルバッファ作成 (Renderer に依頼)
+  pImpl_->cbMaterial =
+      renderer->CreateUploadBuffer(Align256_(sizeof(MaterialCB)));
+  pImpl_->cbMaterial->Map(0, nullptr,
+                          reinterpret_cast<void **>(&pImpl_->cbMatMapped));
 
-  *cbMatMapped_ = {};
-  cbMatMapped_->color = ci.baseColor;
-  cbMatMapped_->enableLighting = ci.lightingMode;
-  cbMatMapped_->specularColor = ci.specularColor;
-  cbMatMapped_->uvTransform = MakeIdentity4x4();
-  cbMatMapped_->shininess = ci.shininess;
+  // 2. トランスフォームバッファ作成
+  pImpl_->cbTransform =
+      renderer->CreateUploadBuffer(Align256_(sizeof(TransformCB)));
+  pImpl_->cbTransform->Map(0, nullptr,
+                           reinterpret_cast<void **>(&pImpl_->cbTransMapped));
 
-  cbTransform_ = CreateUploadBuffer_(Align256_(sizeof(TransformCB)));
-  hr =
-      cbTransform_->Map(0, nullptr, reinterpret_cast<void **>(&cbTransMapped_));
-  assert(SUCCEEDED(hr));
-  assert(cbTransMapped_);
+  // 3. 初期値の設定
+  *pImpl_->cbMatMapped = {};
+  pImpl_->cbMatMapped->color = ci.baseColor;
+  pImpl_->cbMatMapped->enableLighting = ci.lightingMode;
+  pImpl_->cbMatMapped->specularColor = ci.specularColor;
+  pImpl_->cbMatMapped->uvTransform = MakeIdentity4x4();
+  pImpl_->cbMatMapped->shininess = ci.shininess;
 
-  *cbTransMapped_ = {MakeIdentity4x4(), MakeIdentity4x4(), MakeIdentity4x4()};
+  // 行列の初期設定
+  SetWorld(MakeIdentity4x4());
 
   return true;
 }
 
+void ModelInstance::SetWorld(const Matrix4x4 &world) {
+  world_ = world;
+  if (pImpl_->cbTransMapped) {
+    // CPU 側の変数に基づき、GPU 側の World 行列を即座に更新
+    pImpl_->cbTransMapped->World = world_;
+    pImpl_->cbTransMapped->WorldInverseTranspose = Transpose(Inverse(world_));
+  }
+}
+
 void ModelInstance::SetColor(const Vector4 &c) {
-  assert(cbMatMapped_);
-  cbMatMapped_->color = c;
+  if (pImpl_->cbMatMapped)
+    pImpl_->cbMatMapped->color = c;
 }
-
 void ModelInstance::SetLightingMode(int32_t m) {
-  assert(cbMatMapped_);
-  cbMatMapped_->enableLighting = m;
+  if (pImpl_->cbMatMapped)
+    pImpl_->cbMatMapped->enableLighting = m;
 }
-
 void ModelInstance::SetUVTransform(const Matrix4x4 &uv) {
-  assert(cbMatMapped_);
-  cbMatMapped_->uvTransform = uv;
+  if (pImpl_->cbMatMapped)
+    pImpl_->cbMatMapped->uvTransform = uv;
 }
-
 void ModelInstance::SetSpecularColor(const Vector3 &c) {
-  assert(cbMatMapped_);
-  cbMatMapped_->specularColor = c;
+  if (pImpl_->cbMatMapped)
+    pImpl_->cbMatMapped->specularColor = c;
 }
-
 void ModelInstance::SetShininess(float s) {
-  assert(cbMatMapped_);
-  cbMatMapped_->shininess = s;
+  if (pImpl_->cbMatMapped)
+    pImpl_->cbMatMapped->shininess = s;
 }
 
-void ModelInstance::Draw() {
-  Renderer::GetInstance()->DrawModel(this);
+void ModelInstance::Draw() { Renderer::GetInstance()->DrawModel(this); }
+
+unsigned long long ModelInstance::GetMaterialCBAddress() const {
+  return pImpl_->cbMaterial->GetGPUVirtualAddress();
 }
 
-void ModelInstance::DrawInternal(ID3D12GraphicsCommandList *cmd, const Matrix4x4 &view, const Matrix4x4 &proj) {
-  assert(dx_ && resource_);
-  assert(cbMatMapped_ && cbTransMapped_);
-
-  cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  const auto &vbv = resource_->GetVBV();
-  cmd->IASetVertexBuffers(0, 1, &vbv);
-
-  const Matrix4x4 wvp = Multiply(world_, Multiply(view, proj));
-  cbTransMapped_->WVP = wvp;
-  cbTransMapped_->World = world_;
-  cbTransMapped_->WorldInverseTranspose = Transpose(Inverse(world_));
-
-  // Root layout (MakeObject3DDesc 想定)
-  // 0: PS b0 Material
-  cmd->SetGraphicsRootConstantBufferView(0,
-                                         cbMaterial_->GetGPUVirtualAddress());
-
-  // 1: VS b0 Transform
-  cmd->SetGraphicsRootConstantBufferView(1,
-                                         cbTransform_->GetGPUVirtualAddress());
-
-  // 2: PS t0 Texture table
-  ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
-  cmd->SetDescriptorHeaps(1, heaps);
-  cmd->SetGraphicsRootDescriptorTable(2, resource_->GetTextureHandleGPU());
-
-  // 3-6: DirLight, Camera, PointLight, SpotLight are set by Renderer
-
-
-  cmd->RSSetViewports(1, &dx_->GetViewport());
-  cmd->RSSetScissorRects(1, &dx_->GetScissorRect());
-
-  cmd->DrawInstanced(resource_->GetVertexCount(), 1, 0, 0);
+unsigned long long ModelInstance::GetTransformCBAddress() const {
+  return pImpl_->cbTransform->GetGPUVirtualAddress();
 }
 
-Microsoft::WRL::ComPtr<ID3D12Resource>
-ModelInstance::CreateUploadBuffer_(size_t size) {
-  assert(dx_);
-  auto device = dx_->GetDevice();
+ModelResource *ModelInstance::GetResource() const {
+  return pImpl_->resource.get();
+}
 
-  ComPtr<ID3D12Resource> res;
-
-  D3D12_HEAP_PROPERTIES heapProps{};
-  heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-
-  D3D12_RESOURCE_DESC desc{};
-  desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-  desc.Width = size;
-  desc.Height = 1;
-  desc.DepthOrArraySize = 1;
-  desc.MipLevels = 1;
-  desc.SampleDesc.Count = 1;
-  desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-  HRESULT hr = device->CreateCommittedResource(
-      &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&res));
-  assert(SUCCEEDED(hr));
-  return res;
+ModelInstance::TransformCB *ModelInstance::GetTransformMapped() {
+  return pImpl_->cbTransMapped;
 }

@@ -1,124 +1,79 @@
 #include "Sprite.h"
-#include "TextureManager.h"
-#include "TextureResource.h"
 #include "Renderer.h"
-#include <cstring>
+#include "SpriteManager.h"
+#include "SpriteResource.h"
+#include <cassert>
+#include <d3d12.h>
+#include <wrl/client.h>
 
-struct SpriteVertex {
-    Vector3 pos;
-    Vector2 uv;
+namespace {
+static constexpr UINT Align256_(UINT n) { return (n + 255u) & ~255u; }
+} // namespace
+
+// DirectX依存のメンバを隠蔽する構造体
+struct Sprite::Impl {
+  Microsoft::WRL::ComPtr<ID3D12Resource> materialBuffer;
+  Microsoft::WRL::ComPtr<ID3D12Resource> transformBuffer;
+  MaterialCB *materialMapped = nullptr;
+  TransformCB *transformMapped = nullptr;
+  std::shared_ptr<SpriteResource> resource;
 };
 
-constexpr UINT Align256_Sprite(UINT n) { return (n + 255) & ~255; }
+Sprite::Sprite() : pImpl_(std::make_unique<Impl>()) {}
+Sprite::~Sprite() = default;
 
-Microsoft::WRL::ComPtr<ID3D12Resource>
-Sprite::CreateBufferResource(ID3D12Device* device, size_t sizeInBytes) {
-    D3D12_HEAP_PROPERTIES heapProps{};
-    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+bool Sprite::Initialize(const CreateInfo &info) {
+  auto *renderer = Renderer::GetInstance();
 
-    D3D12_RESOURCE_DESC desc{};
-    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    desc.Width = static_cast<UINT64>(sizeInBytes);
-    desc.Height = 1;
-    desc.DepthOrArraySize = 1;
-    desc.MipLevels = 1;
-    desc.SampleDesc.Count = 1;
-    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  // 1. SpriteManager経由でリソースを取得
+  pImpl_->resource = SpriteManager::GetInstance()->Load(info.texturePath);
+  if (!pImpl_->resource)
+    return false;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> res;
-    HRESULT hr = device->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&res));
-    assert(SUCCEEDED(hr));
-    return res;
+  // 2. 定数バッファ作成 (Rendererに依頼)
+  pImpl_->materialBuffer =
+      renderer->CreateUploadBuffer(Align256_(sizeof(MaterialCB)));
+  pImpl_->materialBuffer->Map(
+      0, nullptr, reinterpret_cast<void **>(&pImpl_->materialMapped));
+
+  pImpl_->transformBuffer =
+      renderer->CreateUploadBuffer(Align256_(sizeof(TransformCB)));
+  pImpl_->transformBuffer->Map(
+      0, nullptr, reinterpret_cast<void **>(&pImpl_->transformMapped));
+
+  // 初期値
+  color_ = info.color;
+  scale_ = {info.size.x, info.size.y, 1.0f};
+
+  return true;
 }
-
-bool Sprite::Initialize(const CreateInfo& info) {
-    dx_ = Renderer::GetInstance()->GetDX();
-    assert(dx_);
-    color_ = info.color;
-
-    // TextureManager 経由（SRVはTextureResourceが所有して自動Free）
-    texture_ = TextureManager::GetInstance()->Load(info.texturePath);
-    textureHandle_ = texture_->GetSrvGpu();
-
-    // 頂点
-    const float w = info.size.x;
-    const float h = info.size.y;
-
-    SpriteVertex vertices[4] = {
-      {{0, h, 0}, {0, 1}},
-      {{0, 0, 0}, {0, 0}},
-      {{w, h, 0}, {1, 1}},
-      {{w, 0, 0}, {1, 0}},
-    };
-
-    vertexBuffer_ = CreateBufferResource(dx_->GetDevice(), sizeof(vertices));
-    void* v = nullptr;
-    vertexBuffer_->Map(0, nullptr, &v);
-    std::memcpy(v, vertices, sizeof(vertices));
-
-    vbView_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
-    vbView_.SizeInBytes = sizeof(vertices);
-    vbView_.StrideInBytes = sizeof(SpriteVertex);
-
-    uint32_t indices[6] = { 0, 1, 2, 1, 3, 2 };
-    indexBuffer_ = CreateBufferResource(dx_->GetDevice(), sizeof(indices));
-    void* i = nullptr;
-    indexBuffer_->Map(0, nullptr, &i);
-    std::memcpy(i, indices, sizeof(indices));
-
-    ibView_.BufferLocation = indexBuffer_->GetGPUVirtualAddress();
-    ibView_.SizeInBytes = sizeof(indices);
-    ibView_.Format = DXGI_FORMAT_R32_UINT;
-
-    // CBはMapしっぱなし
-    materialBuffer_ = CreateBufferResource(dx_->GetDevice(), Align256_Sprite(sizeof(SpriteMaterial)));
-    materialBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&materialMapped_));
-    materialMapped_->color = color_;
-    materialMapped_->uvTransform = uvMatrix_;
-
-    transformBuffer_ = CreateBufferResource(dx_->GetDevice(), Align256_Sprite(sizeof(SpriteTransform)));
-    transformBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&transformMapped_));
-    transformMapped_->WVP = MakeIdentity4x4();
-    transformMapped_->World = worldMatrix_;
-
-    return true;
-}
-
-void Sprite::SetPosition(const Vector3& pos) { position_ = pos; }
-void Sprite::SetScale(const Vector3& scale) { scale_ = scale; }
-void Sprite::SetRotation(const Vector3& rot) { rotation_ = rot; }
-void Sprite::SetUVTransform(const Matrix4x4& uv) { uvMatrix_ = uv; }
-void Sprite::SetColor(const Vector4& color) { color_ = color; }
 
 void Sprite::Draw() {
-    Renderer::GetInstance()->DrawSprite(this);
+  if (!pImpl_->materialMapped || !pImpl_->transformMapped)
+    return;
+
+  // 行列の更新
+  worldMatrix_ = MakeAffineMatrix(scale_, rotation_, position_);
+
+  // 定数バッファの書き換え (Worldのみ。WVPはRendererで合成)
+  pImpl_->materialMapped->color = color_;
+  pImpl_->materialMapped->uvTransform = uvMatrix_;
+  pImpl_->transformMapped->World = worldMatrix_;
+
+  // Rendererに自分自身の描画を依頼
+  Renderer::GetInstance()->DrawSprite(this);
 }
 
-void Sprite::DrawInternal(ID3D12GraphicsCommandList *cmdList, const Matrix4x4 &view,
-                  const Matrix4x4 &proj) {
-    worldMatrix_ = MakeAffineMatrix(scale_, rotation_, position_);
-    Matrix4x4 wvp = Multiply(worldMatrix_, Multiply(view, proj));
+unsigned long long Sprite::GetMaterialCBAddress() const {
+  return pImpl_->materialBuffer->GetGPUVirtualAddress();
+}
 
-    transformMapped_->WVP = wvp;
-    transformMapped_->World = worldMatrix_;
+unsigned long long Sprite::GetTransformCBAddress() const {
+  return pImpl_->transformBuffer->GetGPUVirtualAddress();
+}
 
-    materialMapped_->color = color_;
-    materialMapped_->uvTransform = uvMatrix_;
+SpriteResource *Sprite::GetResource() const { return pImpl_->resource.get(); }
 
-    ID3D12DescriptorHeap* heaps[] = { dx_->GetSRVHeap() };
-    cmdList->SetDescriptorHeaps(1, heaps);
-
-    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    cmdList->IASetVertexBuffers(0, 1, &vbView_);
-    cmdList->IASetIndexBuffer(&ibView_);
-
-    cmdList->SetGraphicsRootConstantBufferView(
-        0, materialBuffer_->GetGPUVirtualAddress());
-    cmdList->SetGraphicsRootConstantBufferView(
-        1, transformBuffer_->GetGPUVirtualAddress());
-    cmdList->SetGraphicsRootDescriptorTable(2, textureHandle_);
-
-    cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+Sprite::TransformCB *Sprite::GetTransformMapped() {
+  return pImpl_->transformMapped;
 }

@@ -1,78 +1,67 @@
 #pragma once
-
-#include <Windows.h>
-#include <cassert>
-#include <d3d12.h>
-#include <string>
-#include <wrl.h>
-#include <memory>
-
-#include "DirectXCommon.h"
+#include "BlendMode.h"
 #include "Matrix.h"
 #include "Method.h"
-#include "UnifiedPipeline.h"
 #include "Vector.h"
+#include <memory>
+#include <string>
 
-class TextureResource;
+// 前方宣言
+class SpriteResource;
 
 class Sprite {
 public:
-    struct CreateInfo {
-        std::string texturePath;
-        Vector2 size = { 640, 360 };
-        Vector4 color = { 1, 1, 1, 1 };
-    };
+  struct CreateInfo {
+    std::string texturePath;
+    Vector2 size = {640.0f, 360.0f};
+    Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+  };
 
-    bool Initialize(const CreateInfo& info);
-    void SetPosition(const Vector3& pos);
-    void SetScale(const Vector3& scale);
-    void SetRotation(const Vector3& rot);
-    void SetUVTransform(const Matrix4x4& uv);
-    void SetColor(const Vector4& color);
-    
-    void SetBlendMode(BlendMode mode) { blendMode_ = mode; }
-    BlendMode GetBlendMode() const { return blendMode_; }
+  // インスタンス固有の定数バッファ構造体
+  struct MaterialCB {
+    Vector4 color;
+    Matrix4x4 uvTransform;
+  };
+  struct TransformCB {
+    Matrix4x4 WVP;
+    Matrix4x4 World;
+  };
 
-    void Draw();
+  Sprite();
+  ~Sprite(); // 実装は .cpp へ
 
-    // Called by Renderer
-    void DrawInternal(ID3D12GraphicsCommandList* cmdList, const Matrix4x4& view, const Matrix4x4& proj);
+  bool Initialize(const CreateInfo &info);
+
+  // トランスフォーム設定
+  void SetPosition(const Vector3 &pos) { position_ = pos; }
+  void SetScale(const Vector3 &scale) { scale_ = scale; }
+  void SetRotation(const Vector3 &rot) { rotation_ = rot; }
+  void SetUVTransform(const Matrix4x4 &uv) { uvMatrix_ = uv; }
+  void SetColor(const Vector4 &color) { color_ = color; }
+  void SetBlendMode(BlendMode mode) { blendMode_ = mode; }
+
+  void Draw();
+
+  // Renderer用アクセサ
+  unsigned long long GetMaterialCBAddress() const;
+  unsigned long long GetTransformCBAddress() const;
+  SpriteResource *GetResource() const;
+  BlendMode GetBlendMode() const { return blendMode_; }
+  const Matrix4x4 &GetWorldMatrix() const { return worldMatrix_; }
+
+  // RendererがWVPを計算・転送するための内部アクセサ
+  TransformCB *GetTransformMapped();
 
 private:
-    template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
-    ComPtr<ID3D12Resource> CreateBufferResource(ID3D12Device* device, size_t sizeInBytes);
+  struct Impl;
+  std::unique_ptr<Impl> pImpl_;
 
-private:
-    DirectXCommon* dx_ = nullptr;
-    BlendMode blendMode_ = BlendMode::Alpha;
-
-    std::shared_ptr<TextureResource> texture_;
-    D3D12_GPU_DESCRIPTOR_HANDLE textureHandle_{};
-
-    ComPtr<ID3D12Resource> vertexBuffer_;
-    D3D12_VERTEX_BUFFER_VIEW vbView_{};
-    ComPtr<ID3D12Resource> indexBuffer_;
-    D3D12_INDEX_BUFFER_VIEW ibView_{};
-
-    ComPtr<ID3D12Resource> materialBuffer_;
-    ComPtr<ID3D12Resource> transformBuffer_;
-
-    struct SpriteMaterial {
-        Vector4 color;
-        Matrix4x4 uvTransform;
-    };
-    struct SpriteTransform {
-        Matrix4x4 WVP;
-        Matrix4x4 World;
-    };
-
-    SpriteMaterial* materialMapped_ = nullptr;
-    SpriteTransform* transformMapped_ = nullptr;
-
-    Matrix4x4 worldMatrix_ = MakeIdentity4x4();
-    Vector3 position_{ 0, 0, 0 };
-    Vector3 scale_{ 1, 1, 1 };
-    Vector3 rotation_{ 0, 0, 0 };
-    Matrix4x4 uvMatrix_ = MakeIdentity4x4();
-    Vector4 color_ = { 1, 1, 1, 1 };
+  // 状態パラメータ
+  Vector3 position_ = {0, 0, 0};
+  Vector3 scale_ = {1, 1, 1};
+  Vector3 rotation_ = {0, 0, 0};
+  Vector4 color_ = {1, 1, 1, 1};
+  Matrix4x4 uvMatrix_ = MakeIdentity4x4();
+  Matrix4x4 worldMatrix_ = MakeIdentity4x4();
+  BlendMode blendMode_ = BlendMode::Alpha;
 };

@@ -1,4 +1,5 @@
 #pragma once
+#include "BlendMode.h"
 #include <d3d12.h>
 #include <wrl.h>
 #include <vector>
@@ -9,15 +10,6 @@ struct IDxcUtils;
 struct IDxcCompiler3;
 struct IDxcIncludeHandler;
 struct IDxcBlob;
-
-enum class BlendMode {
-  Opaque = 0, // ブレンドなし
-  Alpha,      // 通常のアルファブレンド
-  Add,        // 加算
-  Subtract,   // 減算
-  Multiply,   // 乗算
-  Screen,     // スクリーン
-};
 
 struct PipelineDesc {
   // 入力レイアウト
