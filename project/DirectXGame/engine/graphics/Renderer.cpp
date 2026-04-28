@@ -11,6 +11,7 @@
 #include "SpriteResource.h"
 #include "TextureResource.h"
 #include "UnifiedPipeline.h"
+#include "PrimitiveDrawer.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -112,6 +113,26 @@ void Renderer::Initialize(DirectXCommon *dx) {
                                                    includeHandler, desc));
   }
 
+  // Primitive Pipeline
+  {
+    PipelineDesc desc = UnifiedPipeline::MakePrimitiveDesc();
+    primitivePipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(primitivePipeline_->Initialize(device, utils, compiler,
+                                              includeHandler, desc));
+  }
+
+  // Effect Pipeline
+  {
+    PipelineDesc desc = UnifiedPipeline::MakeUnlitEffectDesc();
+    effectPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(effectPipeline_->Initialize(device, utils, compiler,
+                                           includeHandler, desc));
+  }
+
+  // Primitive Drawer
+  primitiveDrawer_ = std::make_unique<PrimitiveDrawer>();
+  primitiveDrawer_->Initialize(dx_);
+
   auto align256 = [](size_t size) -> size_t { return (size + 255) & ~255; };
 
   cameraCB_ = CreateUploadBuffer(align256(sizeof(CameraForGPU)));
@@ -124,7 +145,12 @@ void Renderer::Initialize(DirectXCommon *dx) {
   pointLightCB_->Map(0, nullptr, reinterpret_cast<void **>(&pointLightMapped_));
   spotLightCB_ = CreateUploadBuffer(align256(sizeof(SpotLightGroupCB)));
   spotLightCB_->Map(0, nullptr, reinterpret_cast<void **>(&spotLightMapped_));
-}
+
+  // Primitive用定数バッファ
+  primitiveTransformCB_ = CreateUploadBuffer(sizeof(TransformCB));
+  primitiveTransformCB_->Map(
+      0, nullptr, reinterpret_cast<void **>(&primitiveTransformMapped_));
+  }
 
 void Renderer::SetCamera(const Camera &camera) {
   view_ = camera.GetViewMatrix();
@@ -368,6 +394,76 @@ void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode) {
   pm->DrawInternal(cmdList);
 }
 
+void Renderer::RenderPrimitives() {
+  auto *cmdList = dx_->GetCommandList();
+
+  // WVP計算
+  if (primitiveTransformMapped_) {
+    // Primitiveは基本的にワールド座標で指定されるため、World行列は単位行列
+    primitiveTransformMapped_->WVP = Multiply(view_, proj_);
+  }
+
+  primitivePipeline_->SetPipelineState(cmdList);
+  cmdList->SetGraphicsRootConstantBufferView(
+      1, primitiveTransformCB_->GetGPUVirtualAddress());
+
+  primitiveDrawer_->Draw(cmdList);
+  primitiveDrawer_->Reset(); // 描画後にリセット
+}
+
+void Renderer::DrawEffectModel(ModelInstance *instance) {
+  if (!instance || !instance->GetResource())
+    return;
+  auto *cmdList = dx_->GetCommandList();
+  auto *resource = instance->GetResource();
+
+  // WVP 行列の計算と転送
+  auto *cbTrans = instance->GetTransformMapped();
+  if (cbTrans) {
+    Matrix4x4 worldView = Multiply(instance->GetWorld(), view_);
+    cbTrans->WVP = Multiply(worldView, proj_);
+    cbTrans->World = instance->GetWorld();
+    cbTrans->WorldInverseTranspose = Transpose(Inverse(instance->GetWorld()));
+  }
+
+  // エフェクト用パイプラインをセット
+  effectPipeline_->SetPipelineState(cmdList);
+
+  // 頂点バッファ
+  D3D12_VERTEX_BUFFER_VIEW vbv{};
+  vbv.BufferLocation = resource->GetVBVAddress();
+  vbv.SizeInBytes = resource->GetVBVSize();
+  vbv.StrideInBytes = resource->GetVBVStride();
+  cmdList->IASetVertexBuffers(0, 1, &vbv);
+
+  // 定数バッファ (0:マテリアル, 1:トランスフォーム)
+  cmdList->SetGraphicsRootConstantBufferView(0,
+                                             instance->GetMaterialCBAddress());
+  cmdList->SetGraphicsRootConstantBufferView(1,
+                                             instance->GetTransformCBAddress());
+
+  // テクスチャ
+  ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
+  cmdList->SetDescriptorHeaps(1, heaps);
+  D3D12_GPU_DESCRIPTOR_HANDLE texHandle{};
+  texHandle.ptr = resource->GetTextureHandleGPUAsUInt64();
+  cmdList->SetGraphicsRootDescriptorTable(2, texHandle);
+
+  // ライト・カメラ (シェーダがこれらを参照しているため、Unlitでもセットが必要)
+  cmdList->SetGraphicsRootConstantBufferView(
+      3, directionalLightCB_->GetGPUVirtualAddress());
+  cmdList->SetGraphicsRootConstantBufferView(4,
+                                             cameraCB_->GetGPUVirtualAddress());
+  cmdList->SetGraphicsRootConstantBufferView(
+      5, pointLightCB_->GetGPUVirtualAddress());
+  cmdList->SetGraphicsRootConstantBufferView(
+      6, spotLightCB_->GetGPUVirtualAddress());
+
+  // 描画実行
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+}
+
 UnifiedPipeline *Renderer::GetSpritePipeline_(BlendMode mode) {
   switch (mode) {
   case BlendMode::Add:
@@ -420,4 +516,14 @@ Renderer::CreateUploadBuffer(size_t size) {
 
 Microsoft::WRL::ComPtr<ID3D12Resource> Renderer::CreateBuffer(size_t size) {
   return CreateUploadBuffer(size);
+}
+
+// 描画予約をDrawerへ流す
+void Renderer::DrawLine(const Vector3 &start, const Vector3 &end,
+                        const Vector4 &color) {
+  primitiveDrawer_->AddLine(start, end, color);
+}
+
+void Renderer::DrawGrid(float size, int divisions, const Vector4 &color) {
+  primitiveDrawer_->AddGrid(size, divisions, color);
 }

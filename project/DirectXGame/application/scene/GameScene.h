@@ -68,6 +68,7 @@ private:
 
   int lightingMode_ = 1;
   int spriteBlendMode_ = 0;
+  int particleBlendMode_ = 1; // デフォルト加算 (BlendMode::Add)
 
   Transform transform_;
   Transform cameraTransform_;
@@ -75,4 +76,16 @@ private:
   Transform uvTransformSprite_;
 
   std::unique_ptr<Camera> camera_;
+
+  struct HitEffect {
+    ModelInstance instance;
+    float frame = 0.0f;
+    float maxFrame = 30.0f; // 0.5秒で消える
+    bool isActive = false;
+    Vector3 position;
+  };
+
+  std::shared_ptr<ModelResource> resEffect_; // particle.obj
+  std::vector<HitEffect> hitEffects_;
+  void SpawnHitEffect(const Vector3 &pos);
 };

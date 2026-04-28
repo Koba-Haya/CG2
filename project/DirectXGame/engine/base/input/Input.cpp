@@ -158,15 +158,15 @@ void Input::Update() {
 //--------------------------------------------------------------------------------------
 // キーボード：問い合わせ系
 //--------------------------------------------------------------------------------------
-bool Input::IsDown(int dik) const { return (currentKeys_[dik] & 0x80) != 0; }
+bool Input::PressKey(int dik) const { return (currentKeys_[dik] & 0x80) != 0; }
 
-bool Input::WasPressed(int dik) const {
+bool Input::TriggerKey(int dik) const {
   const bool now = (currentKeys_[dik] & 0x80) != 0;
   const bool prev = (previousKeys_[dik] & 0x80) != 0;
   return now && !prev;
 }
 
-bool Input::WasReleased(int dik) const {
+bool Input::ReleaseKey(int dik) const {
   const bool now = (currentKeys_[dik] & 0x80) != 0;
   const bool prev = (previousKeys_[dik] & 0x80) != 0;
   return !now && prev;

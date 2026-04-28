@@ -310,6 +310,8 @@ void GameScene::Update() {
   };
   ImGui::Combo("Sprite Blend", &spriteBlendMode_, blendModeItems,
                IM_ARRAYSIZE(blendModeItems));
+  ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems,
+               IM_ARRAYSIZE(blendModeItems));
 
   static bool useTransformCamera = false;
   ImGui::Separator();
@@ -363,6 +365,38 @@ void GameScene::Update() {
       enableAccelerationField_);
   ParticleManager::GetInstance()->SetAccelerationField(accelerationField_);
   ParticleManager::GetInstance()->Update(deltaTime);
+
+  // テスト用：スペースキーで原点にエフェクト発生
+  if (services_.input->TriggerKey(DIK_SPACE)) {
+    SpawnHitEffect({0.0f, 0.0f, -1.0f});
+  }
+
+  // エフェクトの更新
+  for (auto &ef : hitEffects_) {
+    if (!ef.isActive)
+      continue;
+
+    ef.frame += 1.0f;
+    float t = ef.frame / ef.maxFrame; // 0.0 ~ 1.0
+
+    // スケール：時間とともに大きく
+    float scaleVal = t * 5.0f;
+    Matrix4x4 world = MakeAffineMatrix({scaleVal, scaleVal, scaleVal},
+                                       {0, 0, 0}, ef.position);
+    ef.instance.SetWorld(world);
+
+    // 透明度：時間とともに消える
+    ef.instance.SetColor({1.0f, 1.0f, 1.0f, 1.0f - t});
+
+    if (ef.frame >= ef.maxFrame)
+      ef.isActive = false;
+  }
+
+  // 不要なエフェクトを削除
+  hitEffects_.erase(
+      std::remove_if(hitEffects_.begin(), hitEffects_.end(),
+                     [](const HitEffect &e) { return !e.isActive; }),
+      hitEffects_.end());
 }
 
 void GameScene::Draw() {
@@ -397,6 +431,36 @@ void GameScene::Draw() {
     modelSphere_.Draw();
   }
 
+  // Skybox
+  {
+    Matrix4x4 viewMatrix = renderer->GetViewMatrix();
+    Matrix4x4 projMatrix = renderer->GetProjectionMatrix();
+    Matrix4x4 invView = Inverse(viewMatrix);
+    Vector3 camPos = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+
+    skybox_.Update(viewMatrix, projMatrix, camPos, {100.0f, 100.0f, 100.0f});
+    skybox_.Draw();
+  }
+
+  // ヒットエフェクトの描画
+  for (auto &ef : hitEffects_) {
+    Renderer::GetInstance()->DrawEffectModel(&ef.instance);
+  }
+
+  // パーティクルの描画
+  BlendMode pMode = BlendMode::Alpha;
+  switch (particleBlendMode_) {
+  case 0: pMode = BlendMode::Alpha; break;
+  case 1: pMode = BlendMode::Add; break;
+  case 2: pMode = BlendMode::Subtract; break;
+  case 3: pMode = BlendMode::Multiply; break;
+  case 4: pMode = BlendMode::Screen; break;
+  }
+  ParticleManager::GetInstance()->Draw(pMode);
+
+  // 最後にPrimitive（グリッド等）
+  Renderer::GetInstance()->RenderPrimitives();
+
   //    sprite_.Draw();
 
   if (showEmitterGizmo_) {
@@ -422,16 +486,7 @@ void GameScene::Draw() {
     }
   }
 
-  // Skybox
-  {
-    Matrix4x4 viewMatrix = renderer->GetViewMatrix();
-    Matrix4x4 projMatrix = renderer->GetProjectionMatrix();
-    Matrix4x4 invView = Inverse(viewMatrix);
-    Vector3 camPos = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
 
-    skybox_.Update(viewMatrix, projMatrix, camPos, {100.0f, 100.0f, 100.0f});
-    skybox_.Draw();
-  }
 }
 
 void GameScene::InitLogging_() {
@@ -448,6 +503,8 @@ void GameScene::InitLogging_() {
 void GameScene::InitResources_() {
   resSphere_ = ModelManager::GetInstance()->Load("resources/sphere/sphere.obj");
   resCube_ = ModelManager::GetInstance()->Load("resources/cube/cube.obj");
+  resEffect_ =
+      ModelManager::GetInstance()->Load("resources/particle/particle.obj");
 
   CheckFileExists_("resources/particle/circle.png");
   CheckFileExists_("resources/sound/select.mp3");
@@ -456,7 +513,7 @@ void GameScene::InitResources_() {
     ModelInstance::CreateInfo ci{};
     ci.resource = resSphere_;
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
-    ci.lightingMode = 1;
+    ci.lightingMode = 0;
     CheckBoolOrDie_(modelSphere_.Initialize(ci), "modelSphere_.Initialize");
   }
 
@@ -581,5 +638,42 @@ void GameScene::InitCamera_() {
 
   if (camera_) {
     camera_->SetPerspective(0.45f, aspect, 0.1f, 100.0f);
+  }
+}
+
+void GameScene::SpawnHitEffect(const Vector3 &pos) {
+  // 1. ベースとして particle.obj (Plane) を出す
+ /* HitEffect ef;
+  ModelInstance::CreateInfo ci{};
+  ci.resource = resEffect_;
+  ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
+  ci.lightingMode = 0;
+
+  ef.instance.Initialize(ci);
+  ef.position = pos;
+  ef.isActive = true;
+  hitEffects_.push_back(std::move(ef));*/
+
+  // 2. 放射状の縦長パーティクルを8個バースト発生 (資料3〜4枚目)
+  std::mt19937& rng = []() -> std::mt19937& {
+      static std::mt19937 engine{ std::random_device{}() };
+      return engine;
+  }();
+  std::uniform_real_distribution<float> distRotate(-3.14159265f, 3.14159265f);
+  std::uniform_real_distribution<float> distScale(0.4f, 1.5f);
+
+  Vector3 baseScale = { 0.05f, 1.0f, 1.0f }; // 資料3枚目
+
+  for (int i = 0; i < 8; ++i) {
+      float rotZ = distRotate(rng);
+      float scaleY = distScale(rng);
+      Vector3 finalScale = { baseScale.x, scaleY, baseScale.z };
+      Vector3 rotate = { 0.0f, 0.0f, rotZ };
+      Vector3 velocity = { 0.0f, 0.0f, 0.0f }; // 動かない
+      Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+      float lifetime = 0.5f;
+
+      ParticleManager::GetInstance()->Emit(
+          particleGroupName_, pos, velocity, finalScale, rotate, lifetime, color);
   }
 }

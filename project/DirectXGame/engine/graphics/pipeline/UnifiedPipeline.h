@@ -85,6 +85,9 @@ public:
   static PipelineDesc MakeEmitterAlphaDesc();
   static PipelineDesc MakeParticleDesc();
   static PipelineDesc MakeSkyboxDesc();
+  static PipelineDesc MakePrimitiveDesc();
+  // 3D空間用のエフェクト（ライティングなし）の記述
+  static PipelineDesc MakeUnlitEffectDesc();
 
 private:
   ComPtr<ID3D12RootSignature> rootSignature_;

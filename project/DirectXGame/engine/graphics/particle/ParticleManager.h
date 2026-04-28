@@ -70,7 +70,7 @@ public:
 
     // パーティクルをグループに発生させる（Emitterから呼ぶ想定）
     void Emit(const std::string& name, const Vector3& position, const Vector3& velocity,
-        const Vector3& scale, float lifetime, const Vector4& color);
+        const Vector3& scale, const Vector3& rotate, float lifetime, const Vector4& color);
 
     // Update: 粒子更新 + インスタンスデータ書き込み
     void Update(float deltaTime);
@@ -96,7 +96,7 @@ private:
     ParticleManager(const ParticleManager&) = delete;
     ParticleManager& operator=(const ParticleManager&) = delete;
 
-    Matrix4x4 MakeBillboardMatrix_(const Vector3& scale, const Vector3& translate, const Matrix4x4& viewMatrix) const;
+    Matrix4x4 MakeBillboardMatrix_(const Vector3& scale, const Vector3& rotate, const Vector3& translate, const Matrix4x4& viewMatrix) const;
     bool IsCollision_(const AABB& aabb, const Vector3& point) const;
 
     void EnsureQuadGeometry_();

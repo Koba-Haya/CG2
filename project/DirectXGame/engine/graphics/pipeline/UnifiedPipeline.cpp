@@ -282,7 +282,11 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   pso.RasterizerState = rast;
   pso.NumRenderTargets = 1;
   pso.RTVFormats[0] = desc.rtvFormat;
-  pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+  if (desc.vsPath.find(L"Primitive") != std::wstring::npos) {
+    pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+  } else {
+    pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+  }
   pso.SampleDesc.Count = 1;
   pso.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
   pso.DepthStencilState = depth;
@@ -428,5 +432,47 @@ PipelineDesc UnifiedPipeline::MakeSkyboxDesc() {
   d.alphaBlend = false;
   d.cullMode = D3D12_CULL_MODE_NONE; // キューブ内側を描く
   d.fillMode = D3D12_FILL_MODE_SOLID;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakePrimitiveDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+  };
+  d.vsPath = L"resources/shaders/Primitive.VS.hlsl";
+  d.psPath = L"resources/shaders/Primitive.PS.hlsl";
+
+  d.usePSMaterial_b0 = false; // マテリアルは使わず頂点カラーのみ
+  d.useVSTransform_b0 = true; // WVP行列は使用
+  d.usePSTextureTable_t0 = false;
+  d.enableDepth = true;
+  d.alphaBlend = true; // 線も透過できるようにしておく
+  d.blendMode = BlendMode::Alpha;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.fillMode = D3D12_FILL_MODE_SOLID;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeUnlitEffectDesc() {
+  // 基本はObject3Dと同じ形（Root Signatureを維持）にする
+  PipelineDesc d = MakeObject3DDesc();
+
+  // ライトのフラグを false にしてはいけない（シェーダと不整合が起きるため）
+  // 代わりに、描画時のマテリアル設定でライティングをOFFにする運用にします
+
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.alphaBlend = true;            // 半透明を有効化
+  d.blendMode = BlendMode::Alpha; // アルファブレンド
+  d.depthWrite = false;           // エフェクト越しに後ろが透けるように
+
+  // エフェクトをより強調したい場合は、加算合成にするのもアリです
+  // d.blendMode = BlendMode::Add;
+
   return d;
 }

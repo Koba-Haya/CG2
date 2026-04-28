@@ -60,6 +60,9 @@ public:
         // h: 0..1, s:0..1, v:0..1
         Vector3 baseHSV{ 0.0f, 1.0f, 1.0f };
         Vector3 hsvRange{ 0.0f, 0.0f, 0.0f };
+
+        float rotateMin = -3.14159265f;
+        float rotateMax = 3.14159265f;
     };
 
     ParticleEmitter() = default;

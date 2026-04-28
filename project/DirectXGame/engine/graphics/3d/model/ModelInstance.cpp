@@ -20,6 +20,9 @@ struct ModelInstance::Impl {
 ModelInstance::ModelInstance() : pImpl_(std::make_unique<Impl>()) {}
 ModelInstance::~ModelInstance() = default;
 
+ModelInstance::ModelInstance(ModelInstance &&) noexcept = default;
+ModelInstance &ModelInstance::operator=(ModelInstance &&) noexcept = default;
+
 bool ModelInstance::Initialize(const CreateInfo &ci) {
   auto *renderer = Renderer::GetInstance();
   assert(renderer && ci.resource);

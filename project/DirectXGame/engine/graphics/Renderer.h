@@ -14,6 +14,7 @@ class DirectXCommon;
 class ModelInstance;
 class Sprite;
 class Skybox;
+class PrimitiveDrawer;
 class ParticleManager;
 class Camera;
 struct ID3D12Resource;
@@ -120,6 +121,11 @@ public:
   void DrawSkybox(Skybox *skybox);
   void DrawParticles(ParticleManager *pm,
                      BlendMode blendMode = BlendMode::Alpha);
+  void DrawLine(const Vector3 &start, const Vector3 &end, const Vector4 &color);
+  void DrawGrid(float size, int divisions, const Vector4 &color);
+  void RenderPrimitives();
+  // エフェクト用描画メソッド（中身はDrawModelとほぼ同じだがパイプラインが違う）
+  void DrawEffectModel(ModelInstance *model);
 
   ~Renderer();
 
@@ -163,4 +169,15 @@ private:
   UnifiedPipeline *GetParticlePipeline_(BlendMode mode);
 
   std::shared_ptr<TextureResource> environmentMap_;
+
+  struct TransformCB {
+    Matrix4x4 WVP;
+  };
+
+  std::unique_ptr<UnifiedPipeline> primitivePipeline_;
+  std::unique_ptr<PrimitiveDrawer> primitiveDrawer_;
+  ComPtr<ID3D12Resource> primitiveTransformCB_;
+  TransformCB *primitiveTransformMapped_ = nullptr;
+
+  std::unique_ptr<UnifiedPipeline> effectPipeline_; // エフェクト用
 };

@@ -5,6 +5,8 @@
     <FxCompile Include="resources\shaders\Particle.VS.hlsl" />
     <FxCompile Include="resources\shaders\Skybox.PS.hlsl" />
     <FxCompile Include="resources\shaders\Skybox.VS.hlsl" />
+    <FxCompile Include="resources\shaders\Primitive.VS.hlsl" />
+    <FxCompile Include="resources\shaders\Primitive.PS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DirectXGame\engine\scene\BaseScene.cpp" />
@@ -52,6 +54,7 @@
     <ClCompile Include="DirectXGame\engine\graphics\Skybox.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\2d\SpriteResource.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\2d\SpriteManager.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\PrimitiveDrawer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DirectXGame\engine\scene\BaseScene.h" />
@@ -111,10 +114,12 @@
     <ClInclude Include="DirectXGame\engine\graphics\pipeline\BlendMode.h" />
     <ClInclude Include="DirectXGame\engine\graphics\2d\SpriteResource.h" />
     <ClInclude Include="DirectXGame\engine\graphics\2d\SpriteManager.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\PrimitiveDrawer.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\shaders\Particle.hlsli" />
     <None Include="resources\shaders\Skybox.hlsli" />
+    <None Include="resources\shaders\Primitive.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />

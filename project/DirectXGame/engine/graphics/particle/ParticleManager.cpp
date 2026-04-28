@@ -148,7 +148,7 @@ void ParticleManager::ClearParticleGroup(const std::string& name) {
 }
 
 void ParticleManager::Emit(const std::string& name, const Vector3& position, const Vector3& velocity,
-    const Vector3& scale, float lifetime, const Vector4& color) {
+    const Vector3& scale, const Vector3& rotate, float lifetime, const Vector4& color) {
     auto it = groups_.find(name);
     assert(it != groups_.end());
     if (it == groups_.end()) {
@@ -159,7 +159,7 @@ void ParticleManager::Emit(const std::string& name, const Vector3& position, con
     Particle p{};
     p.transform.translate = position;
     p.transform.scale = scale;
-    p.transform.rotate = { 0,0,0 };
+    p.transform.rotate = rotate;
     p.velocity = velocity;
     p.lifetime = lifetime;
     p.age = 0.0f;
@@ -204,7 +204,7 @@ void ParticleManager::Update(float deltaTime) {
             float alpha = std::clamp(1.0f - t, 0.0f, 1.0f);
 
             if (gpuIndex < capacity) {
-                Matrix4x4 world = MakeBillboardMatrix_(p.transform.scale, p.transform.translate, view);
+                Matrix4x4 world = MakeBillboardMatrix_(p.transform.scale, p.transform.rotate, p.transform.translate, view);
                 Matrix4x4 wvp = Multiply(world, Multiply(view, proj));
                 g.instanceMapped[gpuIndex].World = world;
                 g.instanceMapped[gpuIndex].WVP = wvp;
@@ -328,22 +328,38 @@ void ParticleManager::EnsureQuadGeometry_() {
     quadReady_ = true;
 }
 
-Matrix4x4 ParticleManager::MakeBillboardMatrix_(const Vector3& scale, const Vector3& translate, const Matrix4x4& viewMatrix) const {
+Matrix4x4 ParticleManager::MakeBillboardMatrix_(const Vector3& scale, const Vector3& rotate, const Vector3& translate, const Matrix4x4& viewMatrix) const {
     Matrix4x4 camWorld = Inverse(viewMatrix);
     Vector3 right{ camWorld.m[0][0], camWorld.m[0][1], camWorld.m[0][2] };
     Vector3 up{ camWorld.m[1][0], camWorld.m[1][1], camWorld.m[1][2] };
     Vector3 forward{ camWorld.m[2][0], camWorld.m[2][1], camWorld.m[2][2] };
     forward = { -forward.x, -forward.y, -forward.z };
 
+    // Z軸（視線方向）周りの回転（ロール）を適用
+    float angle = rotate.z;
+    float c = std::cos(angle);
+    float s = std::sin(angle);
+
+    Vector3 rotatedRight = {
+        right.x * c + up.x * s,
+        right.y * c + up.y * s,
+        right.z * c + up.z * s
+    };
+    Vector3 rotatedUp = {
+        -right.x * s + up.x * c,
+        -right.y * s + up.y * c,
+        -right.z * s + up.z * c
+    };
+
     Matrix4x4 m{};
-    m.m[0][0] = scale.x * right.x;
-    m.m[0][1] = scale.x * right.y;
-    m.m[0][2] = scale.x * right.z;
+    m.m[0][0] = scale.x * rotatedRight.x;
+    m.m[0][1] = scale.x * rotatedRight.y;
+    m.m[0][2] = scale.x * rotatedRight.z;
     m.m[0][3] = 0;
 
-    m.m[1][0] = scale.y * up.x;
-    m.m[1][1] = scale.y * up.y;
-    m.m[1][2] = scale.y * up.z;
+    m.m[1][0] = scale.y * rotatedUp.x;
+    m.m[1][1] = scale.y * rotatedUp.y;
+    m.m[1][2] = scale.y * rotatedUp.z;
     m.m[1][3] = 0;
 
     m.m[2][0] = scale.z * forward.x;

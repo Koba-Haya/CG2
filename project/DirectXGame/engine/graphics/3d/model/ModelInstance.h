@@ -38,6 +38,12 @@ public:
   ModelInstance();
   ~ModelInstance();
 
+  ModelInstance(const ModelInstance &) = delete;
+  ModelInstance &operator=(const ModelInstance &) = delete;
+
+  ModelInstance(ModelInstance &&) noexcept;
+  ModelInstance &operator=(ModelInstance &&) noexcept;
+
   bool Initialize(const CreateInfo &ci);
 
   void SetWorld(const Matrix4x4 &world);
