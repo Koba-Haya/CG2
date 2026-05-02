@@ -266,6 +266,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <ClCompile Include="DirectXGame\engine\graphics\2d\SpriteManager.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\2d\SpriteResource.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\PrimitiveDrawer.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\Ring.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DirectXGame\engine\graphics\pipeline\BlendMode.h" />
@@ -330,6 +331,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <ClInclude Include="DirectXGame\engine\graphics\2d\SpriteManager.h" />
     <ClInclude Include="DirectXGame\engine\graphics\2d\SpriteResource.h" />
     <ClInclude Include="DirectXGame\engine\graphics\PrimitiveDrawer.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\Ring.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />

@@ -8,6 +8,8 @@
 #include "ModelResource.h"
 #include "ParticleEmitter.h"
 #include "ParticleManager.h"
+#include "graphics/Ring.h"
+#include "graphics/texture/TextureResource.h"
 #include "Skybox.h"
 #include "Sprite.h"
 #include "Transform.h"
@@ -88,4 +90,10 @@ private:
   std::shared_ptr<ModelResource> resEffect_; // particle.obj
   std::vector<HitEffect> hitEffects_;
   void SpawnHitEffect(const Vector3 &pos);
+
+  Ring ring_;
+  std::shared_ptr<TextureResource> texRing_;
+  Ring::Params ringParams_;
+  Transform ringTransform_;
+  Vector2 ringUVScale_ = { 1.0f, 1.0f };
 };

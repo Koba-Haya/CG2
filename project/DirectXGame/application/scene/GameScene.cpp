@@ -1,8 +1,10 @@
 #define NOMINMAX
 #include "GameScene.h"
 #include "DebugCamera.h"
+#include "DirectXCommon.h"
 #include "Renderer.h"
 #include "TextureResource.h"
+#include "graphics/texture/TextureManager.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
 
@@ -364,6 +366,48 @@ void GameScene::Update() {
   ParticleManager::GetInstance()->SetEnableAccelerationField(
       enableAccelerationField_);
   ParticleManager::GetInstance()->SetAccelerationField(accelerationField_);
+  if (ImGui::CollapsingHeader("Ring Primitive")) {
+      bool changed = false;
+      int divide = static_cast<int>(ringParams_.divide);
+      if (ImGui::SliderInt("Divide", &divide, 3, 128)) {
+          ringParams_.divide = static_cast<uint32_t>(divide);
+          changed = true;
+      }
+      if (ImGui::SliderFloat("Outer Radius", &ringParams_.outerRadius, 0.1f, 10.0f)) {
+          if (ringParams_.outerRadius < ringParams_.innerRadius) {
+              ringParams_.outerRadius = ringParams_.innerRadius + 0.01f;
+          }
+          changed = true;
+      }
+      if (ImGui::SliderFloat("Inner Radius", &ringParams_.innerRadius, 0.0f, 10.0f)) {
+          if (ringParams_.innerRadius > ringParams_.outerRadius) {
+              ringParams_.innerRadius = ringParams_.outerRadius - 0.01f;
+          }
+          changed = true;
+      }
+      changed |= ImGui::SliderAngle("Start Angle", &ringParams_.startAngle, -360.0f, 360.0f);
+      changed |= ImGui::SliderAngle("End Angle", &ringParams_.endAngle, -360.0f, 360.0f);
+      changed |= ImGui::Checkbox("UV Vertical", &ringParams_.uvVertical);
+      changed |= ImGui::ColorEdit4("Color Inner", &ringParams_.colorInner.x);
+      changed |= ImGui::ColorEdit4("Color Outer", &ringParams_.colorOuter.x);
+      
+      ImGui::DragFloat2("UV Scale", &ringUVScale_.x, 0.1f);
+
+      if (changed) {
+          auto* dx = Renderer::GetInstance()->GetDX();
+          ring_.Update(dx->GetDevice(), ringParams_);
+      }
+      
+      ImGui::DragFloat3("Ring Pos", &ringTransform_.translate.x, 0.1f);
+      ImGui::DragFloat3("Ring Rot", &ringTransform_.rotate.x, 0.05f);
+      
+      static bool autoRotate = true;
+      ImGui::Checkbox("Auto Rotate", &autoRotate);
+      if (autoRotate) {
+          ringTransform_.rotate.z += 1.0f * deltaTime;
+      }
+  }
+
   ParticleManager::GetInstance()->Update(deltaTime);
 
   // テスト用：スペースキーで原点にエフェクト発生
@@ -445,6 +489,18 @@ void GameScene::Draw() {
   // ヒットエフェクトの描画
   for (auto &ef : hitEffects_) {
     Renderer::GetInstance()->DrawEffectModel(&ef.instance);
+  }
+
+  // Ring の描画
+  {
+    Matrix4x4 worldRing = MakeAffineMatrix(ringTransform_.scale, ringTransform_.rotate, ringTransform_.translate);
+    ring_.SetTransform(worldRing, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
+    
+    Matrix4x4 uvTransform = MakeScaleMatrix({ ringUVScale_.x, ringUVScale_.y, 1.0f });
+    ring_.SetMaterial({1.0f, 1.0f, 1.0f, 1.0f}, uvTransform);
+    if (texRing_) {
+        Renderer::GetInstance()->DrawRing(&ring_, texRing_->GetSrvGpu());
+    }
   }
 
   // パーティクルの描画
@@ -573,6 +629,20 @@ void GameScene::InitResources_() {
 
     particleEmitter_.Initialize(ParticleManager::GetInstance(), params);
     particleEmitter_.Burst(std::min(initialParticleCount_, kParticleCount_));
+  }
+
+  {
+    ringParams_.divide = 32;
+    ringParams_.outerRadius = 2.0f;
+    ringParams_.innerRadius = 0.5f;
+    ringParams_.colorInner = { 1.0f, 1.0f, 1.0f, 1.0f };
+    ringParams_.colorOuter = { 1.0f, 1.0f, 1.0f, 1.0f };
+    
+    auto* dx = Renderer::GetInstance()->GetDX();
+    ring_.Initialize(dx->GetDevice(), ringParams_);
+    texRing_ = TextureManager::GetInstance()->Load("resources/gradationLine.png");
+    
+    ringTransform_.translate = { 0.0f, 2.0f, 0.0f };
   }
 
   {

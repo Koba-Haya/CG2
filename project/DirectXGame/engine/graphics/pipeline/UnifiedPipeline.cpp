@@ -190,8 +190,9 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
 
   D3D12_STATIC_SAMPLER_DESC samp{};
   samp.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-  samp.AddressU = samp.AddressV = samp.AddressW =
-      D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  samp.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  samp.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+  samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
   samp.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
   samp.MaxLOD = D3D12_FLOAT32_MAX;
   samp.ShaderRegister = 0;
@@ -474,5 +475,30 @@ PipelineDesc UnifiedPipeline::MakeUnlitEffectDesc() {
   // エフェクトをより強調したい場合は、加算合成にするのもアリです
   // d.blendMode = BlendMode::Add;
 
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeRingDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+  };
+  d.vsPath = L"resources/shaders/Ring.VS.hlsl";
+  d.psPath = L"resources/shaders/Ring.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  d.useVSTransform_b0 = true;
+  d.usePSTextureTable_t0 = true;
+  d.enableDepth = true;
+  d.depthWrite = false;
+  d.alphaBlend = true;
+  d.blendMode = BlendMode::Add;
+  d.cullMode = D3D12_CULL_MODE_NONE;
   return d;
 }

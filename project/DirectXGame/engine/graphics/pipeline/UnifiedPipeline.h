@@ -88,6 +88,7 @@ public:
   static PipelineDesc MakePrimitiveDesc();
   // 3D空間用のエフェクト（ライティングなし）の記述
   static PipelineDesc MakeUnlitEffectDesc();
+  static PipelineDesc MakeRingDesc();
 
 private:
   ComPtr<ID3D12RootSignature> rootSignature_;
