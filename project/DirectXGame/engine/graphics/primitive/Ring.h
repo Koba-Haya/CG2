@@ -22,6 +22,7 @@ public:
         bool uvVertical = false; // false: Horizon, true: Vertical
         Vector4 colorInner = { 1.0f, 1.0f, 1.0f, 1.0f };
         Vector4 colorOuter = { 1.0f, 1.0f, 1.0f, 1.0f };
+        float alphaReference = 0.0f;
     };
 
 public:
@@ -68,6 +69,8 @@ private:
     struct MaterialCB {
         Vector4 color;
         int enableLighting;
+        float alphaReference;
+        float pad0;
         Matrix4x4 uvTransform;
     };
 };

@@ -8,7 +8,8 @@
 #include "ModelResource.h"
 #include "ParticleEmitter.h"
 #include "ParticleManager.h"
-#include "graphics/Ring.h"
+#include "Ring.h"
+#include "Cylinder.h"
 #include "graphics/texture/TextureResource.h"
 #include "Skybox.h"
 #include "Sprite.h"
@@ -96,4 +97,10 @@ private:
   Ring::Params ringParams_;
   Transform ringTransform_;
   Vector2 ringUVScale_ = { 1.0f, 1.0f };
+
+  Cylinder cylinder_;
+  std::shared_ptr<TextureResource> texCylinder_;
+  Cylinder::Params cylinderParams_;
+  Transform cylinderTransform_;
+  Vector2 cylinderUVScale_ = { 1.0f, 1.0f };
 };

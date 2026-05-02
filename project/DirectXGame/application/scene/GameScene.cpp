@@ -390,8 +390,9 @@ void GameScene::Update() {
       changed |= ImGui::Checkbox("UV Vertical", &ringParams_.uvVertical);
       changed |= ImGui::ColorEdit4("Color Inner", &ringParams_.colorInner.x);
       changed |= ImGui::ColorEdit4("Color Outer", &ringParams_.colorOuter.x);
+      changed |= ImGui::SliderFloat("Alpha Ref##Ring", &ringParams_.alphaReference, 0.0f, 1.0f);
       
-      ImGui::DragFloat2("UV Scale", &ringUVScale_.x, 0.1f);
+      ImGui::DragFloat2("UV Scale##Ring", &ringUVScale_.x, 0.1f);
 
       if (changed) {
           auto* dx = Renderer::GetInstance()->GetDX();
@@ -406,6 +407,35 @@ void GameScene::Update() {
       if (autoRotate) {
           ringTransform_.rotate.z += 1.0f * deltaTime;
       }
+  }
+
+  if (ImGui::CollapsingHeader("Cylinder Primitive")) {
+      bool changed = false;
+      int divide = static_cast<int>(cylinderParams_.divide);
+      if (ImGui::SliderInt("Divide##Cyl", &divide, 3, 128)) {
+          cylinderParams_.divide = static_cast<uint32_t>(divide);
+          changed = true;
+      }
+      changed |= ImGui::DragFloat2("Top Radius (X,Z)", &cylinderParams_.topRadiusX, 0.1f, 0.0f, 10.0f);
+      changed |= ImGui::DragFloat2("Bottom Radius (X,Z)", &cylinderParams_.bottomRadiusX, 0.1f, 0.0f, 10.0f);
+      changed |= ImGui::SliderFloat("Height##Cyl", &cylinderParams_.height, 0.1f, 10.0f);
+      changed |= ImGui::SliderAngle("Start Angle##Cyl", &cylinderParams_.startAngle, -360.0f, 360.0f);
+      changed |= ImGui::SliderAngle("End Angle##Cyl", &cylinderParams_.endAngle, -360.0f, 360.0f);
+      changed |= ImGui::Checkbox("Flip V##Cyl", &cylinderParams_.flipV);
+      changed |= ImGui::Checkbox("UV Vertical##Cyl", &cylinderParams_.uvVertical);
+      changed |= ImGui::SliderFloat("Alpha Reference", &cylinderParams_.alphaReference, 0.0f, 1.0f);
+      changed |= ImGui::ColorEdit4("Color Top", &cylinderParams_.colorTop.x);
+      changed |= ImGui::ColorEdit4("Color Bottom", &cylinderParams_.colorBottom.x);
+
+      ImGui::DragFloat2("UV Scale##Cyl", &cylinderUVScale_.x, 0.1f);
+
+      if (changed) {
+          auto* dx = Renderer::GetInstance()->GetDX();
+          cylinder_.Update(dx->GetDevice(), cylinderParams_);
+      }
+      
+      ImGui::DragFloat3("Cylinder Pos", &cylinderTransform_.translate.x, 0.1f);
+      ImGui::DragFloat3("Cylinder Rot", &cylinderTransform_.rotate.x, 0.05f);
   }
 
   ParticleManager::GetInstance()->Update(deltaTime);
@@ -500,6 +530,18 @@ void GameScene::Draw() {
     ring_.SetMaterial({1.0f, 1.0f, 1.0f, 1.0f}, uvTransform);
     if (texRing_) {
         Renderer::GetInstance()->DrawRing(&ring_, texRing_->GetSrvGpu());
+    }
+  }
+
+  // Cylinder の描画
+  {
+    Matrix4x4 worldCylinder = MakeAffineMatrix(cylinderTransform_.scale, cylinderTransform_.rotate, cylinderTransform_.translate);
+    cylinder_.SetTransform(worldCylinder, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
+    
+    Matrix4x4 uvTransform = MakeScaleMatrix({ cylinderUVScale_.x, cylinderUVScale_.y, 1.0f });
+    cylinder_.SetMaterial({1.0f, 1.0f, 1.0f, 1.0f}, uvTransform);
+    if (texCylinder_) {
+        Renderer::GetInstance()->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
     }
   }
 
@@ -637,12 +679,33 @@ void GameScene::InitResources_() {
     ringParams_.innerRadius = 0.5f;
     ringParams_.colorInner = { 1.0f, 1.0f, 1.0f, 1.0f };
     ringParams_.colorOuter = { 1.0f, 1.0f, 1.0f, 1.0f };
+    ringParams_.alphaReference = 0.5f; // デフォルトで半分削る
     
     auto* dx = Renderer::GetInstance()->GetDX();
     ring_.Initialize(dx->GetDevice(), ringParams_);
     texRing_ = TextureManager::GetInstance()->Load("resources/gradationLine.png");
     
     ringTransform_.translate = { 0.0f, 2.0f, 0.0f };
+    ringUVScale_ = { 10.0f, 1.0f }; // 10回繰り返して柱っぽくする
+  }
+
+  {
+    cylinderParams_.divide = 32;
+    cylinderParams_.topRadiusX = 1.0f;
+    cylinderParams_.topRadiusZ = 1.0f;
+    cylinderParams_.bottomRadiusX = 1.0f;
+    cylinderParams_.bottomRadiusZ = 1.0f;
+    cylinderParams_.height = 3.0f;
+    cylinderParams_.colorTop = { 1.0f, 1.0f, 1.0f, 1.0f };
+    cylinderParams_.colorBottom = { 1.0f, 1.0f, 1.0f, 1.0f };
+    cylinderParams_.alphaReference = 0.5f;
+    
+    auto* dx = Renderer::GetInstance()->GetDX();
+    cylinder_.Initialize(dx->GetDevice(), cylinderParams_);
+    texCylinder_ = TextureManager::GetInstance()->Load("resources/gradationLine.png");
+    
+    cylinderTransform_.translate = { -3.0f, 0.0f, 0.0f };
+    cylinderUVScale_ = { 10.0f, 1.0f };
   }
 
   {

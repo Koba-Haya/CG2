@@ -6,6 +6,7 @@
 #include "ModelResource.h"
 #include "ParticleManager.h"
 #include "Ring.h"
+#include "Cylinder.h"
 #include "ShaderCompilerUtils.h"
 #include "Skybox.h"
 #include "Sprite.h"
@@ -132,6 +133,10 @@ void Renderer::Initialize(DirectXCommon *dx) {
     ringPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(ringPipeline_->Initialize(device, utils, compiler,
                                          includeHandler, ringDesc));
+    PipelineDesc cylinderDesc = UnifiedPipeline::MakeCylinderDesc();
+    cylinderPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(cylinderPipeline_->Initialize(device, utils, compiler,
+                                             includeHandler, cylinderDesc));
   }
 
   // Primitive Drawer
@@ -488,6 +493,27 @@ void Renderer::DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle) {
 
   // 描画
   ring->Draw(cmdList);
+}
+
+void Renderer::DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle) {
+  if (!cylinder || !textureHandle.ptr)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // パイプライン設定
+  cylinderPipeline_->SetPipelineState(cmdList);
+
+  // 定数バッファ (0:マテリアル, 1:トランスフォーム)
+  cmdList->SetGraphicsRootConstantBufferView(0, cylinder->GetMaterialCBAddress());
+  cmdList->SetGraphicsRootConstantBufferView(1, cylinder->GetTransformCBAddress());
+
+  // テクスチャ
+  ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
+  cmdList->SetDescriptorHeaps(1, heaps);
+  cmdList->SetGraphicsRootDescriptorTable(2, textureHandle);
+
+  // 描画
+  cylinder->Draw(cmdList);
 }
 
 UnifiedPipeline *Renderer::GetSpritePipeline_(BlendMode mode) {

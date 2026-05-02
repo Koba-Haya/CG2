@@ -275,6 +275,8 @@ void Ring::SetMaterial(const Vector4& color, const Matrix4x4& uvTransform) {
         MaterialCB* cb = static_cast<MaterialCB*>(mapped);
         cb->color = color;
         cb->enableLighting = 0; // ライティングなし
+        cb->alphaReference = params_.alphaReference;
+        cb->pad0 = 0.0f;
         cb->uvTransform = uvTransform;
         materialCB_->Unmap(0, nullptr);
     }

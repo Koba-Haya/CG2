@@ -19,6 +19,7 @@ class PrimitiveDrawer;
 class ParticleManager;
 class Camera;
 class Ring;
+class Cylinder;
 struct ID3D12Resource;
 class TextureResource;
 
@@ -129,6 +130,7 @@ public:
   // エフェクト用描画メソッド（中身はDrawModelとほぼ同じだがパイプラインが違う）
   void DrawEffectModel(ModelInstance *model);
   void DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
+  void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
 
   ~Renderer();
 
@@ -184,4 +186,5 @@ private:
 
   std::unique_ptr<UnifiedPipeline> effectPipeline_; // エフェクト用
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
+  std::unique_ptr<UnifiedPipeline> cylinderPipeline_;
 };

@@ -502,3 +502,28 @@ PipelineDesc UnifiedPipeline::MakeRingDesc() {
   d.cullMode = D3D12_CULL_MODE_NONE;
   return d;
 }
+
+PipelineDesc UnifiedPipeline::MakeCylinderDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+  };
+  d.vsPath = L"resources/shaders/Cylinder.VS.hlsl";
+  d.psPath = L"resources/shaders/Cylinder.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  d.useVSTransform_b0 = true;
+  d.usePSTextureTable_t0 = true;
+  d.enableDepth = true;
+  d.depthWrite = false;
+  d.alphaBlend = true;
+  d.blendMode = BlendMode::Add;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  return d;
+}

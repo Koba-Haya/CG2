@@ -1,4 +1,4 @@
-#include "Ring.hlsli"
+#include "Cylinder.hlsli"
 
 struct Material {
     float4 color;
