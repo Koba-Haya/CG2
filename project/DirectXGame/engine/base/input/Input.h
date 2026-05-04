@@ -64,11 +64,11 @@ public:
   // キーボード（DirectInput）
   //======================
   // 押している間判定（引数は DIK_* を渡す）
-  bool IsDown(int dik) const;
+  bool PressKey(int dik) const;
   // 今フレームで押された瞬間
-  bool WasPressed(int dik) const;
+  bool TriggerKey(int dik) const;
   // 今フレームで離された瞬間
-  bool WasReleased(int dik) const;
+  bool ReleaseKey(int dik) const;
   // 生の 256 バイト配列
   const BYTE *GetKeyboardState() const;
 

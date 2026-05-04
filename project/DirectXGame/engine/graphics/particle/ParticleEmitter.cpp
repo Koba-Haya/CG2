@@ -81,7 +81,10 @@ void ParticleEmitter::Update(float deltaTime, const Vector3& parentTranslate) {
         const float life = RandRange_(params_.lifeMin, params_.lifeMax);
         const Vector4 col = SampleColor_();
 
-        manager_->Emit(params_.groupName, pos, vel, params_.particleScale, life, col);
+        const float rotateZ = RandRange_(params_.rotateMin, params_.rotateMax);
+        const Vector3 rotate = { 0.0f, 0.0f, rotateZ };
+
+        manager_->Emit(params_.groupName, pos, vel, params_.particleScale, rotate, life, col);
     }
 }
 
@@ -96,7 +99,10 @@ void ParticleEmitter::Burst(uint32_t count, const Vector3& parentTranslate) {
         const float life = RandRange_(params_.lifeMin, params_.lifeMax);
         const Vector4 col = SampleColor_();
 
-        manager_->Emit(params_.groupName, pos, vel, params_.particleScale, life, col);
+        const float rotateZ = RandRange_(params_.rotateMin, params_.rotateMax);
+        const Vector3 rotate = { 0.0f, 0.0f, rotateZ };
+
+        manager_->Emit(params_.groupName, pos, vel, params_.particleScale, rotate, life, col);
     }
 }
 

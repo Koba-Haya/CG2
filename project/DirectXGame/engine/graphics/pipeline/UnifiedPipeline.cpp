@@ -2,8 +2,7 @@
 #include "ShaderCompilerUtils.h"
 #include <cassert>
 #include <d3d12.h>
-#include <d3dcompiler.h> // D3D12SerializeRootSignature
-
+#include <d3dcompiler.h>
 #include <Windows.h>
 #include <format>
 
@@ -103,81 +102,97 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
 
   HRESULT hr = S_OK;
 
-  // SRV range (PS: texture t0)
+  // t0: 通常テクスチャ (PS)
   D3D12_DESCRIPTOR_RANGE srvRangeTex{};
   srvRangeTex.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-  srvRangeTex.BaseShaderRegister = 0;
+  srvRangeTex.BaseShaderRegister = 0; // t0
   srvRangeTex.NumDescriptors = 1;
   srvRangeTex.OffsetInDescriptorsFromTableStart =
       D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-  // SRV range (VS: instancing matrices t1)
+  // t1: インスタンシング (VS)
   D3D12_DESCRIPTOR_RANGE srvRangeInst{};
   srvRangeInst.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-  srvRangeInst.BaseShaderRegister = 1; // t1
+  srvRangeInst.BaseShaderRegister = 1; // t1 (VS用)
   srvRangeInst.NumDescriptors = 1;
   srvRangeInst.OffsetInDescriptorsFromTableStart =
       D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+  // t1: 環境マップ (PS)
+  D3D12_DESCRIPTOR_RANGE srvRangeEnv{};
+  srvRangeEnv.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  srvRangeEnv.BaseShaderRegister = 1; // t1 (PS用)
+  srvRangeEnv.NumDescriptors = 1;
+  srvRangeEnv.OffsetInDescriptorsFromTableStart =
+      D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
   // --- Root Parameters（フラグに応じて詰める） ---
-  D3D12_ROOT_PARAMETER params[8]{};
+  D3D12_ROOT_PARAMETER params[9]{};
   UINT numParams = 0;
 
-  if (desc.usePSMaterial_b0) {
+  if (desc.usePSMaterial_b0) { // Index 0
     auto &p = params[numParams++];
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    p.Descriptor.ShaderRegister = 0; // b0
+    p.Descriptor.ShaderRegister = 0;
   }
-  if (desc.useVSTransform_b0) {
+  if (desc.useVSTransform_b0) { // Index 1
     auto &p = params[numParams++];
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-    p.Descriptor.ShaderRegister = 0; // b0
+    p.Descriptor.ShaderRegister = 0;
   }
-  if (desc.usePSTextureTable_t0) {
+  if (desc.usePSTextureTable_t0) { // Index 2
     auto &p = params[numParams++];
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     p.DescriptorTable.pDescriptorRanges = &srvRangeTex;
-    p.DescriptorTable.NumDescriptorRanges = 1; // t0
+    p.DescriptorTable.NumDescriptorRanges = 1;
   }
-  if (desc.useVSInstancingTable_t1) {
+  if (desc.useVSInstancingTable_t1) { // (Object3Dでは通常 false)
     auto &p = params[numParams++];
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     p.DescriptorTable.pDescriptorRanges = &srvRangeInst;
     p.DescriptorTable.NumDescriptorRanges = 1;
   }
-  if (desc.usePSDirectionalLight_b1) {
+  if (desc.usePSDirectionalLight_b1) { // Index 3
     auto &p = params[numParams++];
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    p.Descriptor.ShaderRegister = 1; // b1
+    p.Descriptor.ShaderRegister = 1;
   }
-  if (desc.usePSCamera_b2) {
+  if (desc.usePSCamera_b2) { // Index 4
     auto &p = params[numParams++];
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    p.Descriptor.ShaderRegister = 2; // b2
+    p.Descriptor.ShaderRegister = 2;
   }
-  if (desc.usePSPointLight_b3) {
+  if (desc.usePSPointLight_b3) { // Index 5
     auto &p = params[numParams++];
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    p.Descriptor.ShaderRegister = 3; // b3
+    p.Descriptor.ShaderRegister = 3;
   }
-  if (desc.usePSSpotLight_b4) {
+  if (desc.usePSSpotLight_b4) { // Index 6
     auto &p = params[numParams++];
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    p.Descriptor.ShaderRegister = 4; // b4
+    p.Descriptor.ShaderRegister = 4;
+  }  
+  if (desc.usePSEnvironmentMap_t1) {// Index 7
+    auto &p = params[numParams++];
+    p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    p.DescriptorTable.pDescriptorRanges = &srvRangeEnv;
+    p.DescriptorTable.NumDescriptorRanges = 1;
   }
 
   D3D12_STATIC_SAMPLER_DESC samp{};
   samp.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-  samp.AddressU = samp.AddressV = samp.AddressW =
-      D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  samp.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  samp.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+  samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
   samp.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
   samp.MaxLOD = D3D12_FLOAT32_MAX;
   samp.ShaderRegister = 0;
@@ -268,7 +283,11 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   pso.RasterizerState = rast;
   pso.NumRenderTargets = 1;
   pso.RTVFormats[0] = desc.rtvFormat;
-  pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+  if (desc.vsPath.find(L"Primitive") != std::wstring::npos) {
+    pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+  } else {
+    pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+  }
   pso.SampleDesc.Count = 1;
   pso.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
   pso.DepthStencilState = depth;
@@ -305,10 +324,10 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
   d.useVSTransform_b0 = true;
   d.usePSTextureTable_t0 = true;
   d.usePSDirectionalLight_b1 = true;
-
-  d.usePSCamera_b2 = true; // Phong 用に Camera を渡す
+  d.usePSCamera_b2 = true;
   d.usePSPointLight_b3 = true;
   d.usePSSpotLight_b4 = true;
+  d.usePSEnvironmentMap_t1 = true; // 環境マッピングを有効化
 
   d.enableDepth = true;
   d.alphaBlend = false;
@@ -414,5 +433,97 @@ PipelineDesc UnifiedPipeline::MakeSkyboxDesc() {
   d.alphaBlend = false;
   d.cullMode = D3D12_CULL_MODE_NONE; // キューブ内側を描く
   d.fillMode = D3D12_FILL_MODE_SOLID;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakePrimitiveDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+  };
+  d.vsPath = L"resources/shaders/Primitive.VS.hlsl";
+  d.psPath = L"resources/shaders/Primitive.PS.hlsl";
+
+  d.usePSMaterial_b0 = false; // マテリアルは使わず頂点カラーのみ
+  d.useVSTransform_b0 = true; // WVP行列は使用
+  d.usePSTextureTable_t0 = false;
+  d.enableDepth = true;
+  d.alphaBlend = true; // 線も透過できるようにしておく
+  d.blendMode = BlendMode::Alpha;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.fillMode = D3D12_FILL_MODE_SOLID;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeUnlitEffectDesc() {
+  // 基本はObject3Dと同じ形（Root Signatureを維持）にする
+  PipelineDesc d = MakeObject3DDesc();
+
+  // ライトのフラグを false にしてはいけない（シェーダと不整合が起きるため）
+  // 代わりに、描画時のマテリアル設定でライティングをOFFにする運用にします
+
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.alphaBlend = true;            // 半透明を有効化
+  d.blendMode = BlendMode::Alpha; // アルファブレンド
+  d.depthWrite = false;           // エフェクト越しに後ろが透けるように
+
+  // エフェクトをより強調したい場合は、加算合成にするのもアリです
+  // d.blendMode = BlendMode::Add;
+
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeRingDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+  };
+  d.vsPath = L"resources/shaders/Ring.VS.hlsl";
+  d.psPath = L"resources/shaders/Ring.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  d.useVSTransform_b0 = true;
+  d.usePSTextureTable_t0 = true;
+  d.enableDepth = true;
+  d.depthWrite = false;
+  d.alphaBlend = true;
+  d.blendMode = BlendMode::Add;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeCylinderDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+  };
+  d.vsPath = L"resources/shaders/Cylinder.VS.hlsl";
+  d.psPath = L"resources/shaders/Cylinder.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  d.useVSTransform_b0 = true;
+  d.usePSTextureTable_t0 = true;
+  d.enableDepth = true;
+  d.depthWrite = false;
+  d.alphaBlend = true;
+  d.blendMode = BlendMode::Add;
+  d.cullMode = D3D12_CULL_MODE_NONE;
   return d;
 }

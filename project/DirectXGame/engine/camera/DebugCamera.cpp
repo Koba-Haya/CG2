@@ -19,12 +19,12 @@ void DebugCamera::Update(const Input& input) {
     Vector3 move = { 0.0f, 0.0f, 0.0f };
 
     // キーボード移動（ローカル座標系）
-    if (input.IsDown(DIK_W)) { move.z += keyMoveSpeed; }
-    if (input.IsDown(DIK_S)) { move.z -= keyMoveSpeed; }
-    if (input.IsDown(DIK_A)) { move.x -= keyMoveSpeed; }
-    if (input.IsDown(DIK_D)) { move.x += keyMoveSpeed; }
-    if (input.IsDown(DIK_Q)) { move.y += keyMoveSpeed; }
-    if (input.IsDown(DIK_E)) { move.y -= keyMoveSpeed; }
+    if (input.PressKey(DIK_W)) { move.z += keyMoveSpeed; }
+    if (input.PressKey(DIK_S)) { move.z -= keyMoveSpeed; }
+    if (input.PressKey(DIK_A)) { move.x -= keyMoveSpeed; }
+    if (input.PressKey(DIK_D)) { move.x += keyMoveSpeed; }
+    if (input.PressKey(DIK_Q)) { move.y += keyMoveSpeed; }
+    if (input.PressKey(DIK_E)) { move.y -= keyMoveSpeed; }
 
     // マウス状態
     auto mouse = input.GetMouse();
@@ -53,13 +53,12 @@ void DebugCamera::Update(const Input& input) {
     Matrix4x4 rotDelta = MakeIdentity4x4();
 
     // キーボード回転
-    if (input.IsDown(DIK_LEFT)) { rotDelta = Multiply(MakeRotateYMatrix(+rotSpeedKey), rotDelta); }
-    if (input.IsDown(DIK_RIGHT)) { rotDelta = Multiply(MakeRotateYMatrix(-rotSpeedKey), rotDelta); }
-    if (input.IsDown(DIK_UP)) { rotDelta = Multiply(MakeRotateXMatrix(+rotSpeedKey), rotDelta); }
-    if (input.IsDown(DIK_DOWN)) { rotDelta = Multiply(MakeRotateXMatrix(-rotSpeedKey), rotDelta); }
-    if (input.IsDown(DIK_Z)) { rotDelta = Multiply(MakeRotateZMatrix(+rotSpeedKey), rotDelta); }
-    if (input.IsDown(DIK_C)) { rotDelta = Multiply(MakeRotateZMatrix(-rotSpeedKey), rotDelta); }
-
+    if (input.PressKey(DIK_LEFT)) { rotDelta = Multiply(MakeRotateYMatrix(+rotSpeedKey), rotDelta); }
+    if (input.PressKey(DIK_RIGHT)) { rotDelta = Multiply(MakeRotateYMatrix(-rotSpeedKey), rotDelta); }
+    if (input.PressKey(DIK_UP)) { rotDelta = Multiply(MakeRotateXMatrix(+rotSpeedKey), rotDelta); }
+    if (input.PressKey(DIK_DOWN)) { rotDelta = Multiply(MakeRotateXMatrix(-rotSpeedKey), rotDelta); }
+    if (input.PressKey(DIK_Z)) { rotDelta = Multiply(MakeRotateZMatrix(+rotSpeedKey), rotDelta); }
+    if (input.PressKey(DIK_C)) { rotDelta = Multiply(MakeRotateZMatrix(-rotSpeedKey), rotDelta); }
     // 右ドラッグ：Yaw 回転
     if (input.IsMouseDown(1)) {
       yaw_ += mouse.dx * rotSpeedMouse;   // これが横回転

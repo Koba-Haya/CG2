@@ -3,19 +3,25 @@
 #include <memory>
 #include <vector>
 #include <wrl.h>
+#include <d3d12.h>
 
 #include "LightTypes.h"
 #include "Matrix.h"
 #include "Method.h"
-#include "UnifiedPipeline.h"
+#include "BlendMode.h"
 
+class UnifiedPipeline;
 class DirectXCommon;
 class ModelInstance;
 class Sprite;
 class Skybox;
+class PrimitiveDrawer;
 class ParticleManager;
 class Camera;
+class Ring;
+class Cylinder;
 struct ID3D12Resource;
+class TextureResource;
 
 // GPU 定数バッファ型
 struct CameraForGPU {
@@ -107,12 +113,24 @@ public:
   ComPtr<ID3D12Resource> CreateBuffer(size_t size);
   ComPtr<ID3D12Resource> CreateUploadBuffer(size_t size);
 
+  // 環境マップ設定（CubeMap）を追加
+  void SetEnvironmentMap(std::shared_ptr<TextureResource> texture) {
+    environmentMap_ = texture;
+  }
+
   // 描画メソッド群
   void DrawModel(ModelInstance *model);
   void DrawSprite(Sprite *sprite);
   void DrawSkybox(Skybox *skybox);
   void DrawParticles(ParticleManager *pm,
                      BlendMode blendMode = BlendMode::Alpha);
+  void DrawLine(const Vector3 &start, const Vector3 &end, const Vector4 &color);
+  void DrawGrid(float size, int divisions, const Vector4 &color);
+  void RenderPrimitives();
+  // エフェクト用描画メソッド（中身はDrawModelとほぼ同じだがパイプラインが違う）
+  void DrawEffectModel(ModelInstance *model);
+  void DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
+  void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
 
   ~Renderer();
 
@@ -154,4 +172,19 @@ private:
 
   UnifiedPipeline *GetSpritePipeline_(BlendMode mode);
   UnifiedPipeline *GetParticlePipeline_(BlendMode mode);
+
+  std::shared_ptr<TextureResource> environmentMap_;
+
+  struct TransformCB {
+    Matrix4x4 WVP;
+  };
+
+  std::unique_ptr<UnifiedPipeline> primitivePipeline_;
+  std::unique_ptr<PrimitiveDrawer> primitiveDrawer_;
+  ComPtr<ID3D12Resource> primitiveTransformCB_;
+  TransformCB *primitiveTransformMapped_ = nullptr;
+
+  std::unique_ptr<UnifiedPipeline> effectPipeline_; // エフェクト用
+  std::unique_ptr<UnifiedPipeline> ringPipeline_;
+  std::unique_ptr<UnifiedPipeline> cylinderPipeline_;
 };

@@ -1,13 +1,5 @@
 #pragma once
-
-#include <cstdint>
-#include <fstream>
-#include <memory>
-#include <string>
-#include <vector>
-
 #include "BaseScene.h"
-
 #include "Camera.h"
 #include "LightTypes.h"
 #include "Matrix.h"
@@ -16,10 +8,18 @@
 #include "ModelResource.h"
 #include "ParticleEmitter.h"
 #include "ParticleManager.h"
-#include "Sprite.h"
+#include "Ring.h"
+#include "Cylinder.h"
+#include "graphics/texture/TextureResource.h"
 #include "Skybox.h"
+#include "Sprite.h"
 #include "Transform.h"
 #include "Vector.h"
+#include <cstdint>
+#include <fstream>
+#include <memory>
+#include <string>
+#include <vector>
 
 class GameScene final : public BaseScene {
 public:
@@ -40,50 +40,67 @@ private:
   std::ofstream logStream_;
 
   std::shared_ptr<ModelResource> resSphere_;
-  std::shared_ptr<ModelResource> resPlane_;
   std::shared_ptr<ModelResource> resCube_;
-  std::shared_ptr<ModelResource> resTerrain_;
 
   ModelInstance modelSphere_;
-  ModelInstance modelPlane_;
   ModelInstance modelEmitterSphere_;
   ModelInstance modelEmitterBox_;
-  ModelInstance modelTerrain_;
 
   Sprite sprite_;
-
   Skybox skybox_;
 
+  // 反射設定用
+  bool enableReflection_ = false; // デフォルト OFF
+  float reflectionWeight_ = 0.5f; // 反射の強さ
+
+  // その他既存のメンバ
   static constexpr uint32_t kParticleCount_ = 300;
   std::string particleGroupName_ = "default";
   uint32_t initialParticleCount_ = 30;
   bool showEmitterGizmo_ = false;
-
+  bool enableAccelerationField_ = false;
+  AccelerationField accelerationField_;
   ParticleEmitter particleEmitter_;
 
-  // ライト（高レベル記述子）
   std::vector<DirLight> dirLights_;
   bool enableDirectionalLight_ = false;
-
   std::vector<PointLight> pointLights_;
   bool enablePointLight_ = true;
-
   std::vector<SpotLight> spotLights_;
   bool enableSpotLight_ = false;
 
-  // Transform
+  int lightingMode_ = 1;
+  int spriteBlendMode_ = 0;
+  int particleBlendMode_ = 1; // デフォルト加算 (BlendMode::Add)
+
   Transform transform_;
   Transform cameraTransform_;
   Transform transformSprite_;
   Transform uvTransformSprite_;
-  Transform transform2_;
-  Transform terrainTransform_;
 
   std::unique_ptr<Camera> camera_;
 
-  int lightingMode_ = 1;
-  int spriteBlendMode_ = 0;
+  struct HitEffect {
+    ModelInstance instance;
+    float frame = 0.0f;
+    float maxFrame = 30.0f; // 0.5秒で消える
+    bool isActive = false;
+    Vector3 position;
+  };
 
-  AccelerationField accelerationField_{};
-  bool enableAccelerationField_ = false;
+  std::shared_ptr<ModelResource> resEffect_; // particle.obj
+  std::vector<HitEffect> hitEffects_;
+  void SpawnHitEffect(const Vector3 &pos);
+
+  Ring ring_;
+  std::shared_ptr<TextureResource> texRing_;
+  Ring::Params ringParams_;
+  Transform ringTransform_;
+  Vector2 ringUVScale_ = { 1.0f, 1.0f };
+
+  Cylinder cylinder_;
+  std::shared_ptr<TextureResource> texCylinder_;
+  Cylinder::Params cylinderParams_;
+  Transform cylinderTransform_;
+  Vector2 cylinderUVScale_ = { 1.0f, 1.0f };
 };

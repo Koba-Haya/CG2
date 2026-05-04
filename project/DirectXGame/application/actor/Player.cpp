@@ -6,16 +6,16 @@ void Player::Initialize() {
 }
 
 void Player::Update(const Input &input) {
-  if (input.IsDown(DIK_W)) {
+  if (input.PressKey(DIK_W)) {
     transform_.translate.z += moveSpeed_;
   }
-  if (input.IsDown(DIK_S)) {
+  if (input.PressKey(DIK_S)) {
     transform_.translate.z -= moveSpeed_;
   }
-  if (input.IsDown(DIK_A)) {
+  if (input.PressKey(DIK_A)) {
     transform_.translate.x -= moveSpeed_;
   }
-  if (input.IsDown(DIK_D)) {
+  if (input.PressKey(DIK_D)) {
     transform_.translate.x += moveSpeed_;
   }
 }

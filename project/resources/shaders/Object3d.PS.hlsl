@@ -10,6 +10,7 @@ struct Material
     float3 specularColor;
     float4x4 uvTransform;
     float shininess;
+    float environmentCoefficient;
     float3 pad;
 };
 
@@ -78,13 +79,14 @@ struct SpotLightGroup
     float3 padEnabled; // 16byte境界
 };
 
-ConstantBuffer<Material> gMaterial : register(b0);
+ConstantBuffer<Material> gMaterial : register(b0); // マテリアル定数バッファ
 Texture2D<float4> gTexture : register(t0);
-SamplerState gSampler : register(s0);
-ConstantBuffer<DirectionalLightGroup> gDirectionalLights : register(b1);
-ConstantBuffer<Camera> gCamera : register(b2);
-ConstantBuffer<PointLightGroup> gPointLights : register(b3);
-ConstantBuffer<SpotLightGroup> gSpotLights : register(b4);
+TextureCube<float4> gEnvironmentTexture : register(t1); // 環境マップ（キューブマップ）
+SamplerState gSampler : register(s0); // テクスチャサンプラー
+ConstantBuffer<DirectionalLightGroup> gDirectionalLights : register(b1); // 複数の平行光をまとめた定数バッファ
+ConstantBuffer<Camera> gCamera : register(b2); // カメラの定数バッファ
+ConstantBuffer<PointLightGroup> gPointLights : register(b3); // 複数の点光源をまとめた定数バッファ
+ConstantBuffer<SpotLightGroup> gSpotLights : register(b4); // 複数のスポットライトをまとめた定数バッファ
 
 struct PixelShaderOutput
 {
@@ -253,6 +255,23 @@ PixelShaderOutput main(VertexShaderOutput input)
     }
 
     float3 finalRGB = diffuseSum + specularSum;
+    
+    // ===== 環境マッピング (反射) =====
+    if (gMaterial.enableLighting != 0 && gMaterial.environmentCoefficient > 0.0f)
+    {
+        float3 N = normalize(input.normal);
+        // カメラから頂点へのベクトル (入射ベクトル)
+        float3 incident = normalize(input.worldPosition - gCamera.worldPosition);
+        // 反射ベクトルを算出
+        float3 reflectedVector = reflect(incident, N);
+        
+        // CubeMapをサンプリング
+        float3 environmentColor = gEnvironmentTexture.Sample(gSampler, reflectedVector).rgb;
+        
+        // 反射色を最終色に加算 (マテリアルの係数を掛ける)
+        finalRGB += environmentColor * gMaterial.environmentCoefficient;
+    }
+
     output.color = float4(finalRGB, alpha);
     return output;
 }
