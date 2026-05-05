@@ -365,3 +365,95 @@ Matrix4x4 Transpose(const Matrix4x4 &m) {
   }
   return r;
 }
+
+Vector3 Lerp(const Vector3 &v1, const Vector3 &v2, float t) {
+  return {
+    v1.x + (v2.x - v1.x) * t,
+    v1.y + (v2.y - v1.y) * t,
+    v1.z + (v2.z - v1.z) * t
+  };
+}
+
+Quaternion IdentityQuaternion() {
+  return {0.0f, 0.0f, 0.0f, 1.0f};
+}
+
+Quaternion Slerp(const Quaternion &q1, const Quaternion &q2, float t) {
+  float cosOmega = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
+  Quaternion q2_adjusted = q2;
+  if (cosOmega < 0.0f) {
+    q2_adjusted.x = -q2.x;
+    q2_adjusted.y = -q2.y;
+    q2_adjusted.z = -q2.z;
+    q2_adjusted.w = -q2.w;
+    cosOmega = -cosOmega;
+  }
+  
+  float k0, k1;
+  if (cosOmega > 0.9999f) {
+    k0 = 1.0f - t;
+    k1 = t;
+  } else {
+    float sinOmega = std::sqrt(1.0f - cosOmega * cosOmega);
+    float omega = std::atan2(sinOmega, cosOmega);
+    float invSinOmega = 1.0f / sinOmega;
+    k0 = std::sin((1.0f - t) * omega) * invSinOmega;
+    k1 = std::sin(t * omega) * invSinOmega;
+  }
+  
+  Quaternion result;
+  result.x = q1.x * k0 + q2_adjusted.x * k1;
+  result.y = q1.y * k0 + q2_adjusted.y * k1;
+  result.z = q1.z * k0 + q2_adjusted.z * k1;
+  result.w = q1.w * k0 + q2_adjusted.w * k1;
+  return result;
+}
+
+Matrix4x4 MakeRotateMatrix(const Quaternion &q) {
+  Matrix4x4 result = MakeIdentity4x4();
+  float xx = q.x * q.x;
+  float yy = q.y * q.y;
+  float zz = q.z * q.z;
+  float xy = q.x * q.y;
+  float xz = q.x * q.z;
+  float yz = q.y * q.z;
+  float wx = q.w * q.x;
+  float wy = q.w * q.y;
+  float wz = q.w * q.z;
+
+  result.m[0][0] = 1.0f - 2.0f * (yy + zz);
+  result.m[0][1] = 2.0f * (xy + wz);
+  result.m[0][2] = 2.0f * (xz - wy);
+
+  result.m[1][0] = 2.0f * (xy - wz);
+  result.m[1][1] = 1.0f - 2.0f * (xx + zz);
+  result.m[1][2] = 2.0f * (yz + wx);
+
+  result.m[2][0] = 2.0f * (xz + wy);
+  result.m[2][1] = 2.0f * (yz - wx);
+  result.m[2][2] = 1.0f - 2.0f * (xx + yy);
+
+  return result;
+}
+
+Matrix4x4 MakeAffineMatrix(const Vector3 &scale, const Quaternion &rotate, const Vector3 &translate) {
+  Matrix4x4 rotateMatrix = MakeRotateMatrix(rotate);
+  Matrix4x4 result;
+  result = {scale.x * rotateMatrix.m[0][0],
+            scale.x * rotateMatrix.m[0][1],
+            scale.x * rotateMatrix.m[0][2],
+            0,
+            scale.y * rotateMatrix.m[1][0],
+            scale.y * rotateMatrix.m[1][1],
+            scale.y * rotateMatrix.m[1][2],
+            0,
+            scale.z * rotateMatrix.m[2][0],
+            scale.z * rotateMatrix.m[2][1],
+            scale.z * rotateMatrix.m[2][2],
+            0,
+            translate.x,
+            translate.y,
+            translate.z,
+            1};
+  return result;
+}

@@ -440,6 +440,8 @@ void GameScene::Update() {
 
   ParticleManager::GetInstance()->Update(deltaTime);
 
+  modelAnimCube_.UpdateAnimation(deltaTime);
+
   // テスト用：スペースキーで原点にエフェクト発生
   if (services_.input->TriggerKey(DIK_SPACE)) {
     SpawnHitEffect({0.0f, 0.0f, -1.0f});
@@ -455,8 +457,8 @@ void GameScene::Update() {
 
     // スケール：時間とともに大きく
     float scaleVal = t * 5.0f;
-    Matrix4x4 world = MakeAffineMatrix({scaleVal, scaleVal, scaleVal},
-                                       {0, 0, 0}, ef.position);
+    Matrix4x4 world = MakeAffineMatrix(Vector3{scaleVal, scaleVal, scaleVal},
+                                       Vector3{0, 0, 0}, ef.position);
     ef.instance.SetWorld(world);
 
     // 透明度：時間とともに消える
@@ -505,6 +507,13 @@ void GameScene::Draw() {
     modelSphere_.Draw();
   }
 
+  {
+    Matrix4x4 worldAnimCube = MakeAffineMatrix({1.0f, 1.0f, 1.0f}, IdentityQuaternion(), {-2.0f, 0.0f, 0.0f});
+    modelAnimCube_.SetWorld(worldAnimCube);
+    modelAnimCube_.SetLightingMode(lightingMode_);
+    modelAnimCube_.Draw();
+  }
+
   // Skybox
   {
     Matrix4x4 viewMatrix = renderer->GetViewMatrix();
@@ -522,7 +531,7 @@ void GameScene::Draw() {
   }
 
   // Ring の描画
-  {
+  /*{
     Matrix4x4 worldRing = MakeAffineMatrix(ringTransform_.scale, ringTransform_.rotate, ringTransform_.translate);
     ring_.SetTransform(worldRing, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
     
@@ -531,10 +540,10 @@ void GameScene::Draw() {
     if (texRing_) {
         Renderer::GetInstance()->DrawRing(&ring_, texRing_->GetSrvGpu());
     }
-  }
+  }*/
 
   // Cylinder の描画
-  {
+  /*{
     Matrix4x4 worldCylinder = MakeAffineMatrix(cylinderTransform_.scale, cylinderTransform_.rotate, cylinderTransform_.translate);
     cylinder_.SetTransform(worldCylinder, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
     
@@ -543,7 +552,7 @@ void GameScene::Draw() {
     if (texCylinder_) {
         Renderer::GetInstance()->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
     }
-  }
+  }*/
 
   // パーティクルの描画
   BlendMode pMode = BlendMode::Alpha;
@@ -557,7 +566,7 @@ void GameScene::Draw() {
   ParticleManager::GetInstance()->Draw(pMode);
 
   // 最後にPrimitive（グリッド等）
-  Renderer::GetInstance()->RenderPrimitives();
+  //Renderer::GetInstance()->RenderPrimitives();
 
   //    sprite_.Draw();
 
@@ -568,7 +577,7 @@ void GameScene::Draw() {
       Vector3 scale = {ep.extent.x * 2.0f, ep.extent.y * 2.0f,
                        ep.extent.z * 2.0f};
       Matrix4x4 world =
-          MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
+          MakeAffineMatrix(scale, Vector3{0.0f, 0.0f, 0.0f}, ep.localCenter);
       modelEmitterBox_.SetWorld(world);
       modelEmitterBox_.SetWireframe(true);
       modelEmitterBox_.Draw();
@@ -577,7 +586,7 @@ void GameScene::Draw() {
                        std::max(ep.extent.y, 0.001f),
                        std::max(ep.extent.z, 0.001f)};
       Matrix4x4 world =
-          MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
+          MakeAffineMatrix(scale, Vector3{0.0f, 0.0f, 0.0f}, ep.localCenter);
       modelEmitterSphere_.SetWorld(world);
       modelEmitterSphere_.SetWireframe(true);
       modelEmitterSphere_.Draw();
@@ -603,6 +612,8 @@ void GameScene::InitResources_() {
   resCube_ = ModelManager::GetInstance()->Load("resources/cube/cube.obj");
   resEffect_ =
       ModelManager::GetInstance()->Load("resources/particle/particle.obj");
+  resAnimCube_ = ModelManager::GetInstance()->Load("resources/AnimatedCube/AnimatedCube.gltf");
+  animCubeAnim_ = AnimationManager::GetInstance()->LoadAnimation("resources/AnimatedCube", "AnimatedCube.gltf");
 
   CheckFileExists_("resources/particle/circle.png");
   CheckFileExists_("resources/sound/select.mp3");
@@ -613,6 +624,17 @@ void GameScene::InitResources_() {
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 0;
     CheckBoolOrDie_(modelSphere_.Initialize(ci), "modelSphere_.Initialize");
+  }
+
+  {
+    ModelInstance::CreateInfo ci{};
+    ci.resource = resAnimCube_;
+    ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
+    ci.lightingMode = 1;
+    CheckBoolOrDie_(modelAnimCube_.Initialize(ci), "modelAnimCube_.Initialize");
+    if (animCubeAnim_) {
+      modelAnimCube_.PlayAnimation(animCubeAnim_, true);
+    }
   }
 
   {

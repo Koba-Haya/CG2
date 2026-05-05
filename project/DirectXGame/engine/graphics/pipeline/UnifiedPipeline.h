@@ -40,6 +40,9 @@ struct PipelineDesc {
   // スポットライトCB b4
   bool usePSSpotLight_b4 = false;
 
+  // VS Skinning b3
+  bool useVSSkinning_b3 = false;
+
   // ラスタ/ブレンド/深度
   bool enableDepth = true;
   bool alphaBlend = false;
@@ -80,6 +83,7 @@ public:
   }
 
   static PipelineDesc MakeObject3DDesc();
+  static PipelineDesc MakeSkinnedObject3DDesc();
   static PipelineDesc MakeSpriteDesc();
   static PipelineDesc MakeEmitterWireDesc();
   static PipelineDesc MakeEmitterAlphaDesc();

@@ -23,12 +23,19 @@ public:
 
   bool Initialize(const CreateInfo &ci);
 
+  const ModelData* GetModelData() const;
+
   // Renderer が使用するアクセサ
   unsigned long long GetVBVAddress() const;
   unsigned int GetVBVSize() const;
   unsigned int GetVBVStride() const;
   uint32_t GetVertexCount() const;
   unsigned long long GetTextureHandleGPUAsUInt64() const;
+  
+  bool HasBones() const;
+  unsigned long long GetBoneVBVAddress() const;
+  unsigned int GetBoneVBVSize() const;
+  unsigned int GetBoneVBVStride() const;
 
 private:
   struct Impl;

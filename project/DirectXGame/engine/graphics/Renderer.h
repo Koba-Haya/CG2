@@ -156,6 +156,8 @@ private:
 
   std::unique_ptr<UnifiedPipeline> objPipelineOpaque_;
   std::unique_ptr<UnifiedPipeline> objPipelineWireframe_;
+  std::unique_ptr<UnifiedPipeline> skinnedPipelineOpaque_;
+  std::unique_ptr<UnifiedPipeline> skinnedPipelineWireframe_;
   std::unique_ptr<UnifiedPipeline> skyboxPipeline_;
 
   std::unique_ptr<UnifiedPipeline> spritePipelineAlpha_;

@@ -2,6 +2,8 @@
 
 #include <string>
 #include <vector>
+#include <map>
+#include <optional>
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -17,6 +19,12 @@ struct VertexData {
   Vector4 position{};
   Vector2 texcoord{};
   Vector3 normal{};
+  float pad[3] = {0.0f, 0.0f, 0.0f}; // Ensure 48 bytes (multiple of 16)
+};
+
+struct VertexBoneData {
+  uint32_t boneIDs[4] = {0, 0, 0, 0};
+  float weights[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 };
 
 struct MaterialData {
@@ -25,6 +33,7 @@ struct MaterialData {
 
 struct MeshData {
   std::vector<VertexData> vertices;
+  std::vector<VertexBoneData> skinningData;
   int materialIndex = -1;
 };
 
@@ -35,10 +44,25 @@ struct Node {
   std::vector<Node> children;
 };
 
+struct Joint {
+  std::string name;
+  int32_t index;
+  Matrix4x4 inverseBindPoseMatrix;
+  Matrix4x4 localMatrix;
+  std::vector<int32_t> childrenIndices;
+};
+
+struct Skeleton {
+  int32_t rootJointIndex = -1;
+  std::map<std::string, int32_t> jointMap;
+  std::vector<Joint> joints;
+};
+
 struct ModelData {
   std::vector<MeshData> meshes;
   std::vector<MaterialData> materials;
   Node rootNode;
+  Skeleton skeleton;
 };
 
 Matrix4x4 ConvertAssimpMatrix(const aiMatrix4x4 &a);
@@ -55,4 +79,5 @@ VertexData FixupVertex_AssimpToEngine(const VertexData &v,
 void FlipTriangleWinding(VertexData &a, VertexData &b, VertexData &c);
 
 std::vector<VertexData> FlattenVertices(const ModelData &model);
+std::vector<VertexBoneData> FlattenSkinningData(const ModelData &model);
 std::string PickDiffuseTexturePath(const ModelData &model);

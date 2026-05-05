@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <FxCompile Include="resources\shaders\Particle.PS.hlsl" />
@@ -39,6 +39,8 @@
     <ClCompile Include="DirectXGame\engine\base\WinApp.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\3d\model\ModelUtils.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\3d\model\ModelInstance.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\3d\model\SkinCluster.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\3d\model\AnimationManager.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\3d\model\ModelResource.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\particle\ParticleEmitter.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\particle\ParticleManager.cpp" />
@@ -96,6 +98,9 @@
     <ClInclude Include="DirectXGame\engine\base\WinApp.h" />
     <ClInclude Include="DirectXGame\engine\graphics\3d\model\ModelUtils.h" />
     <ClInclude Include="DirectXGame\engine\graphics\3d\model\ModelInstance.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\3d\model\SkinCluster.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\3d\model\AnimationManager.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\3d\model\Animation.h" />
     <ClInclude Include="DirectXGame\engine\graphics\3d\model\ModelResource.h" />
     <ClInclude Include="DirectXGame\engine\graphics\particle\ParticleEmitter.h" />
     <ClInclude Include="DirectXGame\engine\graphics\particle\ParticleManager.h" />

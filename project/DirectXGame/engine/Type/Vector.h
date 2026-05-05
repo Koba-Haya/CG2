@@ -17,3 +17,10 @@ struct Vector4 {
   float z;
   float w;
 };
+
+struct Quaternion {
+  float x;
+  float y;
+  float z;
+  float w;
+};

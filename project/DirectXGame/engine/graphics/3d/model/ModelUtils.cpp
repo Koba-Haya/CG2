@@ -3,28 +3,32 @@
 
 Matrix4x4 ConvertAssimpMatrix(const aiMatrix4x4 &a) {
   Matrix4x4 m{};
+  // Assimp is row-major with pre-multiplication (translation in last column).
+  // Engine is row-major with post-multiplication (translation in last row).
+  // Thus we need to transpose.
   m.m[0][0] = a[0][0];
-  m.m[0][1] = a[0][1];
-  m.m[0][2] = a[0][2];
-  m.m[0][3] = a[0][3];
-  m.m[1][0] = a[1][0];
+  m.m[0][1] = a[1][0];
+  m.m[0][2] = a[2][0];
+  m.m[0][3] = a[3][0];
+  m.m[1][0] = a[0][1];
   m.m[1][1] = a[1][1];
-  m.m[1][2] = a[1][2];
-  m.m[1][3] = a[1][3];
-  m.m[2][0] = a[2][0];
-  m.m[2][1] = a[2][1];
+  m.m[1][2] = a[2][1];
+  m.m[1][3] = a[3][1];
+  m.m[2][0] = a[0][2];
+  m.m[2][1] = a[1][2];
   m.m[2][2] = a[2][2];
-  m.m[2][3] = a[2][3];
-  m.m[3][0] = a[3][0];
-  m.m[3][1] = a[3][1];
-  m.m[3][2] = a[3][2];
+  m.m[2][3] = a[3][2];
+  m.m[3][0] = a[0][3];
+  m.m[3][1] = a[1][3];
+  m.m[3][2] = a[2][3];
   m.m[3][3] = a[3][3];
   return m;
 }
 
 Matrix4x4 ConvertAssimpMatrixTransposed(const aiMatrix4x4 &a) {
-  Matrix4x4 m = ConvertAssimpMatrix(a);
-  return Transpose(m);
+  // We already transpose in ConvertAssimpMatrix, so this would be "original" Assimp layout.
+  // But usually we just need ConvertAssimpMatrix to work correctly.
+  return Transpose(ConvertAssimpMatrix(a));
 }
 
 VertexData FixupVertex_AssimpToEngine(const VertexData &v,
@@ -55,6 +59,22 @@ std::vector<VertexData> FlattenVertices(const ModelData &model) {
 
   for (const auto &m : model.meshes) {
     out.insert(out.end(), m.vertices.begin(), m.vertices.end());
+  }
+  return out;
+}
+
+std::vector<VertexBoneData> FlattenSkinningData(const ModelData &model) {
+  std::vector<VertexBoneData> out;
+  size_t total = 0;
+  for (const auto &m : model.meshes) {
+    total += m.skinningData.size();
+  }
+  
+  if (total == 0) return out;
+  
+  out.reserve(total);
+  for (const auto &m : model.meshes) {
+    out.insert(out.end(), m.skinningData.begin(), m.skinningData.end());
   }
   return out;
 }

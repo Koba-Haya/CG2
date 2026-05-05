@@ -4,6 +4,9 @@
 #include <cassert>
 #include <d3d12.h>
 #include <wrl/client.h>
+#include "SkinCluster.h"
+#include "Animation.h"
+#include "ModelUtils.h"
 
 namespace {
 static constexpr UINT Align256_(UINT n) { return (n + 255u) & ~255u; }
@@ -15,6 +18,12 @@ struct ModelInstance::Impl {
   MaterialCB *cbMatMapped = nullptr;
   TransformCB *cbTransMapped = nullptr;
   std::shared_ptr<ModelResource> resource;
+  
+  std::shared_ptr<Animation> currentAnimation;
+  float animationTime = 0.0f;
+  bool animationLoop = true;
+  std::unique_ptr<Skeleton> skeleton;
+  std::unique_ptr<SkinCluster> skinCluster;
 };
 
 ModelInstance::ModelInstance() : pImpl_(std::make_unique<Impl>()) {}
@@ -50,6 +59,12 @@ bool ModelInstance::Initialize(const CreateInfo &ci) {
       ci.environmentCoefficient; // 追加
 
   SetWorld(MakeIdentity4x4());
+
+  if (pImpl_->resource->HasBones()) {
+    pImpl_->skeleton = std::make_unique<Skeleton>(pImpl_->resource->GetModelData()->skeleton);
+    pImpl_->skinCluster = std::make_unique<SkinCluster>();
+    pImpl_->skinCluster->Initialize(renderer->GetDX());
+  }
 
   return true;
 }
@@ -103,4 +118,70 @@ ModelResource *ModelInstance::GetResource() const {
 
 ModelInstance::TransformCB *ModelInstance::GetTransformMapped() {
   return pImpl_->cbTransMapped;
+}
+
+SkinCluster* ModelInstance::GetSkinCluster() const {
+  return pImpl_->skinCluster.get();
+}
+
+Skeleton* ModelInstance::GetSkeleton() const {
+  return pImpl_->skeleton.get();
+}
+
+template<typename T>
+T CalculateValue(const std::vector<Keyframe<T>>& keyframes, float time) {
+  assert(!keyframes.empty());
+  if (keyframes.size() == 1 || time <= keyframes[0].time) {
+    return keyframes[0].value;
+  }
+  for (size_t index = 0; index < keyframes.size() - 1; ++index) {
+    size_t nextIndex = index + 1;
+    if (keyframes[index].time <= time && time <= keyframes[nextIndex].time) {
+      float t = (time - keyframes[index].time) / (keyframes[nextIndex].time - keyframes[index].time);
+      if constexpr (std::is_same_v<T, Vector3>) {
+        return Lerp(keyframes[index].value, keyframes[nextIndex].value, t);
+      } else if constexpr (std::is_same_v<T, Quaternion>) {
+        return Slerp(keyframes[index].value, keyframes[nextIndex].value, t);
+      }
+    }
+  }
+  return (*keyframes.rbegin()).value;
+}
+
+void ModelInstance::PlayAnimation(std::shared_ptr<Animation> animation, bool loop) {
+  pImpl_->currentAnimation = animation;
+  pImpl_->animationTime = 0.0f;
+  pImpl_->animationLoop = loop;
+}
+
+void ModelInstance::UpdateAnimation(float deltaTime) {
+  if (!pImpl_->currentAnimation || !pImpl_->skeleton) return;
+  
+  pImpl_->animationTime += deltaTime;
+  if (pImpl_->animationLoop) {
+    pImpl_->animationTime = std::fmod(pImpl_->animationTime, pImpl_->currentAnimation->duration);
+  } else {
+    pImpl_->animationTime = std::min(pImpl_->animationTime, pImpl_->currentAnimation->duration);
+  }
+
+  for (auto& joint : pImpl_->skeleton->joints) {
+    if (pImpl_->currentAnimation->nodeAnimations.find(joint.name) != pImpl_->currentAnimation->nodeAnimations.end()) {
+      const auto& nodeAnim = pImpl_->currentAnimation->nodeAnimations[joint.name];
+      
+      Vector3 translate = {0,0,0};
+      if (!nodeAnim.translate.keyframes.empty()) translate = CalculateValue(nodeAnim.translate.keyframes, pImpl_->animationTime);
+      
+      Quaternion rotate = IdentityQuaternion();
+      if (!nodeAnim.rotate.keyframes.empty()) rotate = CalculateValue(nodeAnim.rotate.keyframes, pImpl_->animationTime);
+      
+      Vector3 scale = {1,1,1};
+      if (!nodeAnim.scale.keyframes.empty()) scale = CalculateValue(nodeAnim.scale.keyframes, pImpl_->animationTime);
+      
+      joint.localMatrix = MakeAffineMatrix(scale, rotate, translate);
+    }
+  }
+
+  if (pImpl_->skinCluster) {
+    pImpl_->skinCluster->Update(*pImpl_->skeleton);
+  }
 }
