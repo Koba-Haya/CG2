@@ -357,6 +357,91 @@ void GameScene::Update() {
     // DebugCamera の Update を無視する形
   }
 
+  if (ImGui::CollapsingHeader("Ring Primitive")) {
+    bool changed = false;
+    int divide = static_cast<int>(ringParams_.divide);
+    if (ImGui::SliderInt("Divide", &divide, 3, 128)) {
+      ringParams_.divide = static_cast<uint32_t>(divide);
+      changed = true;
+    }
+    if (ImGui::SliderFloat("Outer Radius", &ringParams_.outerRadius, 0.1f,
+                           10.0f)) {
+      if (ringParams_.outerRadius < ringParams_.innerRadius) {
+        ringParams_.outerRadius = ringParams_.innerRadius + 0.01f;
+      }
+      changed = true;
+    }
+    if (ImGui::SliderFloat("Inner Radius", &ringParams_.innerRadius, 0.0f,
+                           10.0f)) {
+      if (ringParams_.innerRadius > ringParams_.outerRadius) {
+        ringParams_.innerRadius = ringParams_.outerRadius - 0.01f;
+      }
+      changed = true;
+    }
+    changed |= ImGui::SliderAngle("Start Angle", &ringParams_.startAngle,
+                                  -360.0f, 360.0f);
+    changed |=
+        ImGui::SliderAngle("End Angle", &ringParams_.endAngle, -360.0f, 360.0f);
+    changed |= ImGui::Checkbox("UV Vertical", &ringParams_.uvVertical);
+    changed |= ImGui::ColorEdit4("Color Inner", &ringParams_.colorInner.x);
+    changed |= ImGui::ColorEdit4("Color Outer", &ringParams_.colorOuter.x);
+    changed |= ImGui::SliderFloat("Alpha Ref##Ring",
+                                  &ringParams_.alphaReference, 0.0f, 1.0f);
+
+    ImGui::DragFloat2("UV Scale##Ring", &ringUVScale_.x, 0.1f);
+
+    if (changed) {
+      auto *dx = Renderer::GetInstance()->GetDX();
+      ring_.Update(dx->GetDevice(), ringParams_);
+    }
+
+    ImGui::DragFloat3("Ring Pos", &ringTransform_.translate.x, 0.1f);
+    ImGui::DragFloat3("Ring Rot", &ringTransform_.rotate.x, 0.05f);
+
+    static bool autoRotate = true;
+    ImGui::Checkbox("Auto Rotate", &autoRotate);
+    if (autoRotate) {
+      ringTransform_.rotate.z += 1.0f * deltaTime;
+    }
+  }
+
+  if (ImGui::CollapsingHeader("Cylinder Primitive")) {
+    bool changed = false;
+    int divide = static_cast<int>(cylinderParams_.divide);
+    if (ImGui::SliderInt("Divide##Cyl", &divide, 3, 128)) {
+      cylinderParams_.divide = static_cast<uint32_t>(divide);
+      changed = true;
+    }
+    changed |= ImGui::DragFloat2(
+        "Top Radius (X,Z)", &cylinderParams_.topRadiusX, 0.1f, 0.0f, 10.0f);
+    changed |=
+        ImGui::DragFloat2("Bottom Radius (X,Z)", &cylinderParams_.bottomRadiusX,
+                          0.1f, 0.0f, 10.0f);
+    changed |=
+        ImGui::SliderFloat("Height##Cyl", &cylinderParams_.height, 0.1f, 10.0f);
+    changed |= ImGui::SliderAngle("Start Angle##Cyl",
+                                  &cylinderParams_.startAngle, -360.0f, 360.0f);
+    changed |= ImGui::SliderAngle("End Angle##Cyl", &cylinderParams_.endAngle,
+                                  -360.0f, 360.0f);
+    changed |= ImGui::Checkbox("Flip V##Cyl", &cylinderParams_.flipV);
+    changed |= ImGui::Checkbox("UV Vertical##Cyl", &cylinderParams_.uvVertical);
+    changed |= ImGui::SliderFloat("Alpha Reference",
+                                  &cylinderParams_.alphaReference, 0.0f, 1.0f);
+    changed |= ImGui::ColorEdit4("Color Top", &cylinderParams_.colorTop.x);
+    changed |=
+        ImGui::ColorEdit4("Color Bottom", &cylinderParams_.colorBottom.x);
+
+    ImGui::DragFloat2("UV Scale##Cyl", &cylinderUVScale_.x, 0.1f);
+
+    if (changed) {
+      auto *dx = Renderer::GetInstance()->GetDX();
+      cylinder_.Update(dx->GetDevice(), cylinderParams_);
+    }
+
+    ImGui::DragFloat3("Cylinder Pos", &cylinderTransform_.translate.x, 0.1f);
+    ImGui::DragFloat3("Cylinder Rot", &cylinderTransform_.rotate.x, 0.05f);
+  }
+
 #endif
 
   const float deltaTime = 1.0f / 60.0f;
@@ -366,78 +451,6 @@ void GameScene::Update() {
   ParticleManager::GetInstance()->SetEnableAccelerationField(
       enableAccelerationField_);
   ParticleManager::GetInstance()->SetAccelerationField(accelerationField_);
-  if (ImGui::CollapsingHeader("Ring Primitive")) {
-      bool changed = false;
-      int divide = static_cast<int>(ringParams_.divide);
-      if (ImGui::SliderInt("Divide", &divide, 3, 128)) {
-          ringParams_.divide = static_cast<uint32_t>(divide);
-          changed = true;
-      }
-      if (ImGui::SliderFloat("Outer Radius", &ringParams_.outerRadius, 0.1f, 10.0f)) {
-          if (ringParams_.outerRadius < ringParams_.innerRadius) {
-              ringParams_.outerRadius = ringParams_.innerRadius + 0.01f;
-          }
-          changed = true;
-      }
-      if (ImGui::SliderFloat("Inner Radius", &ringParams_.innerRadius, 0.0f, 10.0f)) {
-          if (ringParams_.innerRadius > ringParams_.outerRadius) {
-              ringParams_.innerRadius = ringParams_.outerRadius - 0.01f;
-          }
-          changed = true;
-      }
-      changed |= ImGui::SliderAngle("Start Angle", &ringParams_.startAngle, -360.0f, 360.0f);
-      changed |= ImGui::SliderAngle("End Angle", &ringParams_.endAngle, -360.0f, 360.0f);
-      changed |= ImGui::Checkbox("UV Vertical", &ringParams_.uvVertical);
-      changed |= ImGui::ColorEdit4("Color Inner", &ringParams_.colorInner.x);
-      changed |= ImGui::ColorEdit4("Color Outer", &ringParams_.colorOuter.x);
-      changed |= ImGui::SliderFloat("Alpha Ref##Ring", &ringParams_.alphaReference, 0.0f, 1.0f);
-      
-      ImGui::DragFloat2("UV Scale##Ring", &ringUVScale_.x, 0.1f);
-
-      if (changed) {
-          auto* dx = Renderer::GetInstance()->GetDX();
-          ring_.Update(dx->GetDevice(), ringParams_);
-      }
-      
-      ImGui::DragFloat3("Ring Pos", &ringTransform_.translate.x, 0.1f);
-      ImGui::DragFloat3("Ring Rot", &ringTransform_.rotate.x, 0.05f);
-      
-      static bool autoRotate = true;
-      ImGui::Checkbox("Auto Rotate", &autoRotate);
-      if (autoRotate) {
-          ringTransform_.rotate.z += 1.0f * deltaTime;
-      }
-  }
-
-  if (ImGui::CollapsingHeader("Cylinder Primitive")) {
-      bool changed = false;
-      int divide = static_cast<int>(cylinderParams_.divide);
-      if (ImGui::SliderInt("Divide##Cyl", &divide, 3, 128)) {
-          cylinderParams_.divide = static_cast<uint32_t>(divide);
-          changed = true;
-      }
-      changed |= ImGui::DragFloat2("Top Radius (X,Z)", &cylinderParams_.topRadiusX, 0.1f, 0.0f, 10.0f);
-      changed |= ImGui::DragFloat2("Bottom Radius (X,Z)", &cylinderParams_.bottomRadiusX, 0.1f, 0.0f, 10.0f);
-      changed |= ImGui::SliderFloat("Height##Cyl", &cylinderParams_.height, 0.1f, 10.0f);
-      changed |= ImGui::SliderAngle("Start Angle##Cyl", &cylinderParams_.startAngle, -360.0f, 360.0f);
-      changed |= ImGui::SliderAngle("End Angle##Cyl", &cylinderParams_.endAngle, -360.0f, 360.0f);
-      changed |= ImGui::Checkbox("Flip V##Cyl", &cylinderParams_.flipV);
-      changed |= ImGui::Checkbox("UV Vertical##Cyl", &cylinderParams_.uvVertical);
-      changed |= ImGui::SliderFloat("Alpha Reference", &cylinderParams_.alphaReference, 0.0f, 1.0f);
-      changed |= ImGui::ColorEdit4("Color Top", &cylinderParams_.colorTop.x);
-      changed |= ImGui::ColorEdit4("Color Bottom", &cylinderParams_.colorBottom.x);
-
-      ImGui::DragFloat2("UV Scale##Cyl", &cylinderUVScale_.x, 0.1f);
-
-      if (changed) {
-          auto* dx = Renderer::GetInstance()->GetDX();
-          cylinder_.Update(dx->GetDevice(), cylinderParams_);
-      }
-      
-      ImGui::DragFloat3("Cylinder Pos", &cylinderTransform_.translate.x, 0.1f);
-      ImGui::DragFloat3("Cylinder Rot", &cylinderTransform_.rotate.x, 0.05f);
-  }
-
   ParticleManager::GetInstance()->Update(deltaTime);
 
   modelAnimCube_.UpdateAnimation(deltaTime);
