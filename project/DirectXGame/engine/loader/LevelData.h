@@ -19,6 +19,7 @@ struct LevelData {
         Vector3 scaling;
         std::optional<std::string> fileName;
         std::optional<ColliderData> collider;
+        bool isDisabled = false;
         std::vector<ObjectData> children;
     };
 

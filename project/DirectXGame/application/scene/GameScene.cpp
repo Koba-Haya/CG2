@@ -904,6 +904,9 @@ void GameScene::LoadLevel_(const std::string& name) {
 }
 
 void GameScene::CreateLevelObjectRecursive_(const LevelData::ObjectData& data, LevelObject* parent, std::vector<std::unique_ptr<LevelObject>>* list) {
+    // 無効フラグが立っている場合は、そのオブジェクトと子階層を生成しない
+    if (data.isDisabled) return;
+
     auto newObj = std::make_unique<LevelObject>();
     newObj->name = data.name;
     newObj->translation = data.translation;

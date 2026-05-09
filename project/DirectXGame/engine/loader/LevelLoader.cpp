@@ -52,6 +52,11 @@ void ParseRecursive(json& object, LevelData::ObjectData& parentData) {
         parentData.collider = collider;
     }
 
+    // 無効オプションの取得
+    if (object.contains("無効オプション")) {
+        parentData.isDisabled = object["無効オプション"].get<bool>();
+    }
+
     // 子要素の再帰的パース
     if (object.contains("children")) {
         for (auto& child : object["children"]) {
