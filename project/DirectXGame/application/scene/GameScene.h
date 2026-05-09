@@ -15,6 +15,7 @@
 #include "Sprite.h"
 #include "Transform.h"
 #include "Vector.h"
+#include "loader/LevelData.h" // 追加
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -103,4 +104,26 @@ private:
   Cylinder::Params cylinderParams_;
   Transform cylinderTransform_;
   Vector2 cylinderUVScale_ = { 1.0f, 1.0f };
+
+  // --- レベルエディタ関連 ---
+  struct LevelObject {
+      std::string name;
+      std::unique_ptr<ModelInstance> model;
+      Vector3 translation;
+      Vector3 rotation;
+      Vector3 scaling;
+      Matrix4x4 worldMatrix;
+      LevelObject* parent = nullptr;
+      std::vector<std::unique_ptr<LevelObject>> children;
+      std::optional<LevelData::ColliderData> collider;
+
+      void Update();
+      void Draw(const Vector4& colliderColor);
+  };
+
+  std::vector<std::unique_ptr<LevelObject>> levelObjects_;
+  std::unique_ptr<LevelData> levelData_;
+
+  void LoadLevel_(const std::string& name);
+  void CreateLevelObjectRecursive_(const LevelData::ObjectData& data, LevelObject* parent, std::vector<std::unique_ptr<LevelObject>>* list);
 };

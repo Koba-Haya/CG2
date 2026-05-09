@@ -195,6 +195,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="DirectXGame\engine\loader\LevelLoader.cpp" />
     <ClCompile Include="DirectXGame\engine\scene\BaseScene.cpp" />
     <ClCompile Include="DirectXGame\engine\camera\Camera.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\3d\AssetLoader.cpp" />
@@ -271,6 +272,8 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DirectXGame\engine\graphics\pipeline\BlendMode.h" />
+    <ClInclude Include="DirectXGame\engine\loader\LevelData.h" />
+    <ClInclude Include="DirectXGame\engine\loader\LevelLoader.h" />
     <ClInclude Include="DirectXGame\engine\scene\BaseScene.h" />
     <ClInclude Include="DirectXGame\engine\camera\Camera.h" />
     <ClInclude Include="DirectXGame\engine\camera\ICameraController.h" />

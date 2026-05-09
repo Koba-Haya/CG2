@@ -7,6 +7,7 @@
 #include "graphics/texture/TextureManager.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
+#include "loader/LevelLoader.h"
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
@@ -58,6 +59,9 @@ void GameScene::Initialize(const SceneServices &services) {
   accelerationField_.acceleration = {15.0f, 0.0f, 0.0f};
   accelerationField_.area.min = {-1.0f, -1.0f, -1.0f};
   accelerationField_.area.max = {1.0f, 1.0f, 1.0f};
+
+  // レベルの読み込み
+  LoadLevel_("level");
 }
 
 void GameScene::Finalize() {
@@ -440,6 +444,11 @@ void GameScene::Update() {
 
   ParticleManager::GetInstance()->Update(deltaTime);
 
+  // レベルオブジェクトの更新
+  for (auto& obj : levelObjects_) {
+      obj->Update();
+  }
+
   // テスト用：スペースキーで原点にエフェクト発生
   if (services_.input->TriggerKey(DIK_SPACE)) {
     SpawnHitEffect({0.0f, 0.0f, -1.0f});
@@ -490,20 +499,20 @@ void GameScene::Draw() {
   renderer->SetSpotLights(spotLights_, enableSpotLight_);
 
   // 3D モデル描画
-  {
-    Matrix4x4 worldSphere = MakeAffineMatrix(
-        transform_.scale, transform_.rotate, transform_.translate);
-    modelSphere_.SetWorld(worldSphere);
-    modelSphere_.SetLightingMode(lightingMode_);
-    modelSphere_.SetSpecularColor({1.0f, 1.0f, 1.0f});
-    modelSphere_.SetShininess(64.0f);
+  //{
+  //  Matrix4x4 worldSphere = MakeAffineMatrix(
+  //      transform_.scale, transform_.rotate, transform_.translate);
+  //  modelSphere_.SetWorld(worldSphere);
+  //  modelSphere_.SetLightingMode(lightingMode_);
+  //  modelSphere_.SetSpecularColor({1.0f, 1.0f, 1.0f});
+  //  modelSphere_.SetShininess(64.0f);
 
-    // 反射の有効/無効と強さを設定
-    float finalCoeff = enableReflection_ ? reflectionWeight_ : 0.0f;
-    modelSphere_.SetEnvironmentCoefficient(finalCoeff);
+  //  // 反射の有効/無効と強さを設定
+  //  float finalCoeff = enableReflection_ ? reflectionWeight_ : 0.0f;
+  //  modelSphere_.SetEnvironmentCoefficient(finalCoeff);
 
-    modelSphere_.Draw();
-  }
+  //  modelSphere_.Draw();
+  //}
 
   // Skybox
   {
@@ -522,7 +531,7 @@ void GameScene::Draw() {
   }
 
   // Ring の描画
-  {
+  /*{
     Matrix4x4 worldRing = MakeAffineMatrix(ringTransform_.scale, ringTransform_.rotate, ringTransform_.translate);
     ring_.SetTransform(worldRing, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
     
@@ -531,10 +540,10 @@ void GameScene::Draw() {
     if (texRing_) {
         Renderer::GetInstance()->DrawRing(&ring_, texRing_->GetSrvGpu());
     }
-  }
+  }*/
 
   // Cylinder の描画
-  {
+  /*{
     Matrix4x4 worldCylinder = MakeAffineMatrix(cylinderTransform_.scale, cylinderTransform_.rotate, cylinderTransform_.translate);
     cylinder_.SetTransform(worldCylinder, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
     
@@ -543,10 +552,10 @@ void GameScene::Draw() {
     if (texCylinder_) {
         Renderer::GetInstance()->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
     }
-  }
+  }*/
 
   // パーティクルの描画
-  BlendMode pMode = BlendMode::Alpha;
+  /*BlendMode pMode = BlendMode::Alpha;
   switch (particleBlendMode_) {
   case 0: pMode = BlendMode::Alpha; break;
   case 1: pMode = BlendMode::Add; break;
@@ -554,7 +563,7 @@ void GameScene::Draw() {
   case 3: pMode = BlendMode::Multiply; break;
   case 4: pMode = BlendMode::Screen; break;
   }
-  ParticleManager::GetInstance()->Draw(pMode);
+  ParticleManager::GetInstance()->Draw(pMode);*/
 
   // 最後にPrimitive（グリッド等）
   Renderer::GetInstance()->RenderPrimitives();
@@ -584,7 +593,10 @@ void GameScene::Draw() {
     }
   }
 
-
+  // レベルオブジェクトの描画
+  for (auto& obj : levelObjects_) {
+      obj->Draw({ 0.5f, 1.0f, 1.0f, 1.0f }); // コライダーは水色
+  }
 }
 
 void GameScene::InitLogging_() {
@@ -808,5 +820,127 @@ void GameScene::SpawnHitEffect(const Vector3 &pos) {
 
       ParticleManager::GetInstance()->Emit(
           particleGroupName_, pos, velocity, finalScale, rotate, lifetime, color);
-  }
+    }
+}
+
+void GameScene::LevelObject::Update() {
+    float toRad = 3.14159265f / 180.0f;
+    Vector3 radRot = { rotation.x * toRad, rotation.y * toRad, rotation.z * toRad };
+    Matrix4x4 localMatrix = MakeAffineMatrix(scaling, radRot, translation);
+    
+    if (parent) {
+        worldMatrix = Multiply(localMatrix, parent->worldMatrix);
+    } else {
+        worldMatrix = localMatrix;
+    }
+    
+    if (model) {
+        model->SetWorld(worldMatrix);
+    }
+    
+    for (auto& child : children) {
+        child->Update();
+    }
+}
+
+void GameScene::LevelObject::Draw(const Vector4& colliderColor) {
+    if (model) {
+        model->Draw();
+    }
+    
+    // コライダーの描画
+    if (collider) {
+        // 8頂点を算出 (ローカル空間)
+        Vector3 min = { collider->center.x - collider->size.x * 0.5f, collider->center.y - collider->size.y * 0.5f, collider->center.z - collider->size.z * 0.5f };
+        Vector3 max = { collider->center.x + collider->size.x * 0.5f, collider->center.y + collider->size.y * 0.5f, collider->center.z + collider->size.z * 0.5f };
+        
+        Vector3 corners[8] = {
+            {min.x, min.y, min.z}, {max.x, min.y, min.z},
+            {min.x, max.y, min.z}, {max.x, max.y, min.z},
+            {min.x, min.y, max.z}, {max.x, min.y, max.z},
+            {min.x, max.y, max.z}, {max.x, max.y, max.z}
+        };
+
+        // ワールド座標に変換
+        Vector3 worldCorners[8];
+        for (int i = 0; i < 8; ++i) {
+            Vector3 v = corners[i];
+            worldCorners[i].x = v.x * worldMatrix.m[0][0] + v.y * worldMatrix.m[1][0] + v.z * worldMatrix.m[2][0] + worldMatrix.m[3][0];
+            worldCorners[i].y = v.x * worldMatrix.m[0][1] + v.y * worldMatrix.m[1][1] + v.z * worldMatrix.m[2][1] + worldMatrix.m[3][1];
+            worldCorners[i].z = v.x * worldMatrix.m[0][2] + v.y * worldMatrix.m[1][2] + v.z * worldMatrix.m[2][2] + worldMatrix.m[3][2];
+        }
+
+        auto* renderer = Renderer::GetInstance();
+        // 前面
+        renderer->DrawLine(worldCorners[0], worldCorners[1], colliderColor);
+        renderer->DrawLine(worldCorners[2], worldCorners[3], colliderColor);
+        renderer->DrawLine(worldCorners[0], worldCorners[2], colliderColor);
+        renderer->DrawLine(worldCorners[1], worldCorners[3], colliderColor);
+        // 奥面
+        renderer->DrawLine(worldCorners[4], worldCorners[5], colliderColor);
+        renderer->DrawLine(worldCorners[6], worldCorners[7], colliderColor);
+        renderer->DrawLine(worldCorners[4], worldCorners[6], colliderColor);
+        renderer->DrawLine(worldCorners[5], worldCorners[7], colliderColor);
+        // 接続
+        renderer->DrawLine(worldCorners[0], worldCorners[4], colliderColor);
+        renderer->DrawLine(worldCorners[1], worldCorners[5], colliderColor);
+        renderer->DrawLine(worldCorners[2], worldCorners[6], colliderColor);
+        renderer->DrawLine(worldCorners[3], worldCorners[7], colliderColor);
+    }
+    
+    for (auto& child : children) {
+        child->Draw(colliderColor);
+    }
+}
+
+void GameScene::LoadLevel_(const std::string& name) {
+    levelData_ = LevelLoader::Load(name);
+    if (!levelData_) return;
+    
+    levelObjects_.clear();
+    for (auto& objData : levelData_->objects) {
+        CreateLevelObjectRecursive_(objData, nullptr, &levelObjects_);
+    }
+}
+
+void GameScene::CreateLevelObjectRecursive_(const LevelData::ObjectData& data, LevelObject* parent, std::vector<std::unique_ptr<LevelObject>>* list) {
+    auto newObj = std::make_unique<LevelObject>();
+    newObj->name = data.name;
+    newObj->translation = data.translation;
+    newObj->rotation = data.rotation;
+    newObj->scaling = data.scaling;
+    newObj->parent = parent;
+    newObj->collider = data.collider;
+
+    if (data.type == "MESH" && data.fileName) {
+        // "resources/" + fileName で読み込む
+        // ※現状、Blenderのメッシュ名とフォルダ名が一致している必要がある
+        // (例: blenderでbox -> resources/box/box.obj)
+        auto resource = ModelManager::GetInstance()->Load("resources/" + *data.fileName + "/" + *data.fileName + ".obj");
+        if (!resource) {
+            // 失敗した場合は直接指定も試行
+            resource = ModelManager::GetInstance()->Load("resources/" + *data.fileName);
+        }
+        
+        if (resource) {
+            newObj->model = std::make_unique<ModelInstance>();
+            ModelInstance::CreateInfo ci{};
+            ci.resource = resource;
+            newObj->model->Initialize(ci);
+        } else {
+            OutputDebugStringA(("Failed to load model: " + *data.fileName + "\n").c_str());
+        }
+    } else if (data.type == "CAMERA") {
+        // TODO: カメラの設定を反映
+        OutputDebugStringA(("Found Camera: " + data.name + " (Applying transform to game camera would go here)\n").c_str());
+    } else if (data.type == "LIGHT") {
+        // TODO: ライトの設定を反映
+        OutputDebugStringA(("Found Light: " + data.name + "\n").c_str());
+    }
+
+    for (auto& childData : data.children) {
+        CreateLevelObjectRecursive_(childData, newObj.get(), &newObj->children);
+    }
+
+    list->push_back(std::move(newObj));
 }

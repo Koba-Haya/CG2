@@ -415,7 +415,7 @@ void Renderer::RenderPrimitives() {
 
   primitivePipeline_->SetPipelineState(cmdList);
   cmdList->SetGraphicsRootConstantBufferView(
-      1, primitiveTransformCB_->GetGPUVirtualAddress());
+      0, primitiveTransformCB_->GetGPUVirtualAddress());
 
   primitiveDrawer_->Draw(cmdList);
   primitiveDrawer_->Reset(); // 描画後にリセット

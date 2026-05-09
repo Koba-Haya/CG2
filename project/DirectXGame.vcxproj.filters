@@ -57,6 +57,7 @@
     <ClCompile Include="DirectXGame\engine\graphics\primitive\PrimitiveDrawer.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\primitive\Ring.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\primitive\Cylinder.cpp" />
+    <ClCompile Include="DirectXGame\engine\loader\LevelLoader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DirectXGame\engine\scene\BaseScene.h" />
@@ -119,6 +120,8 @@
     <ClInclude Include="DirectXGame\engine\graphics\primitive\PrimitiveDrawer.h" />
     <ClInclude Include="DirectXGame\engine\graphics\primitive\Ring.h" />
     <ClInclude Include="DirectXGame\engine\graphics\primitive\Cylinder.h" />
+    <ClInclude Include="DirectXGame\engine\loader\LevelLoader.h" />
+    <ClInclude Include="DirectXGame\engine\loader\LevelData.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\shaders\Particle.hlsli" />
