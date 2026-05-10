@@ -2,42 +2,6 @@
     "name": "scene",
     "objects": [
         {
-            "type": "MESH",
-            "name": "Cube",
-            "transform": {
-                "translation": [
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "rotation": [
-                    54.6475512473283,
-                    -0.0,
-                    0.0
-                ],
-                "scaling": [
-                    1.0,
-                    1.0,
-                    1.0
-                ]
-            },
-            "file_name": "cube",
-            "collider": {
-                "type": "BOX",
-                "center": [
-                    0.0,
-                    0.0,
-                    0.0
-                ],
-                "size": [
-                    2.0,
-                    2.0,
-                    2.0
-                ]
-            },
-            "無効オプション": false
-        },
-        {
             "type": "LIGHT",
             "name": "Light",
             "transform": {
@@ -47,9 +11,9 @@
                     5.903861999511719
                 ],
                 "rotation": [
-                    37.261048582966964,
-                    3.163709045717233,
-                    106.93632398554938
+                    37.26104736328125,
+                    3.1637091636657715,
+                    106.93632507324219
                 ],
                 "scaling": [
                     1.0,
@@ -68,9 +32,9 @@
                     4.958309173583984
                 ],
                 "rotation": [
-                    63.5592952084158,
-                    2.298323772810433e-07,
-                    46.691944977583375
+                    63.559295654296875,
+                    2.2983238068263745e-07,
+                    46.69194412231445
                 ],
                 "scaling": [
                     1.0,
@@ -81,11 +45,11 @@
         },
         {
             "type": "MESH",
-            "name": "ICO球",
+            "name": "Cube.001",
             "transform": {
                 "translation": [
-                    0.0,
-                    -2.82565975189209,
+                    3.0,
+                    3.0,
                     0.0
                 ],
                 "rotation": [
@@ -99,21 +63,94 @@
                     1.0
                 ]
             },
-            "file_name": "sphere",
-            "collider": {
-                "type": "BOX",
-                "center": [
+            "file_name": "cube"
+        },
+        {
+            "type": "MESH",
+            "name": "Cube.003",
+            "transform": {
+                "translation": [
+                    -3.0,
+                    3.0,
+                    0.0
+                ],
+                "rotation": [
+                    0.0,
+                    -0.0,
+                    0.0
+                ],
+                "scaling": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "file_name": "cube"
+        },
+        {
+            "type": "PlayerSpawn",
+            "name": "PlayerSpawn",
+            "transform": {
+                "translation": [
                     0.0,
                     0.0,
                     0.0
                 ],
-                "size": [
-                    2.0,
-                    2.0,
-                    2.0
+                "rotation": [
+                    0.0,
+                    -0.0,
+                    179.99998474121094
+                ],
+                "scaling": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            }
+        },
+        {
+            "type": "MESH",
+            "name": "ICO球",
+            "transform": {
+                "translation": [
+                    3.0,
+                    -3.0,
+                    0.0
+                ],
+                "rotation": [
+                    0.0,
+                    -0.0,
+                    0.0
+                ],
+                "scaling": [
+                    1.0,
+                    1.0,
+                    1.0
                 ]
             },
-            "無効オプション": true
+            "file_name": "sphere"
+        },
+        {
+            "type": "MESH",
+            "name": "ICO球.001",
+            "transform": {
+                "translation": [
+                    -3.0,
+                    -3.0,
+                    0.0
+                ],
+                "rotation": [
+                    0.0,
+                    -0.0,
+                    0.0
+                ],
+                "scaling": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "file_name": "sphere"
         }
     ]
 }

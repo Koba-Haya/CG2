@@ -19,15 +19,16 @@ void ParseRecursive(json& object, LevelData::ObjectData& parentData) {
     json& transform = object["transform"];
     
     // Blender(Z-up) -> Game(Y-up) への変換
-    // 座標: (X, Y, Z) -> (X, Z, Y)
+    // 座標: (X, Y, Z) -> (X, Z, -Y) ※Blenderの-Yをゲームの+Z(正面)に合わせる
     parentData.translation.x = (float)transform["translation"][0];
     parentData.translation.y = (float)transform["translation"][2];
-    parentData.translation.z = (float)transform["translation"][1];
+    parentData.translation.z = -(float)transform["translation"][1];
 
-    // 回転: (X, Y, Z) -> (-X, -Z, -Y) ※スクリーンショットの資料に従う
-    parentData.rotation.x = -(float)transform["rotation"][0];
-    parentData.rotation.y = -(float)transform["rotation"][2];
-    parentData.rotation.z = -(float)transform["rotation"][1];
+    // 回転: (X, Y, Z) -> (-X, -Z, -Y) ※軸対応と符号の調整
+    float toRad = 3.14159265f / 180.0f;
+    parentData.rotation.x = -(float)transform["rotation"][0] * toRad;
+    parentData.rotation.y = -(float)transform["rotation"][2] * toRad;
+    parentData.rotation.z = -(float)transform["rotation"][1] * toRad;
 
     // スケーリング: (X, Y, Z) -> (X, Z, Y)
     parentData.scaling.x = (float)transform["scaling"][0];

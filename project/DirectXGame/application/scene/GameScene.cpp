@@ -60,6 +60,11 @@ void GameScene::Initialize(const SceneServices &services) {
   accelerationField_.area.min = {-1.0f, -1.0f, -1.0f};
   accelerationField_.area.max = {1.0f, 1.0f, 1.0f};
 
+  // プレイヤーの初期化
+  auto resPlayer = ModelManager::GetInstance()->Load("resources/player/player.obj");
+  player_ = std::make_unique<Player>();
+  player_->Initialize(resPlayer);
+
   // レベルの読み込み
   LoadLevel_("level");
 }
@@ -72,6 +77,10 @@ void GameScene::Finalize() {
 }
 
 void GameScene::Update() {
+  if (player_) {
+    player_->Update(*services_.input);
+  }
+
   if (camera_) {
     camera_->Update(*services_.input);
   }
@@ -216,7 +225,39 @@ void GameScene::Update() {
     int count = static_cast<int>(spotLights_.size());
     ImGui::Text("Count: %d / %d", count, kMaxSpotLights);
 
-    if (ImGui::Button("Add SpotLight")) {
+    if (ImGui::CollapsingHeader("Player")) {
+        if (player_) {
+            ImGui::Text("Position");
+            Vector3 pos = player_->GetPosition();
+            bool changed = false;
+            changed |= ImGui::DragFloat3("##PosDrag", &pos.x, 0.05f);
+            changed |= ImGui::InputFloat3("##PosInput", &pos.x);
+            if (changed) {
+                player_->SetPosition(pos);
+            }
+            
+            ImGui::Separator();
+            ImGui::Text("Rotation (deg)");
+            Vector3 rot = player_->GetRotation();
+            // 表示用に度数法に変換
+            rot.x *= 180.0f / 3.14159265f;
+            rot.y *= 180.0f / 3.14159265f;
+            rot.z *= 180.0f / 3.14159265f;
+            
+            bool rotChanged = false;
+            rotChanged |= ImGui::DragFloat3("##RotDrag", &rot.x, 0.5f);
+            rotChanged |= ImGui::InputFloat3("##RotInput", &rot.x);
+            if (rotChanged) {
+                // 保存用にラジアンに変換
+                rot.x *= 3.14159265f / 180.0f;
+                rot.y *= 3.14159265f / 180.0f;
+                rot.z *= 3.14159265f / 180.0f;
+                player_->SetRotation(rot);
+            }
+        }
+    }
+
+    if (ImGui::Button("Add Light")) {
       if (count < kMaxSpotLights) {
         SpotLight sl{};
         sl.color = {1.0f, 1.0f, 1.0f};
@@ -597,6 +638,10 @@ void GameScene::Draw() {
   for (auto& obj : levelObjects_) {
       obj->Draw({ 0.5f, 1.0f, 1.0f, 1.0f }); // コライダーは水色
   }
+
+  if (player_) {
+      player_->Draw();
+  }
 }
 
 void GameScene::InitLogging_() {
@@ -906,6 +951,16 @@ void GameScene::LoadLevel_(const std::string& name) {
 void GameScene::CreateLevelObjectRecursive_(const LevelData::ObjectData& data, LevelObject* parent, std::vector<std::unique_ptr<LevelObject>>* list) {
     // 無効フラグが立っている場合は、そのオブジェクトと子階層を生成しない
     if (data.isDisabled) return;
+
+    // 出現ポイントの座標を自キャラに反映
+    if (data.type == "PlayerSpawn") {
+        if (player_) {
+            player_->SetPosition(data.translation);
+            player_->SetRotation(data.rotation);
+        }
+        // 出現ポイント自体は表示モデルを持たないのでここで終了（生成しない）
+        return;
+    }
 
     auto newObj = std::make_unique<LevelObject>();
     newObj->name = data.name;

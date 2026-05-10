@@ -16,6 +16,7 @@
 #include "Transform.h"
 #include "Vector.h"
 #include "loader/LevelData.h" // 追加
+#include "actor/Player.h"
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -123,6 +124,7 @@ private:
 
   std::vector<std::unique_ptr<LevelObject>> levelObjects_;
   std::unique_ptr<LevelData> levelData_;
+  std::unique_ptr<Player> player_;
 
   void LoadLevel_(const std::string& name);
   void CreateLevelObjectRecursive_(const LevelData::ObjectData& data, LevelObject* parent, std::vector<std::unique_ptr<LevelObject>>* list);
