@@ -8,6 +8,7 @@
 #include "ModelResource.h"
 #include "ParticleEmitter.h"
 #include "ParticleManager.h"
+#include "AnimationManager.h"
 #include "Ring.h"
 #include "Cylinder.h"
 #include "graphics/texture/TextureResource.h"
@@ -41,10 +42,24 @@ private:
 
   std::shared_ptr<ModelResource> resSphere_;
   std::shared_ptr<ModelResource> resCube_;
+  std::shared_ptr<ModelResource> resAnimCube_;
 
   ModelInstance modelSphere_;
   ModelInstance modelEmitterSphere_;
   ModelInstance modelEmitterBox_;
+  ModelInstance modelAnimCube_;
+  std::shared_ptr<Animation> animCubeAnim_;
+
+  std::shared_ptr<ModelResource> resSimpleSkin_;
+  std::shared_ptr<ModelResource> resHuman_;
+  ModelInstance modelSimpleSkin_;
+  ModelInstance modelHuman_;
+  std::shared_ptr<Animation> animSimpleSkin_;
+  std::shared_ptr<Animation> animHuman_;
+
+  Transform transformSimpleSkin_;
+  Transform transformHuman_;
+  bool showSkeleton_ = false;
 
   Sprite sprite_;
   Skybox skybox_;

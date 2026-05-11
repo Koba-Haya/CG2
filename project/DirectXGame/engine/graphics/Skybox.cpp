@@ -52,7 +52,7 @@ void Skybox::Update(const Matrix4x4 &view, const Matrix4x4 &proj,
                     const Vector3 &camPos, const Vector3 &scale) {
   if (!transformMapped_)
     return;
-  Matrix4x4 world = MakeAffineMatrix(scale, {0, 0, 0}, camPos);
+  Matrix4x4 world = MakeAffineMatrix(scale, Vector3{0, 0, 0}, camPos);
   transformMapped_->World = world;
   transformMapped_->WVP = Multiply(world, Multiply(view, proj));
   transformMapped_->WorldInverseTranspose = Transpose(Inverse(world));

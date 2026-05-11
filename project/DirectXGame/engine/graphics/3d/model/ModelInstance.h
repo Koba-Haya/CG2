@@ -6,6 +6,9 @@
 
 // 前方宣言
 class ModelResource;
+struct Animation;
+struct Skeleton;
+struct SkinCluster;
 
 class ModelInstance {
 public:
@@ -60,6 +63,13 @@ public:
   bool IsWireframe() const { return isWireframe_; }
 
   void Draw();
+  void DrawSkeleton();
+
+  void UpdateAnimation(float deltaTime);
+  void PlayAnimation(std::shared_ptr<Animation> animation, bool loop = true);
+  
+  SkinCluster* GetSkinCluster() const;
+  Skeleton* GetSkeleton() const;
 
   unsigned long long GetMaterialCBAddress() const;
   unsigned long long GetTransformCBAddress() const;

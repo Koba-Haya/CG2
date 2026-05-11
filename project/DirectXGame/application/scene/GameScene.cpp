@@ -72,6 +72,8 @@ void GameScene::Update() {
     camera_->Update(*services_.input);
   }
 
+  const float deltaTime = 1.0f / 60.0f;
+
 #ifdef USE_IMGUI
   static bool settingsOpen = true;
   ImGui::Begin("Settings", &settingsOpen);
@@ -282,6 +284,8 @@ void GameScene::Update() {
   ImGui::Begin("Object", &settingsOpen);
   ImGui::Separator();
 
+  ImGui::Checkbox("Show Skeleton", &showSkeleton_);
+
   // 反射設定
   ImGui::SeparatorText("Environment Reflection");
   ImGui::Checkbox("Enable Reflection", &enableReflection_);
@@ -336,6 +340,24 @@ void GameScene::Update() {
                     0.01f, 0.0f, 5.0f);
 
   ImGui::Separator();
+  ImGui::Text("SimpleSkin");
+  ImGui::DragFloat3("SimpleSkinTranslate",
+                    reinterpret_cast<float *>(&transformSimpleSkin_.translate), 0.01f);
+  ImGui::DragFloat3("SimpleSkinRotate",
+                    reinterpret_cast<float *>(&transformSimpleSkin_.rotate), 0.01f);
+  ImGui::DragFloat3("SimpleSkinScale", reinterpret_cast<float *>(&transformSimpleSkin_.scale),
+                    0.01f, 0.0f, 5.0f);
+
+  ImGui::Separator();
+  ImGui::Text("Human");
+  ImGui::DragFloat3("HumanTranslate",
+                    reinterpret_cast<float *>(&transformHuman_.translate), 0.01f);
+  ImGui::DragFloat3("HumanRotate",
+                    reinterpret_cast<float *>(&transformHuman_.rotate), 0.01f);
+  ImGui::DragFloat3("HumanScale", reinterpret_cast<float *>(&transformHuman_.scale),
+                    0.01f, 0.0f, 5.0f);
+
+  ImGui::Separator();
   ImGui::Text("Sprite");
   ImGui::DragFloat3("SpriteTranslate", &transformSprite_.translate.x, 1.0f);
   ImGui::DragFloat3("SpriteRotate", &transformSprite_.rotate.x, 0.01f);
@@ -357,88 +379,103 @@ void GameScene::Update() {
     // DebugCamera の Update を無視する形
   }
 
-#endif
+  if (ImGui::CollapsingHeader("Ring Primitive")) {
+    bool changed = false;
+    int divide = static_cast<int>(ringParams_.divide);
+    if (ImGui::SliderInt("Divide", &divide, 3, 128)) {
+      ringParams_.divide = static_cast<uint32_t>(divide);
+      changed = true;
+    }
+    if (ImGui::SliderFloat("Outer Radius", &ringParams_.outerRadius, 0.1f,
+                           10.0f)) {
+      if (ringParams_.outerRadius < ringParams_.innerRadius) {
+        ringParams_.outerRadius = ringParams_.innerRadius + 0.01f;
+      }
+      changed = true;
+    }
+    if (ImGui::SliderFloat("Inner Radius", &ringParams_.innerRadius, 0.0f,
+                           10.0f)) {
+      if (ringParams_.innerRadius > ringParams_.outerRadius) {
+        ringParams_.innerRadius = ringParams_.outerRadius - 0.01f;
+      }
+      changed = true;
+    }
+    changed |= ImGui::SliderAngle("Start Angle", &ringParams_.startAngle,
+                                  -360.0f, 360.0f);
+    changed |=
+        ImGui::SliderAngle("End Angle", &ringParams_.endAngle, -360.0f, 360.0f);
+    changed |= ImGui::Checkbox("UV Vertical", &ringParams_.uvVertical);
+    changed |= ImGui::ColorEdit4("Color Inner", &ringParams_.colorInner.x);
+    changed |= ImGui::ColorEdit4("Color Outer", &ringParams_.colorOuter.x);
+    changed |= ImGui::SliderFloat("Alpha Ref##Ring",
+                                  &ringParams_.alphaReference, 0.0f, 1.0f);
 
-  const float deltaTime = 1.0f / 60.0f;
+    ImGui::DragFloat2("UV Scale##Ring", &ringUVScale_.x, 0.1f);
+
+    if (changed) {
+      auto *dx = Renderer::GetInstance()->GetDX();
+      ring_.Update(dx->GetDevice(), ringParams_);
+    }
+
+    ImGui::DragFloat3("Ring Pos", &ringTransform_.translate.x, 0.1f);
+    ImGui::DragFloat3("Ring Rot", &ringTransform_.rotate.x, 0.05f);
+
+    static bool autoRotate = true;
+    ImGui::Checkbox("Auto Rotate", &autoRotate);
+    if (autoRotate) {
+      ringTransform_.rotate.z += 1.0f * deltaTime;
+    }
+  }
+
+  if (ImGui::CollapsingHeader("Cylinder Primitive")) {
+    bool changed = false;
+    int divide = static_cast<int>(cylinderParams_.divide);
+    if (ImGui::SliderInt("Divide##Cyl", &divide, 3, 128)) {
+      cylinderParams_.divide = static_cast<uint32_t>(divide);
+      changed = true;
+    }
+    changed |= ImGui::DragFloat2(
+        "Top Radius (X,Z)", &cylinderParams_.topRadiusX, 0.1f, 0.0f, 10.0f);
+    changed |=
+        ImGui::DragFloat2("Bottom Radius (X,Z)", &cylinderParams_.bottomRadiusX,
+                          0.1f, 0.0f, 10.0f);
+    changed |=
+        ImGui::SliderFloat("Height##Cyl", &cylinderParams_.height, 0.1f, 10.0f);
+    changed |= ImGui::SliderAngle("Start Angle##Cyl",
+                                  &cylinderParams_.startAngle, -360.0f, 360.0f);
+    changed |= ImGui::SliderAngle("End Angle##Cyl", &cylinderParams_.endAngle,
+                                  -360.0f, 360.0f);
+    changed |= ImGui::Checkbox("Flip V##Cyl", &cylinderParams_.flipV);
+    changed |= ImGui::Checkbox("UV Vertical##Cyl", &cylinderParams_.uvVertical);
+    changed |= ImGui::SliderFloat("Alpha Reference",
+                                  &cylinderParams_.alphaReference, 0.0f, 1.0f);
+    changed |= ImGui::ColorEdit4("Color Top", &cylinderParams_.colorTop.x);
+    changed |=
+        ImGui::ColorEdit4("Color Bottom", &cylinderParams_.colorBottom.x);
+
+    ImGui::DragFloat2("UV Scale##Cyl", &cylinderUVScale_.x, 0.1f);
+
+    if (changed) {
+      auto *dx = Renderer::GetInstance()->GetDX();
+      cylinder_.Update(dx->GetDevice(), cylinderParams_);
+    }
+
+    ImGui::DragFloat3("Cylinder Pos", &cylinderTransform_.translate.x, 0.1f);
+    ImGui::DragFloat3("Cylinder Rot", &cylinderTransform_.rotate.x, 0.05f);
+  }
+
+#endif
 
   particleEmitter_.Update(deltaTime);
 
   ParticleManager::GetInstance()->SetEnableAccelerationField(
       enableAccelerationField_);
   ParticleManager::GetInstance()->SetAccelerationField(accelerationField_);
-  if (ImGui::CollapsingHeader("Ring Primitive")) {
-      bool changed = false;
-      int divide = static_cast<int>(ringParams_.divide);
-      if (ImGui::SliderInt("Divide", &divide, 3, 128)) {
-          ringParams_.divide = static_cast<uint32_t>(divide);
-          changed = true;
-      }
-      if (ImGui::SliderFloat("Outer Radius", &ringParams_.outerRadius, 0.1f, 10.0f)) {
-          if (ringParams_.outerRadius < ringParams_.innerRadius) {
-              ringParams_.outerRadius = ringParams_.innerRadius + 0.01f;
-          }
-          changed = true;
-      }
-      if (ImGui::SliderFloat("Inner Radius", &ringParams_.innerRadius, 0.0f, 10.0f)) {
-          if (ringParams_.innerRadius > ringParams_.outerRadius) {
-              ringParams_.innerRadius = ringParams_.outerRadius - 0.01f;
-          }
-          changed = true;
-      }
-      changed |= ImGui::SliderAngle("Start Angle", &ringParams_.startAngle, -360.0f, 360.0f);
-      changed |= ImGui::SliderAngle("End Angle", &ringParams_.endAngle, -360.0f, 360.0f);
-      changed |= ImGui::Checkbox("UV Vertical", &ringParams_.uvVertical);
-      changed |= ImGui::ColorEdit4("Color Inner", &ringParams_.colorInner.x);
-      changed |= ImGui::ColorEdit4("Color Outer", &ringParams_.colorOuter.x);
-      changed |= ImGui::SliderFloat("Alpha Ref##Ring", &ringParams_.alphaReference, 0.0f, 1.0f);
-      
-      ImGui::DragFloat2("UV Scale##Ring", &ringUVScale_.x, 0.1f);
-
-      if (changed) {
-          auto* dx = Renderer::GetInstance()->GetDX();
-          ring_.Update(dx->GetDevice(), ringParams_);
-      }
-      
-      ImGui::DragFloat3("Ring Pos", &ringTransform_.translate.x, 0.1f);
-      ImGui::DragFloat3("Ring Rot", &ringTransform_.rotate.x, 0.05f);
-      
-      static bool autoRotate = true;
-      ImGui::Checkbox("Auto Rotate", &autoRotate);
-      if (autoRotate) {
-          ringTransform_.rotate.z += 1.0f * deltaTime;
-      }
-  }
-
-  if (ImGui::CollapsingHeader("Cylinder Primitive")) {
-      bool changed = false;
-      int divide = static_cast<int>(cylinderParams_.divide);
-      if (ImGui::SliderInt("Divide##Cyl", &divide, 3, 128)) {
-          cylinderParams_.divide = static_cast<uint32_t>(divide);
-          changed = true;
-      }
-      changed |= ImGui::DragFloat2("Top Radius (X,Z)", &cylinderParams_.topRadiusX, 0.1f, 0.0f, 10.0f);
-      changed |= ImGui::DragFloat2("Bottom Radius (X,Z)", &cylinderParams_.bottomRadiusX, 0.1f, 0.0f, 10.0f);
-      changed |= ImGui::SliderFloat("Height##Cyl", &cylinderParams_.height, 0.1f, 10.0f);
-      changed |= ImGui::SliderAngle("Start Angle##Cyl", &cylinderParams_.startAngle, -360.0f, 360.0f);
-      changed |= ImGui::SliderAngle("End Angle##Cyl", &cylinderParams_.endAngle, -360.0f, 360.0f);
-      changed |= ImGui::Checkbox("Flip V##Cyl", &cylinderParams_.flipV);
-      changed |= ImGui::Checkbox("UV Vertical##Cyl", &cylinderParams_.uvVertical);
-      changed |= ImGui::SliderFloat("Alpha Reference", &cylinderParams_.alphaReference, 0.0f, 1.0f);
-      changed |= ImGui::ColorEdit4("Color Top", &cylinderParams_.colorTop.x);
-      changed |= ImGui::ColorEdit4("Color Bottom", &cylinderParams_.colorBottom.x);
-
-      ImGui::DragFloat2("UV Scale##Cyl", &cylinderUVScale_.x, 0.1f);
-
-      if (changed) {
-          auto* dx = Renderer::GetInstance()->GetDX();
-          cylinder_.Update(dx->GetDevice(), cylinderParams_);
-      }
-      
-      ImGui::DragFloat3("Cylinder Pos", &cylinderTransform_.translate.x, 0.1f);
-      ImGui::DragFloat3("Cylinder Rot", &cylinderTransform_.rotate.x, 0.05f);
-  }
-
   ParticleManager::GetInstance()->Update(deltaTime);
+
+  modelAnimCube_.UpdateAnimation(deltaTime);
+  modelSimpleSkin_.UpdateAnimation(deltaTime);
+  modelHuman_.UpdateAnimation(deltaTime);
 
   // テスト用：スペースキーで原点にエフェクト発生
   if (services_.input->TriggerKey(DIK_SPACE)) {
@@ -455,8 +492,8 @@ void GameScene::Update() {
 
     // スケール：時間とともに大きく
     float scaleVal = t * 5.0f;
-    Matrix4x4 world = MakeAffineMatrix({scaleVal, scaleVal, scaleVal},
-                                       {0, 0, 0}, ef.position);
+    Matrix4x4 world = MakeAffineMatrix(Vector3{scaleVal, scaleVal, scaleVal},
+                                       Vector3{0, 0, 0}, ef.position);
     ef.instance.SetWorld(world);
 
     // 透明度：時間とともに消える
@@ -505,6 +542,36 @@ void GameScene::Draw() {
     modelSphere_.Draw();
   }
 
+  {
+    Matrix4x4 worldAnimCube = MakeAffineMatrix({1.0f, 1.0f, 1.0f}, IdentityQuaternion(), {-2.0f, 0.0f, 0.0f});
+    modelAnimCube_.SetWorld(worldAnimCube);
+    modelAnimCube_.SetLightingMode(lightingMode_);
+    modelAnimCube_.Draw();
+  }
+
+  {
+    Matrix4x4 worldSimpleSkin = MakeAffineMatrix(transformSimpleSkin_.scale, transformSimpleSkin_.rotate, transformSimpleSkin_.translate);
+    modelSimpleSkin_.SetWorld(worldSimpleSkin);
+    modelSimpleSkin_.SetLightingMode(lightingMode_);
+    modelSimpleSkin_.Draw();
+  }
+
+  {
+    Matrix4x4 worldHuman = MakeAffineMatrix(transformHuman_.scale, transformHuman_.rotate, transformHuman_.translate);
+    modelHuman_.SetWorld(worldHuman);
+    modelHuman_.SetLightingMode(lightingMode_);
+    modelHuman_.Draw();
+  }
+
+  if (showSkeleton_) {
+    modelSimpleSkin_.DrawSkeleton();
+    modelHuman_.DrawSkeleton();
+    modelAnimCube_.DrawSkeleton();
+  }
+
+  // プリミティブ（ライン等）の描画
+  renderer->RenderPrimitives();
+
   // Skybox
   {
     Matrix4x4 viewMatrix = renderer->GetViewMatrix();
@@ -522,7 +589,7 @@ void GameScene::Draw() {
   }
 
   // Ring の描画
-  {
+  /*{
     Matrix4x4 worldRing = MakeAffineMatrix(ringTransform_.scale, ringTransform_.rotate, ringTransform_.translate);
     ring_.SetTransform(worldRing, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
     
@@ -531,10 +598,10 @@ void GameScene::Draw() {
     if (texRing_) {
         Renderer::GetInstance()->DrawRing(&ring_, texRing_->GetSrvGpu());
     }
-  }
+  }*/
 
   // Cylinder の描画
-  {
+  /*{
     Matrix4x4 worldCylinder = MakeAffineMatrix(cylinderTransform_.scale, cylinderTransform_.rotate, cylinderTransform_.translate);
     cylinder_.SetTransform(worldCylinder, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
     
@@ -543,7 +610,7 @@ void GameScene::Draw() {
     if (texCylinder_) {
         Renderer::GetInstance()->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
     }
-  }
+  }*/
 
   // パーティクルの描画
   BlendMode pMode = BlendMode::Alpha;
@@ -557,7 +624,7 @@ void GameScene::Draw() {
   ParticleManager::GetInstance()->Draw(pMode);
 
   // 最後にPrimitive（グリッド等）
-  Renderer::GetInstance()->RenderPrimitives();
+  //Renderer::GetInstance()->RenderPrimitives();
 
   //    sprite_.Draw();
 
@@ -568,7 +635,7 @@ void GameScene::Draw() {
       Vector3 scale = {ep.extent.x * 2.0f, ep.extent.y * 2.0f,
                        ep.extent.z * 2.0f};
       Matrix4x4 world =
-          MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
+          MakeAffineMatrix(scale, Vector3{0.0f, 0.0f, 0.0f}, ep.localCenter);
       modelEmitterBox_.SetWorld(world);
       modelEmitterBox_.SetWireframe(true);
       modelEmitterBox_.Draw();
@@ -577,7 +644,7 @@ void GameScene::Draw() {
                        std::max(ep.extent.y, 0.001f),
                        std::max(ep.extent.z, 0.001f)};
       Matrix4x4 world =
-          MakeAffineMatrix(scale, {0.0f, 0.0f, 0.0f}, ep.localCenter);
+          MakeAffineMatrix(scale, Vector3{0.0f, 0.0f, 0.0f}, ep.localCenter);
       modelEmitterSphere_.SetWorld(world);
       modelEmitterSphere_.SetWireframe(true);
       modelEmitterSphere_.Draw();
@@ -603,6 +670,8 @@ void GameScene::InitResources_() {
   resCube_ = ModelManager::GetInstance()->Load("resources/cube/cube.obj");
   resEffect_ =
       ModelManager::GetInstance()->Load("resources/particle/particle.obj");
+  resAnimCube_ = ModelManager::GetInstance()->Load("resources/AnimatedCube/AnimatedCube.gltf");
+  animCubeAnim_ = AnimationManager::GetInstance()->LoadAnimation("resources/AnimatedCube", "AnimatedCube.gltf");
 
   CheckFileExists_("resources/particle/circle.png");
   CheckFileExists_("resources/sound/select.mp3");
@@ -613,6 +682,41 @@ void GameScene::InitResources_() {
     ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     ci.lightingMode = 0;
     CheckBoolOrDie_(modelSphere_.Initialize(ci), "modelSphere_.Initialize");
+  }
+
+  {
+    ModelInstance::CreateInfo ci{};
+    ci.resource = resAnimCube_;
+    ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
+    ci.lightingMode = 1;
+    CheckBoolOrDie_(modelAnimCube_.Initialize(ci), "modelAnimCube_.Initialize");
+    if (animCubeAnim_) {
+      modelAnimCube_.PlayAnimation(animCubeAnim_, true);
+    }
+  }
+
+  {
+    resSimpleSkin_ = ModelManager::GetInstance()->Load("resources/simpleSkin/simpleSkin.gltf");
+    animSimpleSkin_ = AnimationManager::GetInstance()->LoadAnimation("resources/simpleSkin", "simpleSkin.gltf");
+    
+    ModelInstance::CreateInfo ci{};
+    ci.resource = resSimpleSkin_;
+    ci.baseColor = {1,1,1,1};
+    ci.lightingMode = 1;
+    CheckBoolOrDie_(modelSimpleSkin_.Initialize(ci), "modelSimpleSkin_.Initialize");
+    if (animSimpleSkin_) modelSimpleSkin_.PlayAnimation(animSimpleSkin_, true);
+  }
+
+  {
+    resHuman_ = ModelManager::GetInstance()->Load("resources/human/walk.gltf");
+    animHuman_ = AnimationManager::GetInstance()->LoadAnimation("resources/human", "walk.gltf");
+
+    ModelInstance::CreateInfo ci{};
+    ci.resource = resHuman_;
+    ci.baseColor = {1,1,1,1};
+    ci.lightingMode = 1;
+    CheckBoolOrDie_(modelHuman_.Initialize(ci), "modelHuman_.Initialize");
+    if (animHuman_) modelHuman_.PlayAnimation(animHuman_, true);
   }
 
   {
@@ -759,13 +863,29 @@ void GameScene::InitResources_() {
 }
 
 void GameScene::InitCamera_() {
-  transform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-  cameraTransform_ = {
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -10.0f}};
-  transformSprite_ = {
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-  uvTransformSprite_ = {
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+  transform_.scale = {1.0f, 1.0f, 1.0f};
+  transform_.rotate = {0.0f, 0.0f, 0.0f};
+  transform_.translate = {0.0f, 0.0f, 0.0f};
+
+  cameraTransform_.scale = {1.0f, 1.0f, 1.0f};
+  cameraTransform_.rotate = {0.0f, 0.0f, 0.0f};
+  cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
+  
+  transformSimpleSkin_.scale = {1.0f, 1.0f, 1.0f};
+  transformSimpleSkin_.rotate = {0.0f, 0.0f, 0.0f};
+  transformSimpleSkin_.translate = {2.0f, 0.0f, 0.0f};
+
+  transformHuman_.scale = {1.0f, 1.0f, 1.0f};
+  transformHuman_.rotate = {0.0f, 0.0f, 0.0f};
+  transformHuman_.translate = {4.0f, 0.0f, 0.0f};
+
+  transformSprite_.scale = {1.0f, 1.0f, 1.0f};
+  transformSprite_.rotate = {0.0f, 0.0f, 0.0f};
+  transformSprite_.translate = {0.0f, 0.0f, 0.0f};
+
+  uvTransformSprite_.scale = {1.0f, 1.0f, 1.0f};
+  uvTransformSprite_.rotate = {0.0f, 0.0f, 0.0f};
+  uvTransformSprite_.translate = {0.0f, 0.0f, 0.0f};
 
   const float aspect = Renderer::GetInstance()->GetAspectRatio();
 

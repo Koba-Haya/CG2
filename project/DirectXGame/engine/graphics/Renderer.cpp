@@ -12,6 +12,7 @@
 #include "Sprite.h"
 #include "SpriteResource.h"
 #include "TextureResource.h"
+#include "SkinCluster.h"
 #include "UnifiedPipeline.h"
 #include "PrimitiveDrawer.h"
 #include <algorithm>
@@ -55,6 +56,18 @@ void Renderer::Initialize(DirectXCommon *dx) {
     objPipelineWireframe_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(objPipelineWireframe_->Initialize(device, utils, compiler,
                                                  includeHandler, desc));
+  }
+
+  // Skinned 3D Pipelines
+  {
+    PipelineDesc desc = UnifiedPipeline::MakeSkinnedObject3DDesc();
+    skinnedPipelineOpaque_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(skinnedPipelineOpaque_->Initialize(device, utils, compiler,
+                                                  includeHandler, desc));
+    desc.fillMode = D3D12_FILL_MODE_WIREFRAME;
+    skinnedPipelineWireframe_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(skinnedPipelineWireframe_->Initialize(device, utils, compiler,
+                                                     includeHandler, desc));
   }
 
   // Skybox Pipeline
@@ -276,17 +289,31 @@ void Renderer::DrawModel(ModelInstance *instance) {
   }
 
   // 1. パイプライン設定
-  UnifiedPipeline *pipeline = instance->IsWireframe()
-                                  ? objPipelineWireframe_.get()
-                                  : objPipelineOpaque_.get();
+  bool hasBones = resource->HasBones();
+  UnifiedPipeline *pipeline = nullptr;
+  if (hasBones) {
+    pipeline = instance->IsWireframe() ? skinnedPipelineWireframe_.get()
+                                       : skinnedPipelineOpaque_.get();
+  } else {
+    pipeline = instance->IsWireframe() ? objPipelineWireframe_.get()
+                                       : objPipelineOpaque_.get();
+  }
   pipeline->SetPipelineState(cmdList);
 
   // 2. 頂点バッファ設定
-  D3D12_VERTEX_BUFFER_VIEW vbv{};
-  vbv.BufferLocation = resource->GetVBVAddress();
-  vbv.SizeInBytes = resource->GetVBVSize();
-  vbv.StrideInBytes = resource->GetVBVStride();
-  cmdList->IASetVertexBuffers(0, 1, &vbv);
+  D3D12_VERTEX_BUFFER_VIEW vbv[2]{};
+  vbv[0].BufferLocation = resource->GetVBVAddress();
+  vbv[0].SizeInBytes = resource->GetVBVSize();
+  vbv[0].StrideInBytes = resource->GetVBVStride();
+  int numVBV = 1;
+
+  if (hasBones) {
+    vbv[1].BufferLocation = resource->GetBoneVBVAddress();
+    vbv[1].SizeInBytes = resource->GetBoneVBVSize();
+    vbv[1].StrideInBytes = resource->GetBoneVBVStride();
+    numVBV = 2;
+  }
+  cmdList->IASetVertexBuffers(0, numVBV, vbv);
 
   // 3. 定数バッファ (Material / Transform)
   cmdList->SetGraphicsRootConstantBufferView(0,
@@ -317,6 +344,11 @@ void Renderer::DrawModel(ModelInstance *instance) {
       5, pointLightCB_->GetGPUVirtualAddress());
   cmdList->SetGraphicsRootConstantBufferView(
       6, spotLightCB_->GetGPUVirtualAddress());
+
+  if (hasBones && instance->GetSkinCluster()) {
+    cmdList->SetGraphicsRootConstantBufferView(
+        8, instance->GetSkinCluster()->paletteResource->GetGPUVirtualAddress());
+  }
 
   // 6. 描画
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -414,6 +446,7 @@ void Renderer::RenderPrimitives() {
   }
 
   primitivePipeline_->SetPipelineState(cmdList);
+  // 他のパイプラインと共通の構造（1番をTransform）にする
   cmdList->SetGraphicsRootConstantBufferView(
       1, primitiveTransformCB_->GetGPUVirtualAddress());
 

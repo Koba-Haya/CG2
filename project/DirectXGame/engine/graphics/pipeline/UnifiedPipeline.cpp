@@ -187,12 +187,18 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
     p.DescriptorTable.pDescriptorRanges = &srvRangeEnv;
     p.DescriptorTable.NumDescriptorRanges = 1;
   }
+  if (desc.useVSSkinning_b3) { // Index 8
+    auto &p = params[numParams++];
+    p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    p.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    p.Descriptor.ShaderRegister = 3;
+  }
 
   D3D12_STATIC_SAMPLER_DESC samp{};
   samp.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
   samp.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-  samp.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-  samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+  samp.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
   samp.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
   samp.MaxLOD = D3D12_FLOAT32_MAX;
   samp.ShaderRegister = 0;
@@ -336,6 +342,17 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeSkinnedObject3DDesc() {
+  PipelineDesc d = MakeObject3DDesc();
+  d.vsPath = L"resources/shaders/SkinnedObject3D.VS.hlsl";
+  d.useVSSkinning_b3 = true;
+  
+  d.inputElements.push_back({"BONEIDS", 0, DXGI_FORMAT_R32G32B32A32_UINT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0});
+  d.inputElements.push_back({"WEIGHTS", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0});
+  
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
   PipelineDesc d{};
   d.inputElements = {
@@ -449,10 +466,10 @@ PipelineDesc UnifiedPipeline::MakePrimitiveDesc() {
   d.vsPath = L"resources/shaders/Primitive.VS.hlsl";
   d.psPath = L"resources/shaders/Primitive.PS.hlsl";
 
-  d.usePSMaterial_b0 = false; // マテリアルは使わず頂点カラーのみ
-  d.useVSTransform_b0 = true; // WVP行列は使用
+  d.usePSMaterial_b0 = true; // Index 0 (Dummy)
+  d.useVSTransform_b0 = true; // Index 1
   d.usePSTextureTable_t0 = false;
-  d.enableDepth = true;
+  d.enableDepth = false; // スケルトンがメッシュに埋もれないよう最前面に表示
   d.alphaBlend = true; // 線も透過できるようにしておく
   d.blendMode = BlendMode::Alpha;
   d.cullMode = D3D12_CULL_MODE_NONE;

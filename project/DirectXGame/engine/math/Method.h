@@ -107,6 +107,7 @@ Matrix4x4 MakeLookAtMatrix(const Vector3 &eye, const Vector3 &target,
                            const Vector3 &up);
 
 Vector3 TransformNormal(const Vector3 &v, const Matrix4x4 &m);
+Vector3 TransformPoint(const Vector3 &v, const Matrix4x4 &m);
 
 /// <summary>
 /// 加算
@@ -122,3 +123,9 @@ Vector3 Add(const Vector3 &v1, const Vector3 &v2);
 /// <param name="m">変換される行列</param>
 /// <returns>変換結果</returns>
 Matrix4x4 Transpose(const Matrix4x4 &m);
+
+Vector3 Lerp(const Vector3 &v1, const Vector3 &v2, float t);
+Quaternion IdentityQuaternion();
+Quaternion Slerp(const Quaternion &q1, const Quaternion &q2, float t);
+Matrix4x4 MakeRotateMatrix(const Quaternion &q);
+Matrix4x4 MakeAffineMatrix(const Vector3 &scale, const Quaternion &rotate, const Vector3 &translate);

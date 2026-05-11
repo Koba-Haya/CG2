@@ -27,7 +27,8 @@ AssetLoader::LoadModel(const std::string &directoryPath,
   Assimp::Importer importer;
   const std::string filePath = directoryPath + "/" + filename;
 
-  const unsigned flags = aiProcess_Triangulate | aiProcess_ConvertToLeftHanded |
+  const unsigned flags = aiProcess_Triangulate | aiProcess_MakeLeftHanded |
+                         aiProcess_FlipWindingOrder |
                          aiProcess_GenSmoothNormals |
                          aiProcess_JoinIdenticalVertices;
 
@@ -38,18 +39,20 @@ AssetLoader::LoadModel(const std::string &directoryPath,
   const std::string ext = GetExtLower_(filename);
 
   UVFixupOptions uvOpt{};
-  if (ext == "obj") {
-    uvOpt.flipV = false;
-    uvOpt.flipU = false;
-  } else if (ext == "gltf" || ext == "glb") {
-    uvOpt.flipV = true;
-    uvOpt.flipU = true;
-  } else {
-    uvOpt.flipV = false;
-    uvOpt.flipU = false;
-  }
+  // このエンジンでは一律でV反転が必要
+  uvOpt.flipV = true;
+  uvOpt.flipU = false;
 
   auto modelData = std::make_shared<ModelData>();
+  std::map<uint32_t, int32_t> meshToJointMap;
+
+  // Build Skeleton from ALL nodes first
+  BuildSkeleton_(scene->mRootNode, modelData->skeleton, -1, meshToJointMap);
+
+  // Find root joint
+  if (!modelData->skeleton.joints.empty()) {
+    modelData->skeleton.rootJointIndex = 0;
+  }
 
   // Materials
   modelData->materials.resize(scene->mNumMaterials);
@@ -67,6 +70,7 @@ AssetLoader::LoadModel(const std::string &directoryPath,
 
   // Meshes
   modelData->meshes.resize(scene->mNumMeshes);
+
   for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
     const aiMesh *mesh = scene->mMeshes[meshIndex];
     assert(mesh);
@@ -75,6 +79,32 @@ AssetLoader::LoadModel(const std::string &directoryPath,
     meshData.materialIndex = (mesh->mMaterialIndex < scene->mNumMaterials)
                                  ? static_cast<int>(mesh->mMaterialIndex)
                                  : -1;
+
+    std::map<uint32_t, std::vector<std::pair<int32_t, float>>> vertexWeightMap;
+
+    bool hasBones = mesh->HasBones();
+    if (hasBones) {
+      for (uint32_t i = 0; i < mesh->mNumBones; ++i) {
+        aiBone* bone = mesh->mBones[i];
+        std::string boneName = bone->mName.C_Str();
+        
+        if (modelData->skeleton.jointMap.count(boneName)) {
+          int32_t jointIndex = modelData->skeleton.jointMap[boneName];
+          modelData->skeleton.joints[jointIndex].inverseBindPoseMatrix = ConvertAssimpMatrix(bone->mOffsetMatrix);
+
+          for (uint32_t j = 0; j < bone->mNumWeights; ++j) {
+            const aiVertexWeight& weight = bone->mWeights[j];
+            vertexWeightMap[weight.mVertexId].push_back({jointIndex, weight.mWeight});
+          }
+        }
+      }
+    }
+
+    // Default joint for node-based animation (if mesh has no bones)
+    int32_t defaultJointIndex = 0;
+    if (meshToJointMap.count(meshIndex)) {
+      defaultJointIndex = meshToJointMap[meshIndex];
+    }
 
     for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
       const aiFace &face = mesh->mFaces[faceIndex];
@@ -100,6 +130,32 @@ AssetLoader::LoadModel(const std::string &directoryPath,
         v.texcoord = {uv.x, uv.y};
 
         tri[e] = FixupVertex_AssimpToEngine(v, uvOpt);
+        
+        // If the model has ANY joints, we must provide skinning data for all vertices
+        VertexBoneData vbd{};
+        auto it = vertexWeightMap.find(vi);
+        if (it != vertexWeightMap.end()) {
+            auto& weights = it->second;
+            std::sort(weights.begin(), weights.end(), [](const auto& a, const auto& b) {
+                return a.second > b.second;
+            });
+            float totalWeight = 0.0f;
+            for (size_t k = 0; k < 4 && k < weights.size(); ++k) {
+                vbd.boneIDs[k] = weights[k].first;
+                vbd.weights[k] = weights[k].second;
+                totalWeight += weights[k].second;
+            }
+            if (totalWeight > 0.0f) {
+                for (size_t k = 0; k < 4; ++k) {
+                    vbd.weights[k] /= totalWeight;
+                }
+            }
+        } else {
+            // No explicit weights - assign to the node's joint or root
+            vbd.boneIDs[0] = defaultJointIndex;
+            vbd.weights[0] = 1.0f;
+        }
+        meshData.skinningData.push_back(vbd);
       }
 
       meshData.vertices.push_back(tri[0]);
@@ -127,7 +183,17 @@ AssetLoader::LoadModel(const std::string &path) {
 Node AssetLoader::ReadNode_(const aiNode *node) {
   Node result{};
 
-  result.localMatrix = ConvertAssimpMatrix(node->mTransformation);
+  aiVector3D scale, translate;
+  aiQuaternion rotate;
+  node->mTransformation.Decompose(scale, rotate, translate);
+
+  result.transform.scale = {scale.x, scale.y, scale.z};
+  result.transform.rotate = {rotate.x, -rotate.y, -rotate.z, rotate.w};
+  result.transform.translate = {-translate.x, translate.y, translate.z};
+
+  result.localMatrix = MakeAffineMatrix(result.transform.scale,
+                                        result.transform.rotate,
+                                        result.transform.translate);
   result.name = node->mName.C_Str();
 
   result.meshIndices.reserve(node->mNumMeshes);
@@ -141,4 +207,46 @@ Node AssetLoader::ReadNode_(const aiNode *node) {
   }
 
   return result;
+}
+
+void AssetLoader::BuildSkeleton_(
+    const aiNode *node, Skeleton &skeleton, int32_t parentJointIndex,
+    std::map<uint32_t, int32_t> &meshToJointMap) {
+  std::string name = node->mName.C_Str();
+
+  int32_t currentIndex = static_cast<int32_t>(skeleton.joints.size());
+  skeleton.jointMap[name] = currentIndex;
+
+  Joint joint;
+  joint.name = name;
+  joint.index = currentIndex;
+
+  aiVector3D scale, translate;
+  aiQuaternion rotate;
+  node->mTransformation.Decompose(scale, rotate, translate);
+
+  joint.transform.scale = {scale.x, scale.y, scale.z};
+  joint.transform.rotate = {rotate.x, -rotate.y, -rotate.z, rotate.w};
+  joint.transform.translate = {-translate.x, translate.y, translate.z};
+
+  joint.localMatrix = MakeAffineMatrix(joint.transform.scale,
+                                       joint.transform.rotate,
+                                       joint.transform.translate);
+  joint.skeletonSpaceMatrix = MakeIdentity4x4();
+  joint.inverseBindPoseMatrix = MakeIdentity4x4();
+
+  skeleton.joints.push_back(joint);
+
+  if (parentJointIndex != -1) {
+    skeleton.joints[parentJointIndex].children.push_back(currentIndex);
+  }
+
+  // Register meshes attached to this node
+  for (uint32_t i = 0; i < node->mNumMeshes; ++i) {
+    meshToJointMap[node->mMeshes[i]] = currentIndex;
+  }
+
+  for (uint32_t i = 0; i < node->mNumChildren; ++i) {
+    BuildSkeleton_(node->mChildren[i], skeleton, currentIndex, meshToJointMap);
+  }
 }

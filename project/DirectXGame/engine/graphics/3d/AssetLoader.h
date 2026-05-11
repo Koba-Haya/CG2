@@ -28,6 +28,7 @@ private:
   }
 
   Node ReadNode_(const aiNode *node);
+  void BuildSkeleton_(const aiNode *node, Skeleton &skeleton, int32_t parentJointIndex, std::map<uint32_t, int32_t>& meshToJointMap);
 
   std::unordered_map<std::string, std::shared_ptr<ModelData>> cache_;
 };
