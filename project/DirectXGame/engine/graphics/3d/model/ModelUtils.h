@@ -12,6 +12,7 @@
 #include "Matrix.h"
 #include "Method.h"
 #include "Vector.h"
+#include "Transform.h"
 
 // ===== CPU側のモデルデータ（OBJ/MTL読み込み結果） =====
 
@@ -38,18 +39,21 @@ struct MeshData {
 };
 
 struct Node {
-  Matrix4x4 localMatrix{};
+  QuaternionTransform transform;
+  Matrix4x4 localMatrix;
   std::string name;
   std::vector<uint32_t> meshIndices;
   std::vector<Node> children;
 };
 
 struct Joint {
+  QuaternionTransform transform;
+  Matrix4x4 localMatrix;
+  Matrix4x4 skeletonSpaceMatrix;
   std::string name;
+  std::vector<int32_t> children; // 資料に合わせてchildrenIndicesからchildrenにリネーム
   int32_t index;
   Matrix4x4 inverseBindPoseMatrix;
-  Matrix4x4 localMatrix;
-  std::vector<int32_t> childrenIndices;
 };
 
 struct Skeleton {
@@ -64,6 +68,9 @@ struct ModelData {
   Node rootNode;
   Skeleton skeleton;
 };
+
+Skeleton CreateSkeleton(const Node& rootNode);
+void UpdateSkeleton(Skeleton& skeleton);
 
 Matrix4x4 ConvertAssimpMatrix(const aiMatrix4x4 &a);
 Matrix4x4 ConvertAssimpMatrixTransposed(const aiMatrix4x4 &a);

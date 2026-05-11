@@ -50,6 +50,17 @@ private:
   ModelInstance modelAnimCube_;
   std::shared_ptr<Animation> animCubeAnim_;
 
+  std::shared_ptr<ModelResource> resSimpleSkin_;
+  std::shared_ptr<ModelResource> resHuman_;
+  ModelInstance modelSimpleSkin_;
+  ModelInstance modelHuman_;
+  std::shared_ptr<Animation> animSimpleSkin_;
+  std::shared_ptr<Animation> animHuman_;
+
+  Transform transformSimpleSkin_;
+  Transform transformHuman_;
+  bool showSkeleton_ = false;
+
   Sprite sprite_;
   Skybox skybox_;
 

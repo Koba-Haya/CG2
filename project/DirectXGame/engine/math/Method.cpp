@@ -348,6 +348,18 @@ Vector3 TransformNormal(const Vector3 &v, const Matrix4x4 &m) {
   };
 }
 
+Vector3 TransformPoint(const Vector3 &v, const Matrix4x4 &m) {
+  Vector3 result;
+  result.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0];
+  result.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + m.m[3][1];
+  result.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + m.m[3][2];
+  float w = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + m.m[3][3];
+  result.x /= w;
+  result.y /= w;
+  result.z /= w;
+  return result;
+}
+
 Vector3 Add(const Vector3 &v1, const Vector3 &v2) {
   Vector3 result;
   result.x = v1.x + v2.x;

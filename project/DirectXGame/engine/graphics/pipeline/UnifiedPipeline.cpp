@@ -466,10 +466,10 @@ PipelineDesc UnifiedPipeline::MakePrimitiveDesc() {
   d.vsPath = L"resources/shaders/Primitive.VS.hlsl";
   d.psPath = L"resources/shaders/Primitive.PS.hlsl";
 
-  d.usePSMaterial_b0 = false; // マテリアルは使わず頂点カラーのみ
-  d.useVSTransform_b0 = true; // WVP行列は使用
+  d.usePSMaterial_b0 = true; // Index 0 (Dummy)
+  d.useVSTransform_b0 = true; // Index 1
   d.usePSTextureTable_t0 = false;
-  d.enableDepth = true;
+  d.enableDepth = false; // スケルトンがメッシュに埋もれないよう最前面に表示
   d.alphaBlend = true; // 線も透過できるようにしておく
   d.blendMode = BlendMode::Alpha;
   d.cullMode = D3D12_CULL_MODE_NONE;

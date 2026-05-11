@@ -39,9 +39,8 @@ AssetLoader::LoadModel(const std::string &directoryPath,
   const std::string ext = GetExtLower_(filename);
 
   UVFixupOptions uvOpt{};
-  // aiProcess_MakeLeftHanded and aiProcess_FlipWindingOrder are used.
-  // GLTF UVs are already top-left, so we don't need additional flipping.
-  uvOpt.flipV = false;
+  // このエンジンでは一律でV反転が必要
+  uvOpt.flipV = true;
   uvOpt.flipU = false;
 
   auto modelData = std::make_shared<ModelData>();
@@ -184,7 +183,17 @@ AssetLoader::LoadModel(const std::string &path) {
 Node AssetLoader::ReadNode_(const aiNode *node) {
   Node result{};
 
-  result.localMatrix = ConvertAssimpMatrix(node->mTransformation);
+  aiVector3D scale, translate;
+  aiQuaternion rotate;
+  node->mTransformation.Decompose(scale, rotate, translate);
+
+  result.transform.scale = {scale.x, scale.y, scale.z};
+  result.transform.rotate = {rotate.x, -rotate.y, -rotate.z, rotate.w};
+  result.transform.translate = {-translate.x, translate.y, translate.z};
+
+  result.localMatrix = MakeAffineMatrix(result.transform.scale,
+                                        result.transform.rotate,
+                                        result.transform.translate);
   result.name = node->mName.C_Str();
 
   result.meshIndices.reserve(node->mNumMeshes);
@@ -200,21 +209,36 @@ Node AssetLoader::ReadNode_(const aiNode *node) {
   return result;
 }
 
-void AssetLoader::BuildSkeleton_(const aiNode *node, Skeleton &skeleton, int32_t parentJointIndex, std::map<uint32_t, int32_t>& meshToJointMap) {
+void AssetLoader::BuildSkeleton_(
+    const aiNode *node, Skeleton &skeleton, int32_t parentJointIndex,
+    std::map<uint32_t, int32_t> &meshToJointMap) {
   std::string name = node->mName.C_Str();
-  
+
   int32_t currentIndex = static_cast<int32_t>(skeleton.joints.size());
   skeleton.jointMap[name] = currentIndex;
-  
+
   Joint joint;
   joint.name = name;
   joint.index = currentIndex;
-  joint.localMatrix = ConvertAssimpMatrix(node->mTransformation);
+
+  aiVector3D scale, translate;
+  aiQuaternion rotate;
+  node->mTransformation.Decompose(scale, rotate, translate);
+
+  joint.transform.scale = {scale.x, scale.y, scale.z};
+  joint.transform.rotate = {rotate.x, -rotate.y, -rotate.z, rotate.w};
+  joint.transform.translate = {-translate.x, translate.y, translate.z};
+
+  joint.localMatrix = MakeAffineMatrix(joint.transform.scale,
+                                       joint.transform.rotate,
+                                       joint.transform.translate);
+  joint.skeletonSpaceMatrix = MakeIdentity4x4();
   joint.inverseBindPoseMatrix = MakeIdentity4x4();
+
   skeleton.joints.push_back(joint);
 
   if (parentJointIndex != -1) {
-     skeleton.joints[parentJointIndex].childrenIndices.push_back(currentIndex);
+    skeleton.joints[parentJointIndex].children.push_back(currentIndex);
   }
 
   // Register meshes attached to this node

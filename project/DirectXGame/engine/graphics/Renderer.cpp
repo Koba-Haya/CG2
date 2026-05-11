@@ -446,6 +446,7 @@ void Renderer::RenderPrimitives() {
   }
 
   primitivePipeline_->SetPipelineState(cmdList);
+  // 他のパイプラインと共通の構造（1番をTransform）にする
   cmdList->SetGraphicsRootConstantBufferView(
       1, primitiveTransformCB_->GetGPUVirtualAddress());
 

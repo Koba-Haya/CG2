@@ -63,6 +63,7 @@ public:
   bool IsWireframe() const { return isWireframe_; }
 
   void Draw();
+  void DrawSkeleton();
 
   void UpdateAnimation(float deltaTime);
   void PlayAnimation(std::shared_ptr<Animation> animation, bool loop = true);

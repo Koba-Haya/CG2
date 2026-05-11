@@ -1,5 +1,6 @@
 #include "ModelUtils.h"
 #include <utility>
+#include <optional>
 
 Matrix4x4 ConvertAssimpMatrix(const aiMatrix4x4 &a) {
   Matrix4x4 m{};
@@ -86,4 +87,54 @@ std::string PickDiffuseTexturePath(const ModelData &model) {
     }
   }
   return {};
+}
+
+static int32_t CreateJoint(const Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints) {
+  Joint joint;
+  joint.name = node.name;
+  joint.transform = node.transform;
+  joint.localMatrix = node.localMatrix;
+  joint.skeletonSpaceMatrix = MakeIdentity4x4();
+  joint.index = static_cast<int32_t>(joints.size());
+  joint.inverseBindPoseMatrix = MakeIdentity4x4();
+  
+  joints.push_back(joint);
+  int32_t currentIndex = joint.index;
+  
+  for (const auto& childNode : node.children) {
+    int32_t childIndex = CreateJoint(childNode, currentIndex, joints);
+    joints[currentIndex].children.push_back(childIndex);
+  }
+  
+  return currentIndex;
+}
+
+Skeleton CreateSkeleton(const Node& rootNode) {
+  Skeleton skeleton;
+  skeleton.rootJointIndex = CreateJoint(rootNode, std::nullopt, skeleton.joints);
+  for (const auto& joint : skeleton.joints) {
+    skeleton.jointMap[joint.name] = joint.index;
+  }
+  return skeleton;
+}
+
+void UpdateSkeleton(Skeleton& skeleton) {
+  auto updateJoint = [&](auto& self, int32_t jointIndex, const Matrix4x4& parentMatrix) -> void {
+    Joint& joint = skeleton.joints[jointIndex];
+    joint.localMatrix = MakeAffineMatrix(joint.transform.scale, joint.transform.rotate, joint.transform.translate);
+    
+    if (jointIndex == skeleton.rootJointIndex) {
+      joint.skeletonSpaceMatrix = joint.localMatrix;
+    } else {
+      joint.skeletonSpaceMatrix = Multiply(joint.localMatrix, parentMatrix);
+    }
+    
+    for (int32_t childIndex : joint.children) {
+      self(self, childIndex, joint.skeletonSpaceMatrix);
+    }
+  };
+  
+  if (skeleton.rootJointIndex != -1) {
+    updateJoint(updateJoint, skeleton.rootJointIndex, MakeIdentity4x4());
+  }
 }

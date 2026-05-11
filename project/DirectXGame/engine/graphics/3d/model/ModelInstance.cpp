@@ -104,6 +104,25 @@ void ModelInstance::SetEnvironmentCoefficient(float c) { // 追加
 
 void ModelInstance::Draw() { Renderer::GetInstance()->DrawModel(this); }
 
+void ModelInstance::DrawSkeleton() {
+  if (!pImpl_->skeleton) return;
+  auto* renderer = Renderer::GetInstance();
+  for (const auto& joint : pImpl_->skeleton->joints) {
+    // 自分自身の位置 (平行移動成分を抽出)
+    Vector3 start = { joint.skeletonSpaceMatrix.m[3][0], joint.skeletonSpaceMatrix.m[3][1], joint.skeletonSpaceMatrix.m[3][2] };
+    start = TransformPoint(start, world_);
+    
+    // 子への線を描く
+    for (int32_t childIndex : joint.children) {
+      const auto& child = pImpl_->skeleton->joints[childIndex];
+      Vector3 end = { child.skeletonSpaceMatrix.m[3][0], child.skeletonSpaceMatrix.m[3][1], child.skeletonSpaceMatrix.m[3][2] };
+      end = TransformPoint(end, world_);
+      
+      renderer->DrawLine(start, end, {1.0f, 1.0f, 1.0f, 1.0f});
+    }
+  }
+}
+
 unsigned long long ModelInstance::GetMaterialCBAddress() const {
   return pImpl_->cbMaterial->GetGPUVirtualAddress();
 }
@@ -168,18 +187,13 @@ void ModelInstance::UpdateAnimation(float deltaTime) {
     if (pImpl_->currentAnimation->nodeAnimations.find(joint.name) != pImpl_->currentAnimation->nodeAnimations.end()) {
       const auto& nodeAnim = pImpl_->currentAnimation->nodeAnimations[joint.name];
       
-      Vector3 translate = {0,0,0};
-      if (!nodeAnim.translate.keyframes.empty()) translate = CalculateValue(nodeAnim.translate.keyframes, pImpl_->animationTime);
-      
-      Quaternion rotate = IdentityQuaternion();
-      if (!nodeAnim.rotate.keyframes.empty()) rotate = CalculateValue(nodeAnim.rotate.keyframes, pImpl_->animationTime);
-      
-      Vector3 scale = {1,1,1};
-      if (!nodeAnim.scale.keyframes.empty()) scale = CalculateValue(nodeAnim.scale.keyframes, pImpl_->animationTime);
-      
-      joint.localMatrix = MakeAffineMatrix(scale, rotate, translate);
+      if (!nodeAnim.translate.keyframes.empty()) joint.transform.translate = CalculateValue(nodeAnim.translate.keyframes, pImpl_->animationTime);
+      if (!nodeAnim.rotate.keyframes.empty()) joint.transform.rotate = CalculateValue(nodeAnim.rotate.keyframes, pImpl_->animationTime);
+      if (!nodeAnim.scale.keyframes.empty()) joint.transform.scale = CalculateValue(nodeAnim.scale.keyframes, pImpl_->animationTime);
     }
   }
+
+  UpdateSkeleton(*pImpl_->skeleton);
 
   if (pImpl_->skinCluster) {
     pImpl_->skinCluster->Update(*pImpl_->skeleton);

@@ -72,6 +72,8 @@ void GameScene::Update() {
     camera_->Update(*services_.input);
   }
 
+  const float deltaTime = 1.0f / 60.0f;
+
 #ifdef USE_IMGUI
   static bool settingsOpen = true;
   ImGui::Begin("Settings", &settingsOpen);
@@ -282,6 +284,8 @@ void GameScene::Update() {
   ImGui::Begin("Object", &settingsOpen);
   ImGui::Separator();
 
+  ImGui::Checkbox("Show Skeleton", &showSkeleton_);
+
   // 反射設定
   ImGui::SeparatorText("Environment Reflection");
   ImGui::Checkbox("Enable Reflection", &enableReflection_);
@@ -333,6 +337,24 @@ void GameScene::Update() {
   ImGui::DragFloat3("SphereRotate",
                     reinterpret_cast<float *>(&transform_.rotate), 0.01f);
   ImGui::DragFloat3("SphereScale", reinterpret_cast<float *>(&transform_.scale),
+                    0.01f, 0.0f, 5.0f);
+
+  ImGui::Separator();
+  ImGui::Text("SimpleSkin");
+  ImGui::DragFloat3("SimpleSkinTranslate",
+                    reinterpret_cast<float *>(&transformSimpleSkin_.translate), 0.01f);
+  ImGui::DragFloat3("SimpleSkinRotate",
+                    reinterpret_cast<float *>(&transformSimpleSkin_.rotate), 0.01f);
+  ImGui::DragFloat3("SimpleSkinScale", reinterpret_cast<float *>(&transformSimpleSkin_.scale),
+                    0.01f, 0.0f, 5.0f);
+
+  ImGui::Separator();
+  ImGui::Text("Human");
+  ImGui::DragFloat3("HumanTranslate",
+                    reinterpret_cast<float *>(&transformHuman_.translate), 0.01f);
+  ImGui::DragFloat3("HumanRotate",
+                    reinterpret_cast<float *>(&transformHuman_.rotate), 0.01f);
+  ImGui::DragFloat3("HumanScale", reinterpret_cast<float *>(&transformHuman_.scale),
                     0.01f, 0.0f, 5.0f);
 
   ImGui::Separator();
@@ -444,8 +466,6 @@ void GameScene::Update() {
 
 #endif
 
-  const float deltaTime = 1.0f / 60.0f;
-
   particleEmitter_.Update(deltaTime);
 
   ParticleManager::GetInstance()->SetEnableAccelerationField(
@@ -454,6 +474,8 @@ void GameScene::Update() {
   ParticleManager::GetInstance()->Update(deltaTime);
 
   modelAnimCube_.UpdateAnimation(deltaTime);
+  modelSimpleSkin_.UpdateAnimation(deltaTime);
+  modelHuman_.UpdateAnimation(deltaTime);
 
   // テスト用：スペースキーで原点にエフェクト発生
   if (services_.input->TriggerKey(DIK_SPACE)) {
@@ -526,6 +548,29 @@ void GameScene::Draw() {
     modelAnimCube_.SetLightingMode(lightingMode_);
     modelAnimCube_.Draw();
   }
+
+  {
+    Matrix4x4 worldSimpleSkin = MakeAffineMatrix(transformSimpleSkin_.scale, transformSimpleSkin_.rotate, transformSimpleSkin_.translate);
+    modelSimpleSkin_.SetWorld(worldSimpleSkin);
+    modelSimpleSkin_.SetLightingMode(lightingMode_);
+    modelSimpleSkin_.Draw();
+  }
+
+  {
+    Matrix4x4 worldHuman = MakeAffineMatrix(transformHuman_.scale, transformHuman_.rotate, transformHuman_.translate);
+    modelHuman_.SetWorld(worldHuman);
+    modelHuman_.SetLightingMode(lightingMode_);
+    modelHuman_.Draw();
+  }
+
+  if (showSkeleton_) {
+    modelSimpleSkin_.DrawSkeleton();
+    modelHuman_.DrawSkeleton();
+    modelAnimCube_.DrawSkeleton();
+  }
+
+  // プリミティブ（ライン等）の描画
+  renderer->RenderPrimitives();
 
   // Skybox
   {
@@ -648,6 +693,30 @@ void GameScene::InitResources_() {
     if (animCubeAnim_) {
       modelAnimCube_.PlayAnimation(animCubeAnim_, true);
     }
+  }
+
+  {
+    resSimpleSkin_ = ModelManager::GetInstance()->Load("resources/simpleSkin/simpleSkin.gltf");
+    animSimpleSkin_ = AnimationManager::GetInstance()->LoadAnimation("resources/simpleSkin", "simpleSkin.gltf");
+    
+    ModelInstance::CreateInfo ci{};
+    ci.resource = resSimpleSkin_;
+    ci.baseColor = {1,1,1,1};
+    ci.lightingMode = 1;
+    CheckBoolOrDie_(modelSimpleSkin_.Initialize(ci), "modelSimpleSkin_.Initialize");
+    if (animSimpleSkin_) modelSimpleSkin_.PlayAnimation(animSimpleSkin_, true);
+  }
+
+  {
+    resHuman_ = ModelManager::GetInstance()->Load("resources/human/walk.gltf");
+    animHuman_ = AnimationManager::GetInstance()->LoadAnimation("resources/human", "walk.gltf");
+
+    ModelInstance::CreateInfo ci{};
+    ci.resource = resHuman_;
+    ci.baseColor = {1,1,1,1};
+    ci.lightingMode = 1;
+    CheckBoolOrDie_(modelHuman_.Initialize(ci), "modelHuman_.Initialize");
+    if (animHuman_) modelHuman_.PlayAnimation(animHuman_, true);
   }
 
   {
@@ -794,13 +863,29 @@ void GameScene::InitResources_() {
 }
 
 void GameScene::InitCamera_() {
-  transform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-  cameraTransform_ = {
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -10.0f}};
-  transformSprite_ = {
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-  uvTransformSprite_ = {
-      {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+  transform_.scale = {1.0f, 1.0f, 1.0f};
+  transform_.rotate = {0.0f, 0.0f, 0.0f};
+  transform_.translate = {0.0f, 0.0f, 0.0f};
+
+  cameraTransform_.scale = {1.0f, 1.0f, 1.0f};
+  cameraTransform_.rotate = {0.0f, 0.0f, 0.0f};
+  cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
+  
+  transformSimpleSkin_.scale = {1.0f, 1.0f, 1.0f};
+  transformSimpleSkin_.rotate = {0.0f, 0.0f, 0.0f};
+  transformSimpleSkin_.translate = {2.0f, 0.0f, 0.0f};
+
+  transformHuman_.scale = {1.0f, 1.0f, 1.0f};
+  transformHuman_.rotate = {0.0f, 0.0f, 0.0f};
+  transformHuman_.translate = {4.0f, 0.0f, 0.0f};
+
+  transformSprite_.scale = {1.0f, 1.0f, 1.0f};
+  transformSprite_.rotate = {0.0f, 0.0f, 0.0f};
+  transformSprite_.translate = {0.0f, 0.0f, 0.0f};
+
+  uvTransformSprite_.scale = {1.0f, 1.0f, 1.0f};
+  uvTransformSprite_.rotate = {0.0f, 0.0f, 0.0f};
+  uvTransformSprite_.translate = {0.0f, 0.0f, 0.0f};
 
   const float aspect = Renderer::GetInstance()->GetAspectRatio();
 
