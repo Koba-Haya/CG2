@@ -4,12 +4,12 @@
 #include "DirectXCommon.h"
 #include "Renderer.h"
 
-bool SkinCluster::Initialize(DirectXCommon* dx, uint32_t jointCount) {
+bool SkinCluster::Initialize(DirectXCommon* dx, uint32_t jointCount, uint32_t vertexCount) {
   auto* device = dx->GetDevice();
   auto& srvAlloc = dx->GetSrvAllocator();
 
-  size_t size = sizeof(WellForGPU) * jointCount;
-  paletteResource = Renderer::GetInstance()->CreateBuffer(size);
+  size_t paletteSize = sizeof(WellForGPU) * jointCount;
+  paletteResource = Renderer::GetInstance()->CreateBuffer(paletteSize);
   if (!paletteResource) return false;
 
   HRESULT hr = paletteResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedPalette));
@@ -21,7 +21,7 @@ bool SkinCluster::Initialize(DirectXCommon* dx, uint32_t jointCount) {
     mappedPalette[i].skeletonSpaceInverseTransposeMatrix = MakeIdentity4x4();
   }
 
-  // Create SRV
+  // Create SRV for Palette
   srvIndex = srvAlloc.Allocate();
   
   D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
@@ -34,6 +34,29 @@ bool SkinCluster::Initialize(DirectXCommon* dx, uint32_t jointCount) {
   srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
   device->CreateShaderResourceView(paletteResource.Get(), &srvDesc, srvAlloc.Cpu(srvIndex));
+
+  // --- CS出力用バッファの生成 ---
+  size_t vbSize = sizeof(VertexData) * vertexCount;
+  skinnedVertexBuffer = Renderer::GetInstance()->CreateUAVBuffer(vbSize);
+  if (!skinnedVertexBuffer) return false;
+
+  // UAVの作成
+  uavIndex = srvAlloc.Allocate();
+  D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+  uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+  uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+  uavDesc.Buffer.FirstElement = 0;
+  uavDesc.Buffer.NumElements = vertexCount;
+  uavDesc.Buffer.StructureByteStride = sizeof(VertexData);
+  uavDesc.Buffer.CounterOffsetInBytes = 0;
+  uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+  device->CreateUnorderedAccessView(skinnedVertexBuffer.Get(), nullptr, &uavDesc, srvAlloc.Cpu(uavIndex));
+
+  // VBVの設定
+  vbView.BufferLocation = skinnedVertexBuffer->GetGPUVirtualAddress();
+  vbView.SizeInBytes = static_cast<UINT>(vbSize);
+  vbView.StrideInBytes = sizeof(VertexData);
 
   return true;
 }

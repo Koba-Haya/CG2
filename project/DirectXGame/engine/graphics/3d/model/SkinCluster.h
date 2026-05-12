@@ -18,6 +18,11 @@ struct SkinCluster {
   WellForGPU* mappedPalette = nullptr;
   uint32_t srvIndex = 0;
   
-  bool Initialize(DirectXCommon* dx, uint32_t jointCount);
+  // CS出力用
+  Microsoft::WRL::ComPtr<ID3D12Resource> skinnedVertexBuffer;
+  uint32_t uavIndex = 0;
+  D3D12_VERTEX_BUFFER_VIEW vbView{};
+
+  bool Initialize(DirectXCommon* dx, uint32_t jointCount, uint32_t vertexCount);
   void Update(const Skeleton& skeleton);
 };

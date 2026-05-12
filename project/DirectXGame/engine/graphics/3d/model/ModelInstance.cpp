@@ -63,7 +63,7 @@ bool ModelInstance::Initialize(const CreateInfo &ci) {
   if (pImpl_->resource->HasBones()) {
     pImpl_->skeleton = std::make_unique<Skeleton>(pImpl_->resource->GetModelData()->skeleton);
     pImpl_->skinCluster = std::make_unique<SkinCluster>();
-    pImpl_->skinCluster->Initialize(renderer->GetDX(), static_cast<uint32_t>(pImpl_->skeleton->joints.size()));
+    pImpl_->skinCluster->Initialize(renderer->GetDX(), static_cast<uint32_t>(pImpl_->skeleton->joints.size()), pImpl_->resource->GetVertexCount());
   }
 
   return true;
@@ -102,7 +102,12 @@ void ModelInstance::SetEnvironmentCoefficient(float c) { // 追加
     pImpl_->cbMatMapped->environmentCoefficient = c;
 }
 
-void ModelInstance::Draw() { Renderer::GetInstance()->DrawModel(this); }
+void ModelInstance::Draw() {
+  if (pImpl_->skinCluster) {
+    Renderer::GetInstance()->DispatchSkinning(this);
+  }
+  Renderer::GetInstance()->DrawModel(this);
+}
 
 void ModelInstance::DrawSkeleton() {
   if (!pImpl_->skeleton) return;

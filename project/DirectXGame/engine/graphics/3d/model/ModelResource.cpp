@@ -1,6 +1,7 @@
 #include "ModelResource.h"
 #include "ModelUtils.h"
 #include "Renderer.h"
+#include "DirectXCommon.h"
 #include "TextureManager.h"
 #include "TextureResource.h"
 #include <cassert>
@@ -24,6 +25,9 @@ struct ModelResource::Impl {
   unsigned int vbBoneSize = 0;
   unsigned int vbBoneStride = 0;
   bool hasBones = false;
+
+  uint32_t vertexSrvIndex = 0;
+  uint32_t boneSrvIndex = 0;
   
   std::shared_ptr<const ModelData> modelData;
   std::shared_ptr<TextureResource> texture;
@@ -58,6 +62,21 @@ bool ModelResource::Initialize(const CreateInfo &ci) {
   pImpl_->vbSize = static_cast<unsigned int>(vbBufferSize);
   pImpl_->vbStride = sizeof(VertexData);
 
+  // Vertex SRV
+  {
+    auto& srvAlloc = ci.dx->GetSrvAllocator();
+    pImpl_->vertexSrvIndex = srvAlloc.Allocate();
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    srvDesc.Buffer.FirstElement = 0;
+    srvDesc.Buffer.NumElements = pImpl_->vertexCount;
+    srvDesc.Buffer.StructureByteStride = sizeof(VertexData);
+    srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+    ci.dx->GetDevice()->CreateShaderResourceView(pImpl_->vb.Get(), &srvDesc, srvAlloc.Cpu(pImpl_->vertexSrvIndex));
+  }
+
   // Index Buffer
   const std::vector<uint32_t> indices = FlattenIndices(*ci.modelData);
   if (!indices.empty()) {
@@ -89,6 +108,19 @@ bool ModelResource::Initialize(const CreateInfo &ci) {
       pImpl_->vbBoneAddress = pImpl_->vbBone->GetGPUVirtualAddress();
       pImpl_->vbBoneSize = static_cast<unsigned int>(vbBoneBufferSize);
       pImpl_->vbBoneStride = sizeof(VertexBoneData);
+
+      // Bone SRV
+      auto& srvAlloc = ci.dx->GetSrvAllocator();
+      pImpl_->boneSrvIndex = srvAlloc.Allocate();
+      D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+      srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+      srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+      srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+      srvDesc.Buffer.FirstElement = 0;
+      srvDesc.Buffer.NumElements = static_cast<uint32_t>(skinningData.size());
+      srvDesc.Buffer.StructureByteStride = sizeof(VertexBoneData);
+      srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+      ci.dx->GetDevice()->CreateShaderResourceView(pImpl_->vbBone.Get(), &srvDesc, srvAlloc.Cpu(pImpl_->boneSrvIndex));
     }
   }
 
@@ -122,6 +154,9 @@ bool ModelResource::HasBones() const { return pImpl_->hasBones; }
 unsigned long long ModelResource::GetBoneVBVAddress() const { return pImpl_->vbBoneAddress; }
 unsigned int ModelResource::GetBoneVBVSize() const { return pImpl_->vbBoneSize; }
 unsigned int ModelResource::GetBoneVBVStride() const { return pImpl_->vbBoneStride; }
+
+uint32_t ModelResource::GetVertexSRVIndex() const { return pImpl_->vertexSrvIndex; }
+uint32_t ModelResource::GetBoneSRVIndex() const { return pImpl_->boneSrvIndex; }
 
 unsigned long long ModelResource::GetTextureHandleGPUAsUInt64() const {
   return pImpl_->texture ? pImpl_->texture->GetSrvGpu().ptr : 0;

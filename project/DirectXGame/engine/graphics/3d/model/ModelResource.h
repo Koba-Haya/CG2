@@ -42,6 +42,9 @@ public:
   unsigned int GetBoneVBVSize() const;
   unsigned int GetBoneVBVStride() const;
 
+  uint32_t GetVertexSRVIndex() const;
+  uint32_t GetBoneSRVIndex() const;
+
 private:
   struct Impl;
   std::unique_ptr<Impl> pImpl_;
