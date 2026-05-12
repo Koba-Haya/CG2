@@ -126,6 +126,14 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   srvRangeEnv.OffsetInDescriptorsFromTableStart =
       D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+  // t2: Skinning (VS)
+  D3D12_DESCRIPTOR_RANGE srvRangeSkin{};
+  srvRangeSkin.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  srvRangeSkin.BaseShaderRegister = 2; // t2
+  srvRangeSkin.NumDescriptors = 1;
+  srvRangeSkin.OffsetInDescriptorsFromTableStart =
+      D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
   // --- Root Parameters（フラグに応じて詰める） ---
   D3D12_ROOT_PARAMETER params[9]{};
   UINT numParams = 0;
@@ -187,11 +195,12 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
     p.DescriptorTable.pDescriptorRanges = &srvRangeEnv;
     p.DescriptorTable.NumDescriptorRanges = 1;
   }
-  if (desc.useVSSkinning_b3) { // Index 8
+  if (desc.useVSSkinning_t2) { // Index 8
     auto &p = params[numParams++];
-    p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-    p.Descriptor.ShaderRegister = 3;
+    p.DescriptorTable.pDescriptorRanges = &srvRangeSkin;
+    p.DescriptorTable.NumDescriptorRanges = 1;
   }
 
   D3D12_STATIC_SAMPLER_DESC samp{};
@@ -345,7 +354,7 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
 PipelineDesc UnifiedPipeline::MakeSkinnedObject3DDesc() {
   PipelineDesc d = MakeObject3DDesc();
   d.vsPath = L"resources/shaders/SkinnedObject3D.VS.hlsl";
-  d.useVSSkinning_b3 = true;
+  d.useVSSkinning_t2 = true;
   
   d.inputElements.push_back({"BONEIDS", 0, DXGI_FORMAT_R32G32B32A32_UINT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0});
   d.inputElements.push_back({"WEIGHTS", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0});

@@ -8,12 +8,16 @@
 class DirectXCommon;
 struct Skeleton;
 
-static const int kMaxBones = 128;
+struct WellForGPU {
+  Matrix4x4 skeletonSpaceMatrix;
+  Matrix4x4 skeletonSpaceInverseTransposeMatrix;
+};
 
 struct SkinCluster {
   Microsoft::WRL::ComPtr<ID3D12Resource> paletteResource;
-  Matrix4x4* mappedPalette = nullptr;
+  WellForGPU* mappedPalette = nullptr;
+  uint32_t srvIndex = 0;
   
-  bool Initialize(DirectXCommon* dx);
+  bool Initialize(DirectXCommon* dx, uint32_t jointCount);
   void Update(const Skeleton& skeleton);
 };

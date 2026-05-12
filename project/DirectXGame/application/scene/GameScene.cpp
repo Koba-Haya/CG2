@@ -268,7 +268,11 @@ void GameScene::Draw() {
                                                              : 0.0f);
     modelSphere_.Draw();
   }
+  modelAnimCube_.SetWorld(MakeAffineMatrix(transformAnimCube_.scale,
+                                           transformAnimCube_.rotate,
+                                           transformAnimCube_.translate));
   modelAnimCube_.Draw();
+
   modelSimpleSkin_.Draw();
   modelHuman_.Draw();
 
@@ -493,6 +497,7 @@ void GameScene::InitCamera_() {
   cameraTransform_.translate = {0, 0, -15};
   transformSimpleSkin_.translate = {3, 0, 0};
   transformHuman_.translate = {6, 0, 0};
+  transformAnimCube_.translate = {-3, 0, 0};
   if (camera_)
     camera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(),
                             0.1f, 1000.0f);

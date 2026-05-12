@@ -9,10 +9,11 @@ struct TransformationMatrix
 
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
 
-struct SkinningData {
-    float4x4 boneMatrices[128];
+struct WellForGPU {
+    float4x4 skeletonSpaceMatrix;
+    float4x4 skeletonSpaceInverseTransposeMatrix;
 };
-ConstantBuffer<SkinningData> gSkin : register(b3);
+StructuredBuffer<WellForGPU> gMatrixPalette : register(t2);
 
 struct VertexShaderInput
 {
@@ -29,14 +30,20 @@ VertexShaderOutput main(VertexShaderInput input)
 
     // Skinning calculation
     float4x4 skinMatrix = 
-        input.weights.x * gSkin.boneMatrices[input.boneIDs.x] +
-        input.weights.y * gSkin.boneMatrices[input.boneIDs.y] +
-        input.weights.z * gSkin.boneMatrices[input.boneIDs.z] +
-        input.weights.w * gSkin.boneMatrices[input.boneIDs.w];
+        input.weights.x * gMatrixPalette[input.boneIDs.x].skeletonSpaceMatrix +
+        input.weights.y * gMatrixPalette[input.boneIDs.y].skeletonSpaceMatrix +
+        input.weights.z * gMatrixPalette[input.boneIDs.z].skeletonSpaceMatrix +
+        input.weights.w * gMatrixPalette[input.boneIDs.w].skeletonSpaceMatrix;
+
+    float3x3 skinNormalMatrix = 
+        input.weights.x * (float3x3)gMatrixPalette[input.boneIDs.x].skeletonSpaceInverseTransposeMatrix +
+        input.weights.y * (float3x3)gMatrixPalette[input.boneIDs.y].skeletonSpaceInverseTransposeMatrix +
+        input.weights.z * (float3x3)gMatrixPalette[input.boneIDs.z].skeletonSpaceInverseTransposeMatrix +
+        input.weights.w * (float3x3)gMatrixPalette[input.boneIDs.w].skeletonSpaceInverseTransposeMatrix;
 
     float4 skinnedPosition = mul(input.position, skinMatrix);
     skinnedPosition.w = 1.0f;
-    float3 skinnedNormal = normalize(mul(input.normal, (float3x3)skinMatrix));
+    float3 skinnedNormal = normalize(mul(input.normal, skinNormalMatrix));
 
     output.position = mul(skinnedPosition, gTransformationMatrix.WVP);
     output.texcoord = input.texcoord;

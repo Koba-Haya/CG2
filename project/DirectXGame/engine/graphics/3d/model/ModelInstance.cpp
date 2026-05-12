@@ -63,7 +63,7 @@ bool ModelInstance::Initialize(const CreateInfo &ci) {
   if (pImpl_->resource->HasBones()) {
     pImpl_->skeleton = std::make_unique<Skeleton>(pImpl_->resource->GetModelData()->skeleton);
     pImpl_->skinCluster = std::make_unique<SkinCluster>();
-    pImpl_->skinCluster->Initialize(renderer->GetDX());
+    pImpl_->skinCluster->Initialize(renderer->GetDX(), static_cast<uint32_t>(pImpl_->skeleton->joints.size()));
   }
 
   return true;

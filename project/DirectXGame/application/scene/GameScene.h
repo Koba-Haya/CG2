@@ -57,6 +57,7 @@ private:
   std::shared_ptr<Animation> animSimpleSkin_;
   std::shared_ptr<Animation> animHuman_;
 
+  Transform transformAnimCube_;
   Transform transformSimpleSkin_;
   Transform transformHuman_;
   bool showSkeleton_ = false;

@@ -355,8 +355,9 @@ void Renderer::DrawModel(ModelInstance *instance) {
       6, spotLightCB_->GetGPUVirtualAddress());
 
   if (hasBones && instance->GetSkinCluster()) {
-    cmdList->SetGraphicsRootConstantBufferView(
-        8, instance->GetSkinCluster()->paletteResource->GetGPUVirtualAddress());
+    auto& srvAlloc = dx_->GetSrvAllocator();
+    cmdList->SetGraphicsRootDescriptorTable(
+        8, srvAlloc.Gpu(instance->GetSkinCluster()->srvIndex));
   }
 
   // 6. 描画

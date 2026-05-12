@@ -41,7 +41,7 @@ struct MeshData {
 
 struct Node {
   QuaternionTransform transform;
-  Matrix4x4 localMatrix;
+  Matrix4x4 localMatrix{};
   std::string name;
   std::vector<uint32_t> meshIndices;
   std::vector<Node> children;
@@ -49,12 +49,12 @@ struct Node {
 
 struct Joint {
   QuaternionTransform transform;
-  Matrix4x4 localMatrix;
-  Matrix4x4 skeletonSpaceMatrix;
+  Matrix4x4 localMatrix{};
+  Matrix4x4 skeletonSpaceMatrix{};
   std::string name;
   std::vector<int32_t> children; // 資料に合わせてchildrenIndicesからchildrenにリネーム
-  int32_t index;
-  Matrix4x4 inverseBindPoseMatrix;
+  int32_t index = 0;
+  Matrix4x4 inverseBindPoseMatrix{};
 };
 
 struct Skeleton {
