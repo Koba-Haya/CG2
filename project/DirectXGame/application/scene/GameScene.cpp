@@ -335,6 +335,7 @@ void GameScene::Draw() {
   case 4: pMode = BlendMode::Screen; break;
   }
   ParticleManager::GetInstance()->Draw(pMode);
+  renderer->DrawGPUParticles();
 
   // 最後にPrimitive（グリッド等）
   //Renderer::GetInstance()->RenderPrimitives();

@@ -5,6 +5,7 @@
 #include "ModelInstance.h"
 #include "ModelResource.h"
 #include "ParticleManager.h"
+#include "particle/GPUParticleManager.h"
 #include "Ring.h"
 #include "Cylinder.h"
 #include "ShaderCompilerUtils.h"
@@ -171,6 +172,8 @@ void Renderer::Initialize(DirectXCommon *dx) {
 
   skinningInformationCB_ = CreateUploadBuffer(align256(sizeof(SkinningInformation)));
   skinningInformationCB_->Map(0, nullptr, reinterpret_cast<void **>(&skinningInformationMapped_));
+
+  GPUParticleManager::GetInstance()->Initialize(dx_);
 
   // Primitive用定数バッファ
   primitiveTransformCB_ = CreateUploadBuffer(sizeof(TransformCB));
@@ -773,6 +776,11 @@ Microsoft::WRL::ComPtr<ID3D12Resource> Renderer::CreateUAVBuffer(size_t size) {
 }
 
 // 描画予約をDrawerへ流す
+void Renderer::DrawGPUParticles() {
+  GPUParticleManager::GetInstance()->Update();
+  GPUParticleManager::GetInstance()->Draw();
+}
+
 void Renderer::DrawLine(const Vector3 &start, const Vector3 &end,
                         const Vector4 &color) {
   primitiveDrawer_->AddLine(start, end, color);

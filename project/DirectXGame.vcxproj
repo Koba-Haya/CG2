@@ -251,6 +251,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <ClCompile Include="DirectXGame\engine\graphics\3d\model\ModelResource.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\particle\ParticleEmitter.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\particle\ParticleManager.cpp" />
+    <ClCompile Include="DirectXGame\engine\graphics\particle\GPUParticleManager.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\shader\ShaderCompilerUtils.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\descriptor\SrvHandle.cpp" />
     <ClCompile Include="DirectXGame\engine\graphics\texture\TextureManager.cpp" />
@@ -320,6 +321,8 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <ClInclude Include="DirectXGame\engine\graphics\3d\model\ModelResource.h" />
     <ClInclude Include="DirectXGame\engine\graphics\particle\ParticleEmitter.h" />
     <ClInclude Include="DirectXGame\engine\graphics\particle\ParticleManager.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\particle\GPUParticle.h" />
+    <ClInclude Include="DirectXGame\engine\graphics\particle\GPUParticleManager.h" />
     <ClInclude Include="DirectXGame\engine\graphics\shader\ShaderCompilerUtils.h" />
     <ClInclude Include="DirectXGame\engine\graphics\descriptor\SrvAllocator.h" />
     <ClInclude Include="DirectXGame\engine\graphics\descriptor\SrvHandle.h" />
@@ -350,6 +353,10 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\shaders\Primitive.hlsli" />
+    <None Include="resources\shaders\GPUParticle.hlsli" />
+    <None Include="resources\shaders\InitializeGPUParticle.CS.hlsl" />
+    <None Include="resources\shaders\GPUParticle.VS.hlsl" />
+    <None Include="resources\shaders\GPUParticle.PS.hlsl" />
     <None Include="resources\shaders\Particle.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
