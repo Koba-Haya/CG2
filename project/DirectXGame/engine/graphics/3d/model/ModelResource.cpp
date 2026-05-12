@@ -14,6 +14,11 @@ struct ModelResource::Impl {
   unsigned int vbStride = 0;
   uint32_t vertexCount = 0;
   
+  Microsoft::WRL::ComPtr<ID3D12Resource> ib;
+  D3D12_GPU_VIRTUAL_ADDRESS ibAddress = 0;
+  unsigned int ibSize = 0;
+  uint32_t indexCount = 0;
+  
   Microsoft::WRL::ComPtr<ID3D12Resource> vbBone;
   D3D12_GPU_VIRTUAL_ADDRESS vbBoneAddress = 0;
   unsigned int vbBoneSize = 0;
@@ -53,6 +58,23 @@ bool ModelResource::Initialize(const CreateInfo &ci) {
   pImpl_->vbSize = static_cast<unsigned int>(vbBufferSize);
   pImpl_->vbStride = sizeof(VertexData);
 
+  // Index Buffer
+  const std::vector<uint32_t> indices = FlattenIndices(*ci.modelData);
+  if (!indices.empty()) {
+    pImpl_->indexCount = static_cast<uint32_t>(indices.size());
+    const size_t ibBufferSize = sizeof(uint32_t) * indices.size();
+    pImpl_->ib = renderer->CreateUploadBuffer(ibBufferSize);
+    if (pImpl_->ib) {
+      void *ibMapped = nullptr;
+      if (SUCCEEDED(pImpl_->ib->Map(0, nullptr, &ibMapped))) {
+        std::memcpy(ibMapped, indices.data(), ibBufferSize);
+        pImpl_->ib->Unmap(0, nullptr);
+      }
+      pImpl_->ibAddress = pImpl_->ib->GetGPUVirtualAddress();
+      pImpl_->ibSize = static_cast<unsigned int>(ibBufferSize);
+    }
+  }
+
   const std::vector<VertexBoneData> skinningData = FlattenSkinningData(*ci.modelData);
   if (!skinningData.empty() && skinningData.size() == vertices.size()) {
     pImpl_->hasBones = true;
@@ -87,6 +109,12 @@ unsigned long long ModelResource::GetVBVAddress() const {
 unsigned int ModelResource::GetVBVSize() const { return pImpl_->vbSize; }
 unsigned int ModelResource::GetVBVStride() const { return pImpl_->vbStride; }
 uint32_t ModelResource::GetVertexCount() const { return pImpl_->vertexCount; }
+
+unsigned long long ModelResource::GetIBVAddress() const {
+  return pImpl_->ibAddress;
+}
+unsigned int ModelResource::GetIBVSize() const { return pImpl_->ibSize; }
+uint32_t ModelResource::GetIndexCount() const { return pImpl_->indexCount; }
 
 const ModelData* ModelResource::GetModelData() const { return pImpl_->modelData.get(); }
 

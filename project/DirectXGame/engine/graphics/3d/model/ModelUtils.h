@@ -34,6 +34,7 @@ struct MaterialData {
 
 struct MeshData {
   std::vector<VertexData> vertices;
+  std::vector<uint32_t> indices;
   std::vector<VertexBoneData> skinningData;
   int materialIndex = -1;
 };
@@ -86,5 +87,6 @@ VertexData FixupVertex_AssimpToEngine(const VertexData &v,
 void FlipTriangleWinding(VertexData &a, VertexData &b, VertexData &c);
 
 std::vector<VertexData> FlattenVertices(const ModelData &model);
+std::vector<uint32_t> FlattenIndices(const ModelData &model);
 std::vector<VertexBoneData> FlattenSkinningData(const ModelData &model);
 std::string PickDiffuseTexturePath(const ModelData &model);

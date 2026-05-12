@@ -314,6 +314,15 @@ void Renderer::DrawModel(ModelInstance *instance) {
     numVBV = 2;
   }
   cmdList->IASetVertexBuffers(0, numVBV, vbv);
+  
+  // Index Buffer
+  if (resource->GetIndexCount() > 0) {
+    D3D12_INDEX_BUFFER_VIEW ibv{};
+    ibv.BufferLocation = resource->GetIBVAddress();
+    ibv.Format = DXGI_FORMAT_R32_UINT;
+    ibv.SizeInBytes = resource->GetIBVSize();
+    cmdList->IASetIndexBuffer(&ibv);
+  }
 
   // 3. 定数バッファ (Material / Transform)
   cmdList->SetGraphicsRootConstantBufferView(0,
@@ -352,7 +361,11 @@ void Renderer::DrawModel(ModelInstance *instance) {
 
   // 6. 描画
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+  if (resource->GetIndexCount() > 0) {
+    cmdList->DrawIndexedInstanced(resource->GetIndexCount(), 1, 0, 0, 0);
+  } else {
+    cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+  }
 }
 
 void Renderer::DrawSprite(Sprite *sprite) {
@@ -479,6 +492,15 @@ void Renderer::DrawEffectModel(ModelInstance *instance) {
   vbv.StrideInBytes = resource->GetVBVStride();
   cmdList->IASetVertexBuffers(0, 1, &vbv);
 
+  // Index Buffer
+  if (resource->GetIndexCount() > 0) {
+    D3D12_INDEX_BUFFER_VIEW ibv{};
+    ibv.BufferLocation = resource->GetIBVAddress();
+    ibv.Format = DXGI_FORMAT_R32_UINT;
+    ibv.SizeInBytes = resource->GetIBVSize();
+    cmdList->IASetIndexBuffer(&ibv);
+  }
+
   // 定数バッファ (0:マテリアル, 1:トランスフォーム)
   cmdList->SetGraphicsRootConstantBufferView(0,
                                              instance->GetMaterialCBAddress());
@@ -504,7 +526,11 @@ void Renderer::DrawEffectModel(ModelInstance *instance) {
 
   // 描画実行
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+  if (resource->GetIndexCount() > 0) {
+    cmdList->DrawIndexedInstanced(resource->GetIndexCount(), 1, 0, 0, 0);
+  } else {
+    cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+  }
 }
 
 void Renderer::DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle) {

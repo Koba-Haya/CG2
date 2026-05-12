@@ -30,6 +30,11 @@ public:
   unsigned int GetVBVSize() const;
   unsigned int GetVBVStride() const;
   uint32_t GetVertexCount() const;
+
+  unsigned long long GetIBVAddress() const;
+  unsigned int GetIBVSize() const;
+  uint32_t GetIndexCount() const;
+
   unsigned long long GetTextureHandleGPUAsUInt64() const;
   
   bool HasBones() const;

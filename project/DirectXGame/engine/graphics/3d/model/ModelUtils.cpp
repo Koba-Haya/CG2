@@ -64,6 +64,24 @@ std::vector<VertexData> FlattenVertices(const ModelData &model) {
   return out;
 }
 
+std::vector<uint32_t> FlattenIndices(const ModelData &model) {
+  std::vector<uint32_t> out;
+  size_t totalIndices = 0;
+  for (const auto &m : model.meshes) {
+    totalIndices += m.indices.size();
+  }
+  out.reserve(totalIndices);
+
+  uint32_t vertexOffset = 0;
+  for (const auto &m : model.meshes) {
+    for (uint32_t index : m.indices) {
+      out.push_back(index + vertexOffset);
+    }
+    vertexOffset += static_cast<uint32_t>(m.vertices.size());
+  }
+  return out;
+}
+
 std::vector<VertexBoneData> FlattenSkinningData(const ModelData &model) {
   std::vector<VertexBoneData> out;
   size_t total = 0;
