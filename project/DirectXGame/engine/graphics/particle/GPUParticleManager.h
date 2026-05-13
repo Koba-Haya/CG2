@@ -2,11 +2,12 @@
 #include <wrl.h>
 #include <d3d12.h>
 #include <memory>
-#include <vector>
 #include "GPUParticle.h"
 #include "Matrix.h"
+#include <vector>
 
 class DirectXCommon;
+class TextureResource;
 
 class GPUParticleManager {
 public:
@@ -64,6 +65,8 @@ private:
 
     ComPtr<ID3D12Resource> freeCounterBuffer_;
     uint32_t counterUavIndex_ = 0;
+
+    std::unique_ptr<TextureResource> texture_;
 
     // Quad Mesh
     ComPtr<ID3D12Resource> vb_;

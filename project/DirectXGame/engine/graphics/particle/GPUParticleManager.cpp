@@ -3,6 +3,7 @@
 #include "DirectXCommon.h"
 #include "Renderer.h"
 #include "Method.h"
+#include "texture/TextureResource.h"
 #include <cassert>
 #include <dxcapi.h>
 
@@ -193,6 +194,8 @@ void GPUParticleManager::Draw() {
     cmdList->SetGraphicsRootConstantBufferView(0, perViewCB_->GetGPUVirtualAddress());
     // 1: SRV(t0)
     cmdList->SetGraphicsRootDescriptorTable(1, srvAlloc.Gpu(srvIndex_));
+    // 2: Texture(t1)
+    cmdList->SetGraphicsRootDescriptorTable(2, texture_->GetSrvGpu());
 
     cmdList->DrawIndexedInstanced(6, kMaxParticles, 0, 0, 0);
 }
@@ -260,6 +263,10 @@ void GPUParticleManager::CreateResources() {
     emitterMapped_->translate = {0.0f, 0.0f, 0.0f};
     emitterMapped_->radius = 1.0f;
     emitterMapped_->emit = 0;
+
+    // Load Texture
+    texture_ = std::make_unique<TextureResource>();
+    texture_->CreateFromFile(dx_, "resources/particle/circle2.png");
 }
 
 void GPUParticleManager::CreateComputePipeline() {
@@ -343,7 +350,12 @@ void GPUParticleManager::CreateGraphicsPipeline() {
     srvRange.NumDescriptors = 1;
     srvRange.BaseShaderRegister = 0;
 
-    D3D12_ROOT_PARAMETER params[2]{};
+    D3D12_DESCRIPTOR_RANGE texRange{};
+    texRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    texRange.NumDescriptors = 1;
+    texRange.BaseShaderRegister = 1;
+
+    D3D12_ROOT_PARAMETER params[3]{};
     // 0: PerView (b0)
     params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     params[0].Descriptor.ShaderRegister = 0;
@@ -353,10 +365,27 @@ void GPUParticleManager::CreateGraphicsPipeline() {
     params[1].DescriptorTable.NumDescriptorRanges = 1;
     params[1].DescriptorTable.pDescriptorRanges = &srvRange;
     params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    // 2: Texture (t1)
+    params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[2].DescriptorTable.NumDescriptorRanges = 1;
+    params[2].DescriptorTable.pDescriptorRanges = &texRange;
+    params[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    D3D12_STATIC_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
+    sampler.ShaderRegister = 0;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rsDesc{};
-    rsDesc.NumParameters = 2;
+    rsDesc.NumParameters = 3;
     rsDesc.pParameters = params;
+    rsDesc.NumStaticSamplers = 1;
+    rsDesc.pStaticSamplers = &sampler;
     rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> blob, err;
