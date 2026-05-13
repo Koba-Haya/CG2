@@ -27,6 +27,9 @@
     <ClCompile Include="actor\Player.cpp">
       <Filter>application\actor</Filter>
     </ClCompile>
+    <ClCompile Include="scene\DevScene.cpp">
+      <Filter>application\scene</Filter>
+    </ClCompile>
     <ClCompile Include="scene\GameScene.cpp">
       <Filter>application\scene</Filter>
     </ClCompile>
@@ -44,6 +47,9 @@
     </ClInclude>
     <ClInclude Include="actor\Player.h">
       <Filter>application\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\DevScene.h">
+      <Filter>application\scene</Filter>
     </ClInclude>
     <ClInclude Include="GameScene.h">
       <Filter>application\scene</Filter>

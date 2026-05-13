@@ -5,6 +5,7 @@
 #include "SceneIds.h"
 #include "SceneManager.h"
 #include "Renderer.h"
+#include <imgui.h>
 
 GameApp::GameApp() = default;
 GameApp::~GameApp() = default;
@@ -35,6 +36,14 @@ void GameApp::Update() {
   if (!sceneManager_) {
     return;
   }
+
+  // デバッグメニュー
+  ImGui::Begin("DebugMenu");
+  if (ImGui::Button("Go to DevScene")) {
+    sceneManager_->RequestChange(SceneId::Dev);
+  }
+  ImGui::End();
+
   sceneManager_->Update();
   sceneManager_->ApplySceneChangeIfNeeded();
 }

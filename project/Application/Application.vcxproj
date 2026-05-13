@@ -180,6 +180,7 @@
   <ItemGroup>
     <ClCompile Include="GameApp.cpp" />
     <ClCompile Include="actor\Player.cpp" />
+    <ClCompile Include="scene\DevScene.cpp" />
     <ClCompile Include="scene\GameScene.cpp" />
     <ClCompile Include="scene\SceneFactory.cpp" />
     <ClCompile Include="scene\TitleScene.cpp" />
@@ -188,6 +189,7 @@
   <ItemGroup>
     <ClInclude Include="GameApp.h" />
     <ClInclude Include="actor\Player.h" />
+    <ClInclude Include="scene\DevScene.h" />
     <ClInclude Include="scene\GameScene.h" />
     <ClInclude Include="scene\SceneFactory.h" />
     <ClInclude Include="scene\SceneIds.h" />
