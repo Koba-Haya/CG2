@@ -266,7 +266,7 @@ void GPUParticleManager::CreateResources() {
 
     // Load Texture
     texture_ = std::make_unique<TextureResource>();
-    texture_->CreateFromFile(dx_, "resources/particle/circle2.png");
+    texture_->CreateFromFile(dx_, "resources/engine/particle/circle2.png");
 }
 
 void GPUParticleManager::CreateComputePipeline() {
@@ -326,14 +326,14 @@ void GPUParticleManager::CreateComputePipeline() {
 
     // PSOs
     {
-        ComPtr<IDxcBlob> csBlob = CompileShader(L"resources/shaders/InitializeGPUParticle.CS.hlsl", L"cs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
+        ComPtr<IDxcBlob> csBlob = CompileShader(L"resources/engine/shaders/InitializeGPUParticle.CS.hlsl", L"cs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
         D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc{};
         psoDesc.pRootSignature = computeRootSignature_.Get();
         psoDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
         device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&computePipelineState_));
     }
     {
-        ComPtr<IDxcBlob> csBlob = CompileShader(L"resources/shaders/EmitParticle.CS.hlsl", L"cs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
+        ComPtr<IDxcBlob> csBlob = CompileShader(L"resources/engine/shaders/EmitParticle.CS.hlsl", L"cs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
         D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc{};
         psoDesc.pRootSignature = emitRootSignature_.Get();
         psoDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
@@ -393,8 +393,8 @@ void GPUParticleManager::CreateGraphicsPipeline() {
     device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&graphicsRootSignature_));
 
     // PSO
-    ComPtr<IDxcBlob> vsBlob = CompileShader(L"resources/shaders/GPUParticle.VS.hlsl", L"vs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
-    ComPtr<IDxcBlob> psBlob = CompileShader(L"resources/shaders/GPUParticle.PS.hlsl", L"ps_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
+    ComPtr<IDxcBlob> vsBlob = CompileShader(L"resources/engine/shaders/GPUParticle.VS.hlsl", L"vs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
+    ComPtr<IDxcBlob> psBlob = CompileShader(L"resources/engine/shaders/GPUParticle.PS.hlsl", L"ps_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
 
     D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },

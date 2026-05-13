@@ -333,8 +333,8 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
                                D3D12_APPEND_ALIGNED_ELEMENT,
                                D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
-  d.vsPath = L"resources/shaders/Object3D.VS.hlsl";
-  d.psPath = L"resources/shaders/Object3D.PS.hlsl";
+  d.vsPath = L"resources/app/shaders/Object3D.VS.hlsl";
+  d.psPath = L"resources/app/shaders/Object3D.PS.hlsl";
   d.usePSMaterial_b0 = true;
   d.useVSTransform_b0 = true;
   d.usePSTextureTable_t0 = true;
@@ -353,7 +353,7 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
 
 PipelineDesc UnifiedPipeline::MakeSkinnedObject3DDesc() {
   PipelineDesc d = MakeObject3DDesc();
-  d.vsPath = L"resources/shaders/SkinnedObject3D.VS.hlsl";
+  d.vsPath = L"resources/app/shaders/SkinnedObject3D.VS.hlsl";
   d.useVSSkinning_t2 = true;
   
   d.inputElements.push_back({"BONEIDS", 0, DXGI_FORMAT_R32G32B32A32_UINT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0});
@@ -371,8 +371,8 @@ PipelineDesc UnifiedPipeline::MakeSpriteDesc() {
       {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
-  d.vsPath = L"resources/shaders/Sprite.VS.hlsl";
-  d.psPath = L"resources/shaders/Sprite.PS.hlsl";
+  d.vsPath = L"resources/engine/shaders/Sprite.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Sprite.PS.hlsl";
   d.usePSMaterial_b0 = true;
   d.useVSTransform_b0 = true;
   d.usePSTextureTable_t0 = true;
@@ -415,8 +415,8 @@ PipelineDesc UnifiedPipeline::MakeParticleDesc() {
       {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
-  d.vsPath = L"resources/shaders/Particle.VS.hlsl";
-  d.psPath = L"resources/shaders/Particle.PS.hlsl";
+  d.vsPath = L"resources/engine/shaders/Particle.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Particle.PS.hlsl";
   d.usePSMaterial_b0 = true;
   d.useVSTransform_b0 = false; // Instancingで行列はSRV
   d.usePSTextureTable_t0 = true;
@@ -438,8 +438,8 @@ PipelineDesc UnifiedPipeline::MakeSkyboxDesc() {
                                D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
 
-  d.vsPath = L"resources/shaders/Skybox.VS.hlsl";
-  d.psPath = L"resources/shaders/Skybox.PS.hlsl";
+  d.vsPath = L"resources/engine/shaders/Skybox.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Skybox.PS.hlsl";
 
   // RootParameter: [0]=PS b0, [1]=VS b0, [2]=PS t0
   d.usePSMaterial_b0 = true;
@@ -472,8 +472,8 @@ PipelineDesc UnifiedPipeline::MakePrimitiveDesc() {
        D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
        0},
   };
-  d.vsPath = L"resources/shaders/Primitive.VS.hlsl";
-  d.psPath = L"resources/shaders/Primitive.PS.hlsl";
+  d.vsPath = L"resources/engine/shaders/Primitive.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Primitive.PS.hlsl";
 
   d.usePSMaterial_b0 = true; // Index 0 (Dummy)
   d.useVSTransform_b0 = true; // Index 1
@@ -516,8 +516,8 @@ PipelineDesc UnifiedPipeline::MakeRingDesc() {
        D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
        0},
   };
-  d.vsPath = L"resources/shaders/Ring.VS.hlsl";
-  d.psPath = L"resources/shaders/Ring.PS.hlsl";
+  d.vsPath = L"resources/engine/shaders/Ring.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Ring.PS.hlsl";
   d.usePSMaterial_b0 = true;
   d.useVSTransform_b0 = true;
   d.usePSTextureTable_t0 = true;
@@ -541,8 +541,8 @@ PipelineDesc UnifiedPipeline::MakeCylinderDesc() {
        D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
        0},
   };
-  d.vsPath = L"resources/shaders/Cylinder.VS.hlsl";
-  d.psPath = L"resources/shaders/Cylinder.PS.hlsl";
+  d.vsPath = L"resources/engine/shaders/Cylinder.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Cylinder.PS.hlsl";
   d.usePSMaterial_b0 = true;
   d.useVSTransform_b0 = true;
   d.usePSTextureTable_t0 = true;

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="application">
+      <UniqueIdentifier>{6f89047b-7b0b-4b2a-8c8e-8a2a8b2a8b2b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="application\actor">
+      <UniqueIdentifier>{7f89047b-7b0b-4b2a-8c8e-8a2a8b2a8b2b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="application\scene">
+      <UniqueIdentifier>{8f89047b-7b0b-4b2a-8c8e-8a2a8b2a8b2b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="externals">
+      <UniqueIdentifier>{9f89047b-7b0b-4b2a-8c8e-8a2a8b2a8b2b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="externals\assimp">
+      <UniqueIdentifier>{af89047b-7b0b-4b2a-8c8e-8a2a8b2a8b2b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="externals\cmft">
+      <UniqueIdentifier>{bf89047b-7b0b-4b2a-8c8e-8a2a8b2a8b2b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="GameApp.cpp">
+      <Filter>application</Filter>
+    </ClCompile>
+    <ClCompile Include="actor\Player.cpp">
+      <Filter>application\actor</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\GameScene.cpp">
+      <Filter>application\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\SceneFactory.cpp">
+      <Filter>application\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\TitleScene.cpp">
+      <Filter>application\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="..\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="GameApp.h">
+      <Filter>application</Filter>
+    </ClInclude>
+    <ClInclude Include="actor\Player.h">
+      <Filter>application\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="GameScene.h">
+      <Filter>application\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="SceneFactory.h">
+      <Filter>application\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="SceneIds.h">
+      <Filter>application\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="TitleScene.h">
+      <Filter>application\scene</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

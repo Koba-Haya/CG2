@@ -129,7 +129,7 @@ bool ModelResource::Initialize(const CreateInfo &ci) {
   } else {
     const std::string texPath = PickDiffuseTexturePath(*ci.modelData);
     pImpl_->texture = TextureManager::GetInstance()->Load(
-        texPath.empty() ? "resources/uvChecker.png" : texPath);
+        texPath.empty() ? "resources/engine/textures/uvChecker.png" : texPath);
   }
 
   return true;

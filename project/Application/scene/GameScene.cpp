@@ -382,27 +382,27 @@ void GameScene::InitResources_() {
   auto *tm = TextureManager::GetInstance();
   auto *dx = Renderer::GetInstance()->GetDX();
 
-  resSphere_ = mm->Load("resources/sphere/sphere.obj");
-  resCube_ = mm->Load("resources/cube/cube.obj");
-  resAnimCube_ = mm->Load("resources/AnimatedCube/AnimatedCube.gltf");
+  resSphere_ = mm->Load("resources/app/sphere/sphere.obj");
+  resCube_ = mm->Load("resources/app/cube/cube.obj");
+  resAnimCube_ = mm->Load("resources/app/AnimatedCube/AnimatedCube.gltf");
   animCubeAnim_ = AnimationManager::GetInstance()->LoadAnimation(
-      "resources/AnimatedCube", "AnimatedCube.gltf");
-  resEffect_ = mm->Load("resources/particle/particle.obj");
+      "resources/app/AnimatedCube", "AnimatedCube.gltf");
+  resEffect_ = mm->Load("resources/app/particle/particle.obj");
 
   modelSphere_.Initialize({resSphere_, {1, 1, 1, 1}, 0});
   modelAnimCube_.Initialize({resAnimCube_, {1, 1, 1, 1}, 1});
   if (animCubeAnim_)
     modelAnimCube_.PlayAnimation(animCubeAnim_, true);
 
-  resSimpleSkin_ = mm->Load("resources/simpleSkin/simpleSkin.gltf");
+  resSimpleSkin_ = mm->Load("resources/app/simpleSkin/simpleSkin.gltf");
   animSimpleSkin_ = AnimationManager::GetInstance()->LoadAnimation(
-      "resources/simpleSkin", "simpleSkin.gltf");
+      "resources/app/simpleSkin", "simpleSkin.gltf");
   modelSimpleSkin_.Initialize({resSimpleSkin_, {1, 1, 1, 1}, 1});
   if (animSimpleSkin_)
     modelSimpleSkin_.PlayAnimation(animSimpleSkin_, true);
 
-  resHuman_ = mm->Load("resources/human/walk.gltf");
-  animHuman_ = AnimationManager::GetInstance()->LoadAnimation("resources/human",
+  resHuman_ = mm->Load("resources/app/human/walk.gltf");
+  animHuman_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/human",
                                                               "walk.gltf");
   modelHuman_.Initialize({resHuman_, {1, 1, 1, 1}, 1});
   if (animHuman_)
@@ -412,8 +412,8 @@ void GameScene::InitResources_() {
   modelEmitterBox_.Initialize({resCube_, {1.0f, 0.8f, 0.2f, 0.3f}, 0});
 
   sprite_.Initialize(
-      {"resources/plane/uvChecker.png", {640, 360}, {1, 1, 1, 1}});
-  skybox_.Initialize("resources/dds/dds.dds");
+      {"resources/app/plane/uvChecker.png", {640, 360}, {1, 1, 1, 1}});
+  skybox_.Initialize("resources/app/dds/dds.dds");
 
   // Ring 初期化
   ringParams_.divide = 32;
@@ -423,7 +423,7 @@ void GameScene::InitResources_() {
   ringParams_.colorOuter = {1, 1, 1, 1};
   ringParams_.alphaReference = 0.0f;
   ring_.Initialize(dx->GetDevice(), ringParams_);
-  texRing_ = tm->Load("resources/gradationLine.png");
+  texRing_ = tm->Load("resources/app/textures/gradationLine.png");
   ringTransform_.translate = {0.0f, 2.0f, 0.0f};
   ringUVScale_ = {10.0f, 1.0f};
 
@@ -437,12 +437,12 @@ void GameScene::InitResources_() {
   cylinderParams_.colorTop = {1, 1, 1, 1};
   cylinderParams_.colorBottom = {1, 1, 1, 1};
   cylinder_.Initialize(dx->GetDevice(), cylinderParams_);
-  texCylinder_ = tm->Load("resources/gradationLine.png");
+  texCylinder_ = tm->Load("resources/app/textures/gradationLine.png");
   cylinderTransform_.translate = {-4.0f, 0.0f, 0.0f};
   cylinderUVScale_ = {5.0f, 1.0f};
 
   ParticleManager::GetInstance()->CreateParticleGroup(
-      particleGroupName_, "resources/particle/circle.png", kParticleCount_);
+      particleGroupName_, "resources/app/particle/circle.png", kParticleCount_);
   ParticleEmitter::Params p{};
   p.groupName = particleGroupName_;
   p.shape = EmitterShape::Box;

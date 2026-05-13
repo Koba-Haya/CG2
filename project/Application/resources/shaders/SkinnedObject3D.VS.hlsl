@@ -13,7 +13,7 @@ struct WellForGPU {
     float4x4 skeletonSpaceMatrix;
     float4x4 skeletonSpaceInverseTransposeMatrix;
 };
-StructuredBuffer<WellForGPU> gMatrixPalette : register(t2);
+StructuredBuffer<WellForGPU> gSkin : register(t2);
 
 struct VertexShaderInput
 {
@@ -29,21 +29,18 @@ VertexShaderOutput main(VertexShaderInput input)
     VertexShaderOutput output;
 
     // Skinning calculation
-    float4x4 skinMatrix = 
-        input.weights.x * gMatrixPalette[input.boneIDs.x].skeletonSpaceMatrix +
-        input.weights.y * gMatrixPalette[input.boneIDs.y].skeletonSpaceMatrix +
-        input.weights.z * gMatrixPalette[input.boneIDs.z].skeletonSpaceMatrix +
-        input.weights.w * gMatrixPalette[input.boneIDs.w].skeletonSpaceMatrix;
+    float4x4 skinMatrix = 0;
+    float4x4 skinNormalMatrix = 0;
 
-    float3x3 skinNormalMatrix = 
-        input.weights.x * (float3x3)gMatrixPalette[input.boneIDs.x].skeletonSpaceInverseTransposeMatrix +
-        input.weights.y * (float3x3)gMatrixPalette[input.boneIDs.y].skeletonSpaceInverseTransposeMatrix +
-        input.weights.z * (float3x3)gMatrixPalette[input.boneIDs.z].skeletonSpaceInverseTransposeMatrix +
-        input.weights.w * (float3x3)gMatrixPalette[input.boneIDs.w].skeletonSpaceInverseTransposeMatrix;
+    [unroll]
+    for (int i = 0; i < 4; ++i) {
+        skinMatrix += input.weights[i] * gSkin[input.boneIDs[i]].skeletonSpaceMatrix;
+        skinNormalMatrix += input.weights[i] * gSkin[input.boneIDs[i]].skeletonSpaceInverseTransposeMatrix;
+    }
 
     float4 skinnedPosition = mul(input.position, skinMatrix);
     skinnedPosition.w = 1.0f;
-    float3 skinnedNormal = normalize(mul(input.normal, skinNormalMatrix));
+    float3 skinnedNormal = normalize(mul(input.normal, (float3x3)skinNormalMatrix));
 
     output.position = mul(skinnedPosition, gTransformationMatrix.WVP);
     output.texcoord = input.texcoord;
