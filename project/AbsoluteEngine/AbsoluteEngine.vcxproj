@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Development|x64">
+      <Configuration>Development</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{AF2E0C6A-9B3B-4E7B-8E4A-7A5A0A1A2B3C}</ProjectGuid>
+    <RootNamespace>AbsoluteEngine</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)generated\outputs\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)generated\outputs\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
+    <OutDir>$(SolutionDir)generated\outputs\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_LIB;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)AbsoluteEngine;$(SolutionDir)AbsoluteEngine\audio;$(SolutionDir)AbsoluteEngine\base;$(SolutionDir)AbsoluteEngine\math;$(SolutionDir)AbsoluteEngine\base\input;$(SolutionDir)AbsoluteEngine\camera;$(SolutionDir)AbsoluteEngine\graphics;$(SolutionDir)AbsoluteEngine\graphics\2d;$(SolutionDir)AbsoluteEngine\graphics\3d;$(SolutionDir)AbsoluteEngine\graphics\3d\model;$(SolutionDir)AbsoluteEngine\graphics\descriptor;$(SolutionDir)AbsoluteEngine\graphics\particle;$(SolutionDir)AbsoluteEngine\graphics\shader;$(SolutionDir)AbsoluteEngine\graphics\texture;$(SolutionDir)AbsoluteEngine\graphics\pipeline;$(SolutionDir)AbsoluteEngine\graphics\primitive;$(SolutionDir)AbsoluteEngine\Type;$(SolutionDir)AbsoluteEngine\scene;$(SolutionDir)externals\DirectXTex;$(SolutionDir)externals\imgui;$(SolutionDir)externals\assimp\include;$(SolutionDir)externals\cmft;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)AbsoluteEngine;$(SolutionDir)AbsoluteEngine\audio;$(SolutionDir)AbsoluteEngine\base;$(SolutionDir)AbsoluteEngine\math;$(SolutionDir)AbsoluteEngine\base\input;$(SolutionDir)AbsoluteEngine\camera;$(SolutionDir)AbsoluteEngine\graphics;$(SolutionDir)AbsoluteEngine\graphics\2d;$(SolutionDir)AbsoluteEngine\graphics\3d;$(SolutionDir)AbsoluteEngine\graphics\3d\model;$(SolutionDir)AbsoluteEngine\graphics\descriptor;$(SolutionDir)AbsoluteEngine\graphics\particle;$(SolutionDir)AbsoluteEngine\graphics\shader;$(SolutionDir)AbsoluteEngine\graphics\texture;$(SolutionDir)AbsoluteEngine\graphics\pipeline;$(SolutionDir)AbsoluteEngine\graphics\primitive;$(SolutionDir)AbsoluteEngine\Type;$(SolutionDir)AbsoluteEngine\scene;$(SolutionDir)externals\DirectXTex;$(SolutionDir)externals\imgui;$(SolutionDir)externals\assimp\include;$(SolutionDir)externals\cmft;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEVELOPMENT;_LIB;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)AbsoluteEngine;$(SolutionDir)AbsoluteEngine\audio;$(SolutionDir)AbsoluteEngine\base;$(SolutionDir)AbsoluteEngine\math;$(SolutionDir)AbsoluteEngine\base\input;$(SolutionDir)AbsoluteEngine\camera;$(SolutionDir)AbsoluteEngine\graphics;$(SolutionDir)AbsoluteEngine\graphics\2d;$(SolutionDir)AbsoluteEngine\graphics\3d;$(SolutionDir)AbsoluteEngine\graphics\3d\model;$(SolutionDir)AbsoluteEngine\graphics\descriptor;$(SolutionDir)AbsoluteEngine\graphics\particle;$(SolutionDir)AbsoluteEngine\graphics\shader;$(SolutionDir)AbsoluteEngine\graphics\texture;$(SolutionDir)AbsoluteEngine\graphics\pipeline;$(SolutionDir)AbsoluteEngine\graphics\primitive;$(SolutionDir)AbsoluteEngine\Type;$(SolutionDir)AbsoluteEngine\scene;$(SolutionDir)externals\DirectXTex;$(SolutionDir)externals\imgui;$(SolutionDir)externals\assimp\include;$(SolutionDir)externals\cmft;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <Optimization>Disabled</Optimization>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="audio\Audio.cpp" />
+    <ClCompile Include="base\DirectXCommon.cpp" />
+    <ClCompile Include="base\DirectXResourceUtils.cpp" />
+    <ClCompile Include="base\FrameWork.cpp" />
+    <ClCompile Include="base\ImGuiManager.cpp" />
+    <ClCompile Include="base\WinApp.cpp" />
+    <ClCompile Include="base\input\Input.cpp" />
+    <ClCompile Include="camera\Camera.cpp" />
+    <ClCompile Include="camera\DebugCamera.cpp" />
+    <ClCompile Include="camera\GameCamera.cpp" />
+    <ClCompile Include="graphics\Renderer.cpp" />
+    <ClCompile Include="graphics\Skybox.cpp" />
+    <ClCompile Include="graphics\2d\Sprite.cpp" />
+    <ClCompile Include="graphics\2d\SpriteManager.cpp" />
+    <ClCompile Include="graphics\2d\SpriteResource.cpp" />
+    <ClCompile Include="graphics\3d\AssetLoader.cpp" />
+    <ClCompile Include="graphics\3d\model\AnimationManager.cpp" />
+    <ClCompile Include="graphics\3d\model\ModelInstance.cpp" />
+    <ClCompile Include="graphics\3d\model\ModelManager.cpp" />
+    <ClCompile Include="graphics\3d\model\ModelResource.cpp" />
+    <ClCompile Include="graphics\3d\model\ModelUtils.cpp" />
+    <ClCompile Include="graphics\3d\model\SkinCluster.cpp" />
+    <ClCompile Include="graphics\descriptor\SrvHandle.cpp" />
+    <ClCompile Include="graphics\particle\GPUParticleManager.cpp" />
+    <ClCompile Include="graphics\particle\ParticleEmitter.cpp" />
+    <ClCompile Include="graphics\particle\ParticleManager.cpp" />
+    <ClCompile Include="graphics\pipeline\UnifiedPipeline.cpp" />
+    <ClCompile Include="graphics\primitive\Cylinder.cpp" />
+    <ClCompile Include="graphics\primitive\PrimitiveDrawer.cpp" />
+    <ClCompile Include="graphics\primitive\Ring.cpp" />
+    <ClCompile Include="graphics\shader\ShaderCompiler.cpp" />
+    <ClCompile Include="graphics\shader\ShaderCompilerUtils.cpp" />
+    <ClCompile Include="graphics\texture\TextureManager.cpp" />
+    <ClCompile Include="graphics\texture\TextureResource.cpp" />
+    <ClCompile Include="graphics\texture\TextureUtils.cpp" />
+    <ClCompile Include="math\Method.cpp" />
+    <ClCompile Include="scene\BaseScene.cpp" />
+    <ClCompile Include="scene\SceneManager.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="audio\Audio.h" />
+    <ClInclude Include="base\DirectXCommon.h" />
+    <ClInclude Include="base\DirectXResourceUtils.h" />
+    <ClInclude Include="base\FrameWork.h" />
+    <ClInclude Include="base\ImGuiManager.h" />
+    <ClInclude Include="base\WinApp.h" />
+    <ClInclude Include="base\input\Input.h" />
+    <ClInclude Include="camera\Camera.h" />
+    <ClInclude Include="camera\DebugCamera.h" />
+    <ClInclude Include="camera\GameCamera.h" />
+    <ClInclude Include="camera\ICameraController.h" />
+    <ClInclude Include="graphics\LightTypes.h" />
+    <ClInclude Include="graphics\Renderer.h" />
+    <ClInclude Include="graphics\Skybox.h" />
+    <ClInclude Include="graphics\2d\Sprite.h" />
+    <ClInclude Include="graphics\2d\SpriteManager.h" />
+    <ClInclude Include="graphics\2d\SpriteResource.h" />
+    <ClInclude Include="graphics\3d\AssetLoader.h" />
+    <ClInclude Include="graphics\3d\model\Animation.h" />
+    <ClInclude Include="graphics\3d\model\AnimationManager.h" />
+    <ClInclude Include="graphics\3d\model\ModelInstance.h" />
+    <ClInclude Include="graphics\3d\model\ModelManager.h" />
+    <ClInclude Include="graphics\3d\model\ModelResource.h" />
+    <ClInclude Include="graphics\3d\model\ModelUtils.h" />
+    <ClInclude Include="graphics\3d\model\SkinCluster.h" />
+    <ClInclude Include="graphics\descriptor\SrvAllocator.h" />
+    <ClInclude Include="graphics\descriptor\SrvHandle.h" />
+    <ClInclude Include="graphics\particle\GPUParticle.h" />
+    <ClInclude Include="graphics\particle\GPUParticleManager.h" />
+    <ClInclude Include="graphics\particle\ParticleEmitter.h" />
+    <ClInclude Include="graphics\particle\ParticleManager.h" />
+    <ClInclude Include="graphics\pipeline\BlendMode.h" />
+    <ClInclude Include="graphics\pipeline\UnifiedPipeline.h" />
+    <ClInclude Include="graphics\primitive\Cylinder.h" />
+    <ClInclude Include="graphics\primitive\PrimitiveDrawer.h" />
+    <ClInclude Include="graphics\primitive\Ring.h" />
+    <ClInclude Include="graphics\resources\ResourceObject.h" />
+    <ClInclude Include="graphics\shader\ShaderCompiler.h" />
+    <ClInclude Include="graphics\shader\ShaderCompilerUtils.h" />
+    <ClInclude Include="graphics\texture\TextureManager.h" />
+    <ClInclude Include="graphics\texture\TextureResource.h" />
+    <ClInclude Include="graphics\texture\TextureUtils.h" />
+    <ClInclude Include="math\Method.h" />
+    <ClInclude Include="scene\BaseScene.h" />
+    <ClInclude Include="scene\ISceneFactory.h" />
+    <ClInclude Include="scene\SceneManager.h" />
+    <ClInclude Include="scene\SceneServices.h" />
+    <ClInclude Include="Type\AABB.h" />
+    <ClInclude Include="Type\Matrix.h" />
+    <ClInclude Include="Type\Transform.h" />
+    <ClInclude Include="Type\Vector.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

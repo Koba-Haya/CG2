@@ -243,7 +243,7 @@ void Renderer::InitSkinningPipeline_() {
   device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&skinningRootSignature_));
 
   // Pipeline State
-  ComPtr<IDxcBlob> csBlob = CompileShader(L"resources/shaders/Skinning.CS.hlsl", L"cs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
+  ComPtr<IDxcBlob> csBlob = CompileShader(L"resources/engine/shaders/Skinning.CS.hlsl", L"cs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
   assert(csBlob);
 
   D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc{};
