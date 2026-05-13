@@ -38,6 +38,9 @@ private:
     ComPtr<ID3D12RootSignature> computeRootSignature_;
     ComPtr<ID3D12PipelineState> computePipelineState_;
 
+    ComPtr<ID3D12RootSignature> emitRootSignature_;
+    ComPtr<ID3D12PipelineState> emitPipelineState_;
+
     ComPtr<ID3D12RootSignature> graphicsRootSignature_;
     ComPtr<ID3D12PipelineState> graphicsPipelineState_;
 
@@ -48,6 +51,19 @@ private:
     };
     ComPtr<ID3D12Resource> perViewCB_;
     PerView* perViewMapped_ = nullptr;
+
+    struct PerFrame {
+        float time;
+        float deltaTime;
+    };
+    ComPtr<ID3D12Resource> perFrameCB_;
+    PerFrame* perFrameMapped_ = nullptr;
+
+    ComPtr<ID3D12Resource> emitterCB_;
+    EmitterSphere* emitterMapped_ = nullptr;
+
+    ComPtr<ID3D12Resource> freeCounterBuffer_;
+    uint32_t counterUavIndex_ = 0;
 
     // Quad Mesh
     ComPtr<ID3D12Resource> vb_;
