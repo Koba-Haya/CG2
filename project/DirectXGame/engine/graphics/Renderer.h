@@ -112,6 +112,7 @@ public:
 
   ComPtr<ID3D12Resource> CreateBuffer(size_t size);
   ComPtr<ID3D12Resource> CreateUploadBuffer(size_t size);
+  ComPtr<ID3D12Resource> CreateUAVBuffer(size_t size);
 
   // 環境マップ設定（CubeMap）を追加
   void SetEnvironmentMap(std::shared_ptr<TextureResource> texture) {
@@ -124,6 +125,7 @@ public:
   void DrawSkybox(Skybox *skybox);
   void DrawParticles(ParticleManager *pm,
                      BlendMode blendMode = BlendMode::Alpha);
+  void DrawGPUParticles();
   void DrawLine(const Vector3 &start, const Vector3 &end, const Vector4 &color);
   void DrawGrid(float size, int divisions, const Vector4 &color);
   void RenderPrimitives();
@@ -132,12 +134,20 @@ public:
   void DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
   void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
 
+  void DispatchSkinning(ModelInstance* instance);
+
   ~Renderer();
 
 private:
   Renderer();
 
+  void InitSkinningPipeline_();
+
   DirectXCommon *dx_ = nullptr;
+  
+  // CS Skinning
+  ComPtr<ID3D12RootSignature> skinningRootSignature_;
+  ComPtr<ID3D12PipelineState> skinningPipelineState_;
 
   Matrix4x4 view_ = MakeIdentity4x4();
   Matrix4x4 proj_ = MakeIdentity4x4();
@@ -153,6 +163,12 @@ private:
 
   ComPtr<ID3D12Resource> spotLightCB_;
   SpotLightGroupCB *spotLightMapped_ = nullptr;
+
+  struct SkinningInformation {
+    uint32_t numVertices;
+  };
+  ComPtr<ID3D12Resource> skinningInformationCB_;
+  SkinningInformation* skinningInformationMapped_ = nullptr;
 
   std::unique_ptr<UnifiedPipeline> objPipelineOpaque_;
   std::unique_ptr<UnifiedPipeline> objPipelineWireframe_;

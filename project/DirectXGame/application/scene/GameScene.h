@@ -1,6 +1,8 @@
 #pragma once
+#include "AnimationManager.h"
 #include "BaseScene.h"
 #include "Camera.h"
+#include "Cylinder.h"
 #include "LightTypes.h"
 #include "Matrix.h"
 #include "Method.h"
@@ -8,14 +10,12 @@
 #include "ModelResource.h"
 #include "ParticleEmitter.h"
 #include "ParticleManager.h"
-#include "AnimationManager.h"
 #include "Ring.h"
-#include "Cylinder.h"
-#include "graphics/texture/TextureResource.h"
 #include "Skybox.h"
 #include "Sprite.h"
 #include "Transform.h"
 #include "Vector.h"
+#include "graphics/texture/TextureResource.h"
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -57,6 +57,7 @@ private:
   std::shared_ptr<Animation> animSimpleSkin_;
   std::shared_ptr<Animation> animHuman_;
 
+  Transform transformAnimCube_;
   Transform transformSimpleSkin_;
   Transform transformHuman_;
   bool showSkeleton_ = false;
@@ -65,10 +66,10 @@ private:
   Skybox skybox_;
 
   // 反射設定用
-  bool enableReflection_ = false; // デフォルト OFF
-  float reflectionWeight_ = 0.5f; // 反射の強さ
+  bool enableReflection_ = false;
+  float reflectionWeight_ = 0.5f;
 
-  // その他既存のメンバ
+  // パーティクル関連
   static constexpr uint32_t kParticleCount_ = 300;
   std::string particleGroupName_ = "default";
   uint32_t initialParticleCount_ = 30;
@@ -86,7 +87,7 @@ private:
 
   int lightingMode_ = 1;
   int spriteBlendMode_ = 0;
-  int particleBlendMode_ = 1; // デフォルト加算 (BlendMode::Add)
+  int particleBlendMode_ = 1;
 
   Transform transform_;
   Transform cameraTransform_;
@@ -95,27 +96,29 @@ private:
 
   std::unique_ptr<Camera> camera_;
 
+  // エフェクト管理（ModelInstance版：一応保持）
   struct HitEffect {
     ModelInstance instance;
     float frame = 0.0f;
-    float maxFrame = 30.0f; // 0.5秒で消える
+    float maxFrame = 30.0f;
     bool isActive = false;
     Vector3 position;
   };
 
-  std::shared_ptr<ModelResource> resEffect_; // particle.obj
+  std::shared_ptr<ModelResource> resEffect_;
   std::vector<HitEffect> hitEffects_;
   void SpawnHitEffect(const Vector3 &pos);
 
+  // 常時確認用プリミティブ
   Ring ring_;
   std::shared_ptr<TextureResource> texRing_;
   Ring::Params ringParams_;
   Transform ringTransform_;
-  Vector2 ringUVScale_ = { 1.0f, 1.0f };
+  Vector2 ringUVScale_ = {1.0f, 1.0f};
 
   Cylinder cylinder_;
   std::shared_ptr<TextureResource> texCylinder_;
   Cylinder::Params cylinderParams_;
   Transform cylinderTransform_;
-  Vector2 cylinderUVScale_ = { 1.0f, 1.0f };
+  Vector2 cylinderUVScale_ = {1.0f, 1.0f};
 };

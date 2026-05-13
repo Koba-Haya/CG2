@@ -40,8 +40,8 @@ struct PipelineDesc {
   // スポットライトCB b4
   bool usePSSpotLight_b4 = false;
 
-  // VS Skinning b3
-  bool useVSSkinning_b3 = false;
+  // VS Skinning t2
+  bool useVSSkinning_t2 = false;
 
   // ラスタ/ブレンド/深度
   bool enableDepth = true;

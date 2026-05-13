@@ -8,12 +8,21 @@
 class DirectXCommon;
 struct Skeleton;
 
-static const int kMaxBones = 128;
+struct WellForGPU {
+  Matrix4x4 skeletonSpaceMatrix;
+  Matrix4x4 skeletonSpaceInverseTransposeMatrix;
+};
 
 struct SkinCluster {
   Microsoft::WRL::ComPtr<ID3D12Resource> paletteResource;
-  Matrix4x4* mappedPalette = nullptr;
+  WellForGPU* mappedPalette = nullptr;
+  uint32_t srvIndex = 0;
   
-  bool Initialize(DirectXCommon* dx);
+  // CS出力用
+  Microsoft::WRL::ComPtr<ID3D12Resource> skinnedVertexBuffer;
+  uint32_t uavIndex = 0;
+  D3D12_VERTEX_BUFFER_VIEW vbView{};
+
+  bool Initialize(DirectXCommon* dx, uint32_t jointCount, uint32_t vertexCount);
   void Update(const Skeleton& skeleton);
 };

@@ -47,7 +47,6 @@ void GameScene::Initialize(const SceneServices &services) {
   }
 
   InitLogging_();
-
   InitResources_();
 
   camera_ = std::make_unique<DebugCamera>();
@@ -76,395 +75,129 @@ void GameScene::Update() {
 
 #ifdef USE_IMGUI
   static bool settingsOpen = true;
+
+  // --- ウィンドウ1: Settings ---
   ImGui::Begin("Settings", &settingsOpen);
-
-  // ===== DirectionalLights =====
   {
-    ImGui::SeparatorText("DirectionalLights");
-
-    ImGui::Checkbox("Enable DirectionalLights", &enableDirectionalLight_);
-
-    int count = static_cast<int>(dirLights_.size());
-    ImGui::Text("Count: %d / %d", count, kMaxDirLights);
-
-    if (ImGui::Button("Add DirectionalLight")) {
-      if (count < kMaxDirLights) {
-        DirLight dl{};
-        dl.color = {1.0f, 1.0f, 1.0f};
-        dl.direction = {0.0f, -1.0f, 0.0f};
-        dl.intensity = 1.0f;
-        dl.enabled = enableDirectionalLight_;
-        dirLights_.push_back(dl);
-      }
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button("Remove Last##Dir")) {
+    // DirectionalLights
+    if (ImGui::CollapsingHeader("DirectionalLights")) {
+      ImGui::Checkbox("Enable DirectionalLights", &enableDirectionalLight_);
       if (!dirLights_.empty()) {
-        dirLights_.pop_back();
+        DirLight &dl = dirLights_[0];
+        ImGui::ColorEdit3("DirColor", &dl.color.x);
+        ImGui::DragFloat3("DirDirection", &dl.direction.x, 0.01f, -1.0f, 1.0f);
+        ImGui::SliderFloat("DirIntensity", &dl.intensity, 0.0f, 10.0f);
       }
     }
 
-    static int editDirIndex = 0;
-    if (dirLights_.empty())
-      editDirIndex = 0;
-    else
-      editDirIndex =
-          std::clamp(editDirIndex, 0, static_cast<int>(dirLights_.size()) - 1);
-
-    ImGui::SliderInt("Edit Index##Dir", &editDirIndex, 0,
-                     std::max(0, static_cast<int>(dirLights_.size()) - 1));
-
-    if (!dirLights_.empty()) {
-      DirLight &dl = dirLights_[editDirIndex];
-
-      ImGui::PushID(editDirIndex);
-
-      ImGui::Checkbox("Enabled##Dir", &dl.enabled);
-
-      float col[3] = {dl.color.x, dl.color.y, dl.color.z};
-      if (ImGui::ColorEdit3("DirColor", col)) {
-        dl.color = {col[0], col[1], col[2]};
-      }
-
-      float dir[3] = {dl.direction.x, dl.direction.y, dl.direction.z};
-      if (ImGui::DragFloat3("DirDirection", dir, 0.01f, -1.0f, 1.0f)) {
-        const float lenSq = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
-        if (lenSq < 1e-6f) {
-          dir[0] = 0.0f; dir[1] = -1.0f; dir[2] = 0.0f;
-        }
-        dl.direction = {dir[0], dir[1], dir[2]};
-      }
-
-      ImGui::SliderFloat("DirIntensity", &dl.intensity, 0.0f, 10.0f);
-
-      ImGui::PopID();
-    }
-  }
-
-  // ===== PointLights =====
-  {
-    ImGui::SeparatorText("PointLights");
-
-    ImGui::Checkbox("Enable PointLights", &enablePointLight_);
-
-    int count = static_cast<int>(pointLights_.size());
-    ImGui::Text("Count: %d / %d", count, kMaxPointLights);
-
-    if (ImGui::Button("Add PointLight")) {
-      if (count < kMaxPointLights) {
-        PointLight pl{};
-        pl.color = {1.0f, 1.0f, 1.0f};
-        pl.position = {static_cast<float>(count) * 2.0f, 2.0f, -2.0f};
-        pl.intensity = 1.0f;
-        pl.radius = 10.0f;
-        pl.decay = 2.0f;
-        pl.enabled = enablePointLight_;
-        pointLights_.push_back(pl);
-      }
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button("Remove Last")) {
+    // PointLights
+    if (ImGui::CollapsingHeader("PointLights")) {
+      ImGui::Checkbox("Enable PointLights", &enablePointLight_);
       if (!pointLights_.empty()) {
-        pointLights_.pop_back();
+        PointLight &pl = pointLights_[0];
+        ImGui::ColorEdit3("PointColor", &pl.color.x);
+        ImGui::DragFloat3("PointPosition", &pl.position.x, 0.1f);
+        ImGui::SliderFloat("PointIntensity", &pl.intensity, 0.0f, 10.0f);
       }
     }
 
-    static int editIndex = 0;
-    if (pointLights_.empty())
-      editIndex = 0;
-    else
-      editIndex = std::clamp(editIndex, 0, static_cast<int>(pointLights_.size()) - 1);
-
-    ImGui::SliderInt("Edit Index", &editIndex, 0,
-                     std::max(0, static_cast<int>(pointLights_.size()) - 1));
-
-    if (!pointLights_.empty()) {
-      PointLight &pl = pointLights_[editIndex];
-
-      ImGui::PushID(editIndex);
-
-      ImGui::Checkbox("Enabled", &pl.enabled);
-
-      float col[3] = {pl.color.x, pl.color.y, pl.color.z};
-      if (ImGui::ColorEdit3("PointColor", col)) {
-        pl.color = {col[0], col[1], col[2]};
-      }
-
-      float pos[3] = {pl.position.x, pl.position.y, pl.position.z};
-      if (ImGui::DragFloat3("PointPosition", pos, 0.01f)) {
-        pl.position = {pos[0], pos[1], pos[2]};
-      }
-
-      ImGui::SliderFloat("PointIntensity", &pl.intensity, 0.0f, 10.0f);
-      ImGui::SliderFloat("PointRadius", &pl.radius, 0.01f, 50.0f);
-      ImGui::SliderFloat("PointDecay", &pl.decay, 0.01f, 8.0f);
-
-      ImGui::PopID();
-    }
-  }
-
-  // ===== SpotLights =====
-  {
-    ImGui::SeparatorText("SpotLights");
-
-    ImGui::Checkbox("Enable SpotLights", &enableSpotLight_);
-
-    int count = static_cast<int>(spotLights_.size());
-    ImGui::Text("Count: %d / %d", count, kMaxSpotLights);
-
-    if (ImGui::Button("Add SpotLight")) {
-      if (count < kMaxSpotLights) {
-        SpotLight sl{};
-        sl.color = {1.0f, 1.0f, 1.0f};
-        sl.position = {static_cast<float>(count) * 2.0f, 3.0f, -2.0f};
-        sl.direction = {0.0f, -1.0f, 0.0f};
-        sl.intensity = 1.0f;
-        sl.distance = 10.0f;
-        sl.decay = 2.0f;
-        sl.coneAngleDeg = 30.0f;
-        sl.enabled = enableSpotLight_;
-        spotLights_.push_back(sl);
-      }
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button("Remove Last##Spot")) {
+    // SpotLights
+    if (ImGui::CollapsingHeader("SpotLights")) {
+      ImGui::Checkbox("Enable SpotLights", &enableSpotLight_);
       if (!spotLights_.empty()) {
-        spotLights_.pop_back();
+        SpotLight &sl = spotLights_[0];
+        ImGui::ColorEdit3("SpotColor", &sl.color.x);
+        ImGui::DragFloat3("SpotPosition", &sl.position.x, 0.1f);
+        ImGui::SliderFloat("SpotIntensity", &sl.intensity, 0.0f, 10.0f);
       }
     }
 
-    static int editSpotIndex = 0;
-    if (spotLights_.empty())
-      editSpotIndex = 0;
-    else
-      editSpotIndex = std::clamp(editSpotIndex, 0, static_cast<int>(spotLights_.size()) - 1);
-
-    ImGui::SliderInt("Edit Index##Spot", &editSpotIndex, 0,
-                     std::max(0, static_cast<int>(spotLights_.size()) - 1));
-
-    if (!spotLights_.empty()) {
-      SpotLight &sl = spotLights_[editSpotIndex];
-
-      ImGui::PushID(editSpotIndex);
-
-      ImGui::Checkbox("Enabled##Spot", &sl.enabled);
-
-      float col[3] = {sl.color.x, sl.color.y, sl.color.z};
-      if (ImGui::ColorEdit3("SpotColor", col)) {
-        sl.color = {col[0], col[1], col[2]};
+    // Ring Primitive 調整
+    if (ImGui::CollapsingHeader("Ring Primitive")) {
+      bool changed = false;
+      int divide = static_cast<int>(ringParams_.divide);
+      if (ImGui::SliderInt("Divide##Ring", &divide, 3, 128)) {
+        ringParams_.divide = static_cast<uint32_t>(divide);
+        changed = true;
       }
+      changed |= ImGui::SliderFloat("Outer Radius", &ringParams_.outerRadius,
+                                    0.1f, 10.0f);
+      changed |= ImGui::SliderFloat("Inner Radius", &ringParams_.innerRadius,
+                                    0.0f, 10.0f);
+      changed |= ImGui::SliderAngle("Start Angle", &ringParams_.startAngle);
+      changed |= ImGui::SliderAngle("End Angle", &ringParams_.endAngle);
+      changed |= ImGui::Checkbox("UV Vertical##Ring", &ringParams_.uvVertical);
+      changed |= ImGui::ColorEdit4("Color Inner", &ringParams_.colorInner.x);
+      changed |= ImGui::ColorEdit4("Color Outer", &ringParams_.colorOuter.x);
+      changed |= ImGui::SliderFloat("Alpha Ref##Ring",
+                                    &ringParams_.alphaReference, 0.0f, 1.0f);
+      ImGui::DragFloat2("UV Scale##Ring", &ringUVScale_.x, 0.1f);
 
-      float pos[3] = {sl.position.x, sl.position.y, sl.position.z};
-      if (ImGui::DragFloat3("SpotPosition", pos, 0.01f)) {
-        sl.position = {pos[0], pos[1], pos[2]};
+      if (changed) {
+        ring_.Update(Renderer::GetInstance()->GetDX()->GetDevice(),
+                     ringParams_);
       }
+      ImGui::DragFloat3("Ring Pos", &ringTransform_.translate.x, 0.1f);
+      ImGui::DragFloat3("Ring Rot", &ringTransform_.rotate.x, 0.05f);
+    }
 
-      float dir[3] = {sl.direction.x, sl.direction.y, sl.direction.z};
-      if (ImGui::DragFloat3("SpotDirection", dir, 0.01f, -1.0f, 1.0f)) {
-        const float lenSq = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
-        if (lenSq < 1e-6f) {
-          dir[0] = 0.0f; dir[1] = -1.0f; dir[2] = 0.0f;
-        }
-        sl.direction = {dir[0], dir[1], dir[2]};
+    // Cylinder Primitive 調整
+    if (ImGui::CollapsingHeader("Cylinder Primitive")) {
+      bool changed = false;
+      int divide = static_cast<int>(cylinderParams_.divide);
+      if (ImGui::SliderInt("Divide##Cyl", &divide, 3, 128)) {
+        cylinderParams_.divide = static_cast<uint32_t>(divide);
+        changed = true;
       }
+      changed |= ImGui::DragFloat2("Top Radius (X,Z)",
+                                   &cylinderParams_.topRadiusX, 0.1f);
+      changed |= ImGui::DragFloat2("Bottom Radius (X,Z)",
+                                   &cylinderParams_.bottomRadiusX, 0.1f);
+      changed |= ImGui::SliderFloat("Height##Cyl", &cylinderParams_.height,
+                                    0.1f, 10.0f);
+      changed |= ImGui::Checkbox("Flip V##Cyl", &cylinderParams_.flipV);
+      changed |= ImGui::ColorEdit4("Color Top", &cylinderParams_.colorTop.x);
+      changed |=
+          ImGui::ColorEdit4("Color Bottom", &cylinderParams_.colorBottom.x);
+      ImGui::DragFloat2("UV Scale##Cyl", &cylinderUVScale_.x, 0.1f);
 
-      ImGui::SliderFloat("SpotIntensity", &sl.intensity, 0.0f, 10.0f);
-      ImGui::SliderFloat("SpotDistance", &sl.distance, 0.01f, 50.0f);
-      ImGui::SliderFloat("SpotDecay", &sl.decay, 0.01f, 8.0f);
-      ImGui::SliderFloat("Cone Angle (deg)", &sl.coneAngleDeg, 1.0f, 89.0f);
-
-      ImGui::PopID();
+      if (changed) {
+        cylinder_.Update(Renderer::GetInstance()->GetDX()->GetDevice(),
+                         cylinderParams_);
+      }
+      ImGui::DragFloat3("Cylinder Pos", &cylinderTransform_.translate.x, 0.1f);
+      ImGui::DragFloat3("Cylinder Rot", &cylinderTransform_.rotate.x, 0.05f);
     }
   }
-  ImGui::End();
+  ImGui::End(); // ウィンドウ1 終了
 
+  // --- ウィンドウ2: Object ---
   ImGui::Begin("Object", &settingsOpen);
-  ImGui::Separator();
+  {
+    ImGui::Checkbox("Show Skeleton", &showSkeleton_);
+    ImGui::Checkbox("Enable Reflection", &enableReflection_);
+    if (enableReflection_) {
+      ImGui::SliderFloat("Weight", &reflectionWeight_, 0.0f, 1.0f);
+    }
 
-  ImGui::Checkbox("Show Skeleton", &showSkeleton_);
+    const char *blendModeItems[] = {"Alpha", "Add", "Subtract", "Multiply",
+                                    "Screen"};
+    ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems,
+                 IM_ARRAYSIZE(blendModeItems));
 
-  // 反射設定
-  ImGui::SeparatorText("Environment Reflection");
-  ImGui::Checkbox("Enable Reflection", &enableReflection_);
-  if (enableReflection_) {
-    ImGui::SliderFloat("Weight", &reflectionWeight_, 0.0f, 1.0f);
+    ImGui::SeparatorText("Camera");
+    ImGui::DragFloat3("CameraTranslate", &cameraTransform_.translate.x, 0.1f);
+    ImGui::DragFloat3("CameraRotate", &cameraTransform_.rotate.x, 0.01f);
+
+    ImGui::SeparatorText("Sphere");
+    ImGui::DragFloat3("SphereTranslate", &transform_.translate.x, 0.1f);
+    ImGui::DragFloat3("SphereScale", &transform_.scale.x, 0.1f);
   }
-
-  static float sphereCol[3] = {1.0f, 1.0f, 1.0f};
-  ImGui::Text("ObjectColor");
-  if (ImGui::ColorEdit3("SphereColor", sphereCol)) {
-    modelSphere_.SetColor({sphereCol[0], sphereCol[1], sphereCol[2], 1.0f});
-  }
-
-  static float spriteCol[3] = {1.0f, 1.0f, 1.0f};
-  if (ImGui::ColorEdit3("SpriteColor", spriteCol)) {
-    sprite_.SetColor({spriteCol[0], spriteCol[1], spriteCol[2], 1.0f});
-  }
-
-  ImGui::Separator();
-  ImGui::Text("Lighting Mode");
-  ImGui::RadioButton("None", &lightingMode_, 0);
-  ImGui::RadioButton("Lambert", &lightingMode_, 1);
-  ImGui::RadioButton("Half-Lambert", &lightingMode_, 2);
-
-  const char *blendModeItems[] = {
-      "Alpha (通常)",    "Add (加算)",          "Subtract (減算)",
-      "Multiply (乗算)", "Screen (スクリーン)",
-  };
-  ImGui::Combo("Sprite Blend", &spriteBlendMode_, blendModeItems,
-               IM_ARRAYSIZE(blendModeItems));
-  ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems,
-               IM_ARRAYSIZE(blendModeItems));
-
-  static bool useTransformCamera = false;
-  ImGui::Separator();
-  ImGui::Text("Camera");
-  ImGui::Checkbox("Use Transform Camera", &useTransformCamera);
-
-  ImGui::DragFloat3("CameraTranslate",
-                    reinterpret_cast<float *>(&cameraTransform_.translate),
-                    0.01f);
-  ImGui::DragFloat3("CameraRotate",
-                    reinterpret_cast<float *>(&cameraTransform_.rotate), 0.01f);
-
-  ImGui::Separator();
-  ImGui::Text("Sphere");
-  ImGui::DragFloat3("SphereTranslate",
-                    reinterpret_cast<float *>(&transform_.translate), 0.01f);
-  ImGui::DragFloat3("SphereRotate",
-                    reinterpret_cast<float *>(&transform_.rotate), 0.01f);
-  ImGui::DragFloat3("SphereScale", reinterpret_cast<float *>(&transform_.scale),
-                    0.01f, 0.0f, 5.0f);
-
-  ImGui::Separator();
-  ImGui::Text("SimpleSkin");
-  ImGui::DragFloat3("SimpleSkinTranslate",
-                    reinterpret_cast<float *>(&transformSimpleSkin_.translate), 0.01f);
-  ImGui::DragFloat3("SimpleSkinRotate",
-                    reinterpret_cast<float *>(&transformSimpleSkin_.rotate), 0.01f);
-  ImGui::DragFloat3("SimpleSkinScale", reinterpret_cast<float *>(&transformSimpleSkin_.scale),
-                    0.01f, 0.0f, 5.0f);
-
-  ImGui::Separator();
-  ImGui::Text("Human");
-  ImGui::DragFloat3("HumanTranslate",
-                    reinterpret_cast<float *>(&transformHuman_.translate), 0.01f);
-  ImGui::DragFloat3("HumanRotate",
-                    reinterpret_cast<float *>(&transformHuman_.rotate), 0.01f);
-  ImGui::DragFloat3("HumanScale", reinterpret_cast<float *>(&transformHuman_.scale),
-                    0.01f, 0.0f, 5.0f);
-
-  ImGui::Separator();
-  ImGui::Text("Sprite");
-  ImGui::DragFloat3("SpriteTranslate", &transformSprite_.translate.x, 1.0f);
-  ImGui::DragFloat3("SpriteRotate", &transformSprite_.rotate.x, 0.01f);
-  ImGui::DragFloat3("SpriteScale", &transformSprite_.scale.x, 0.01f);
-
-  ImGui::Separator();
-  ImGui::Text("UV");
-  ImGui::DragFloat2("UVTranslate", &uvTransformSprite_.translate.x, 0.01f,
-                    -10.0f, 10.0f);
-  ImGui::DragFloat2("UVScale", &uvTransformSprite_.scale.x, 0.01f, -10.0f,
-                    10.0f);
-  ImGui::SliderAngle("UVRotate", &uvTransformSprite_.rotate.z);
-
-  ImGui::End();
-
-  // Transform Camera override
-  if (useTransformCamera && camera_) {
-    // カメラを手動トランスフォームで上書き（デバッグ用）
-    // DebugCamera の Update を無視する形
-  }
-
-  if (ImGui::CollapsingHeader("Ring Primitive")) {
-    bool changed = false;
-    int divide = static_cast<int>(ringParams_.divide);
-    if (ImGui::SliderInt("Divide", &divide, 3, 128)) {
-      ringParams_.divide = static_cast<uint32_t>(divide);
-      changed = true;
-    }
-    if (ImGui::SliderFloat("Outer Radius", &ringParams_.outerRadius, 0.1f,
-                           10.0f)) {
-      if (ringParams_.outerRadius < ringParams_.innerRadius) {
-        ringParams_.outerRadius = ringParams_.innerRadius + 0.01f;
-      }
-      changed = true;
-    }
-    if (ImGui::SliderFloat("Inner Radius", &ringParams_.innerRadius, 0.0f,
-                           10.0f)) {
-      if (ringParams_.innerRadius > ringParams_.outerRadius) {
-        ringParams_.innerRadius = ringParams_.outerRadius - 0.01f;
-      }
-      changed = true;
-    }
-    changed |= ImGui::SliderAngle("Start Angle", &ringParams_.startAngle,
-                                  -360.0f, 360.0f);
-    changed |=
-        ImGui::SliderAngle("End Angle", &ringParams_.endAngle, -360.0f, 360.0f);
-    changed |= ImGui::Checkbox("UV Vertical", &ringParams_.uvVertical);
-    changed |= ImGui::ColorEdit4("Color Inner", &ringParams_.colorInner.x);
-    changed |= ImGui::ColorEdit4("Color Outer", &ringParams_.colorOuter.x);
-    changed |= ImGui::SliderFloat("Alpha Ref##Ring",
-                                  &ringParams_.alphaReference, 0.0f, 1.0f);
-
-    ImGui::DragFloat2("UV Scale##Ring", &ringUVScale_.x, 0.1f);
-
-    if (changed) {
-      auto *dx = Renderer::GetInstance()->GetDX();
-      ring_.Update(dx->GetDevice(), ringParams_);
-    }
-
-    ImGui::DragFloat3("Ring Pos", &ringTransform_.translate.x, 0.1f);
-    ImGui::DragFloat3("Ring Rot", &ringTransform_.rotate.x, 0.05f);
-
-    static bool autoRotate = true;
-    ImGui::Checkbox("Auto Rotate", &autoRotate);
-    if (autoRotate) {
-      ringTransform_.rotate.z += 1.0f * deltaTime;
-    }
-  }
-
-  if (ImGui::CollapsingHeader("Cylinder Primitive")) {
-    bool changed = false;
-    int divide = static_cast<int>(cylinderParams_.divide);
-    if (ImGui::SliderInt("Divide##Cyl", &divide, 3, 128)) {
-      cylinderParams_.divide = static_cast<uint32_t>(divide);
-      changed = true;
-    }
-    changed |= ImGui::DragFloat2(
-        "Top Radius (X,Z)", &cylinderParams_.topRadiusX, 0.1f, 0.0f, 10.0f);
-    changed |=
-        ImGui::DragFloat2("Bottom Radius (X,Z)", &cylinderParams_.bottomRadiusX,
-                          0.1f, 0.0f, 10.0f);
-    changed |=
-        ImGui::SliderFloat("Height##Cyl", &cylinderParams_.height, 0.1f, 10.0f);
-    changed |= ImGui::SliderAngle("Start Angle##Cyl",
-                                  &cylinderParams_.startAngle, -360.0f, 360.0f);
-    changed |= ImGui::SliderAngle("End Angle##Cyl", &cylinderParams_.endAngle,
-                                  -360.0f, 360.0f);
-    changed |= ImGui::Checkbox("Flip V##Cyl", &cylinderParams_.flipV);
-    changed |= ImGui::Checkbox("UV Vertical##Cyl", &cylinderParams_.uvVertical);
-    changed |= ImGui::SliderFloat("Alpha Reference",
-                                  &cylinderParams_.alphaReference, 0.0f, 1.0f);
-    changed |= ImGui::ColorEdit4("Color Top", &cylinderParams_.colorTop.x);
-    changed |=
-        ImGui::ColorEdit4("Color Bottom", &cylinderParams_.colorBottom.x);
-
-    ImGui::DragFloat2("UV Scale##Cyl", &cylinderUVScale_.x, 0.1f);
-
-    if (changed) {
-      auto *dx = Renderer::GetInstance()->GetDX();
-      cylinder_.Update(dx->GetDevice(), cylinderParams_);
-    }
-
-    ImGui::DragFloat3("Cylinder Pos", &cylinderTransform_.translate.x, 0.1f);
-    ImGui::DragFloat3("Cylinder Rot", &cylinderTransform_.rotate.x, 0.05f);
-  }
+  ImGui::End(); // ウィンドウ2 終了
 
 #endif
+  ringTransform_.rotate.z += 1.5f * deltaTime;
+  cylinderTransform_.rotate.y += 1.0f * deltaTime;
 
   particleEmitter_.Update(deltaTime);
 
@@ -484,8 +217,9 @@ void GameScene::Update() {
 
   // エフェクトの更新
   for (auto &ef : hitEffects_) {
-    if (!ef.isActive)
+    if (!ef.isActive) {
       continue;
+    }
 
     ef.frame += 1.0f;
     float t = ef.frame / ef.maxFrame; // 0.0 ~ 1.0
@@ -526,42 +260,21 @@ void GameScene::Draw() {
   renderer->SetPointLights(pointLights_, enablePointLight_);
   renderer->SetSpotLights(spotLights_, enableSpotLight_);
 
-  // 3D モデル描画
+  // --- 不透明描画 ---
   {
-    Matrix4x4 worldSphere = MakeAffineMatrix(
-        transform_.scale, transform_.rotate, transform_.translate);
-    modelSphere_.SetWorld(worldSphere);
-    modelSphere_.SetLightingMode(lightingMode_);
-    modelSphere_.SetSpecularColor({1.0f, 1.0f, 1.0f});
-    modelSphere_.SetShininess(64.0f);
-
-    // 反射の有効/無効と強さを設定
-    float finalCoeff = enableReflection_ ? reflectionWeight_ : 0.0f;
-    modelSphere_.SetEnvironmentCoefficient(finalCoeff);
-
+    modelSphere_.SetWorld(MakeAffineMatrix(transform_.scale, transform_.rotate,
+                                           transform_.translate));
+    modelSphere_.SetEnvironmentCoefficient(enableReflection_ ? reflectionWeight_
+                                                             : 0.0f);
     modelSphere_.Draw();
   }
+  modelAnimCube_.SetWorld(MakeAffineMatrix(transformAnimCube_.scale,
+                                           transformAnimCube_.rotate,
+                                           transformAnimCube_.translate));
+  modelAnimCube_.Draw();
 
-  {
-    Matrix4x4 worldAnimCube = MakeAffineMatrix({1.0f, 1.0f, 1.0f}, IdentityQuaternion(), {-2.0f, 0.0f, 0.0f});
-    modelAnimCube_.SetWorld(worldAnimCube);
-    modelAnimCube_.SetLightingMode(lightingMode_);
-    modelAnimCube_.Draw();
-  }
-
-  {
-    Matrix4x4 worldSimpleSkin = MakeAffineMatrix(transformSimpleSkin_.scale, transformSimpleSkin_.rotate, transformSimpleSkin_.translate);
-    modelSimpleSkin_.SetWorld(worldSimpleSkin);
-    modelSimpleSkin_.SetLightingMode(lightingMode_);
-    modelSimpleSkin_.Draw();
-  }
-
-  {
-    Matrix4x4 worldHuman = MakeAffineMatrix(transformHuman_.scale, transformHuman_.rotate, transformHuman_.translate);
-    modelHuman_.SetWorld(worldHuman);
-    modelHuman_.SetLightingMode(lightingMode_);
-    modelHuman_.Draw();
-  }
+  modelSimpleSkin_.Draw();
+  modelHuman_.Draw();
 
   if (showSkeleton_) {
     modelSimpleSkin_.DrawSkeleton();
@@ -569,48 +282,48 @@ void GameScene::Draw() {
     modelAnimCube_.DrawSkeleton();
   }
 
-  // プリミティブ（ライン等）の描画
   renderer->RenderPrimitives();
+  skybox_.Draw();
 
-  // Skybox
+  // --- 透過・加算描画（Ring & Cylinder） ---
+
+  // Ring 描画
   {
-    Matrix4x4 viewMatrix = renderer->GetViewMatrix();
-    Matrix4x4 projMatrix = renderer->GetProjectionMatrix();
-    Matrix4x4 invView = Inverse(viewMatrix);
-    Vector3 camPos = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+    Matrix4x4 worldRing = MakeAffineMatrix(
+        ringTransform_.scale, ringTransform_.rotate, ringTransform_.translate);
+    ring_.SetTransform(worldRing, camera_->GetViewMatrix(),
+                       camera_->GetProjectionMatrix());
 
-    skybox_.Update(viewMatrix, projMatrix, camPos, {100.0f, 100.0f, 100.0f});
-    skybox_.Draw();
-  }
-
-  // ヒットエフェクトの描画
-  for (auto &ef : hitEffects_) {
-    Renderer::GetInstance()->DrawEffectModel(&ef.instance);
-  }
-
-  // Ring の描画
-  /*{
-    Matrix4x4 worldRing = MakeAffineMatrix(ringTransform_.scale, ringTransform_.rotate, ringTransform_.translate);
-    ring_.SetTransform(worldRing, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
-    
-    Matrix4x4 uvTransform = MakeScaleMatrix({ ringUVScale_.x, ringUVScale_.y, 1.0f });
+    Matrix4x4 uvTransform =
+        MakeScaleMatrix({ringUVScale_.x, ringUVScale_.y, 1.0f});
     ring_.SetMaterial({1.0f, 1.0f, 1.0f, 1.0f}, uvTransform);
-    if (texRing_) {
-        Renderer::GetInstance()->DrawRing(&ring_, texRing_->GetSrvGpu());
-    }
-  }*/
 
-  // Cylinder の描画
-  /*{
-    Matrix4x4 worldCylinder = MakeAffineMatrix(cylinderTransform_.scale, cylinderTransform_.rotate, cylinderTransform_.translate);
-    cylinder_.SetTransform(worldCylinder, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
-    
-    Matrix4x4 uvTransform = MakeScaleMatrix({ cylinderUVScale_.x, cylinderUVScale_.y, 1.0f });
-    cylinder_.SetMaterial({1.0f, 1.0f, 1.0f, 1.0f}, uvTransform);
-    if (texCylinder_) {
-        Renderer::GetInstance()->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
+    if (texRing_) {
+      renderer->DrawRing(&ring_, texRing_->GetSrvGpu());
     }
-  }*/
+  }
+
+  // Cylinder 描画
+  {
+    Matrix4x4 worldCylinder =
+        MakeAffineMatrix(cylinderTransform_.scale, cylinderTransform_.rotate,
+                         cylinderTransform_.translate);
+    cylinder_.SetTransform(worldCylinder, camera_->GetViewMatrix(),
+                           camera_->GetProjectionMatrix());
+
+    Matrix4x4 uvTransform =
+        MakeScaleMatrix({cylinderUVScale_.x, cylinderUVScale_.y, 1.0f});
+    cylinder_.SetMaterial({1.0f, 1.0f, 1.0f, 1.0f}, uvTransform);
+
+    if (texCylinder_) {
+      renderer->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
+    }
+  }
+
+  // エフェクト・パーティクル
+  for (auto &ef : hitEffects_) {
+    renderer->DrawEffectModel(&ef.instance);
+  }
 
   // パーティクルの描画
   BlendMode pMode = BlendMode::Alpha;
@@ -622,6 +335,7 @@ void GameScene::Draw() {
   case 4: pMode = BlendMode::Screen; break;
   }
   ParticleManager::GetInstance()->Draw(pMode);
+  renderer->DrawGPUParticles();
 
   // 最後にPrimitive（グリッド等）
   //Renderer::GetInstance()->RenderPrimitives();
@@ -650,8 +364,6 @@ void GameScene::Draw() {
       modelEmitterSphere_.Draw();
     }
   }
-
-
 }
 
 void GameScene::InitLogging_() {
@@ -666,157 +378,76 @@ void GameScene::InitLogging_() {
 }
 
 void GameScene::InitResources_() {
-  resSphere_ = ModelManager::GetInstance()->Load("resources/sphere/sphere.obj");
-  resCube_ = ModelManager::GetInstance()->Load("resources/cube/cube.obj");
-  resEffect_ =
-      ModelManager::GetInstance()->Load("resources/particle/particle.obj");
-  resAnimCube_ = ModelManager::GetInstance()->Load("resources/AnimatedCube/AnimatedCube.gltf");
-  animCubeAnim_ = AnimationManager::GetInstance()->LoadAnimation("resources/AnimatedCube", "AnimatedCube.gltf");
+  auto *mm = ModelManager::GetInstance();
+  auto *tm = TextureManager::GetInstance();
+  auto *dx = Renderer::GetInstance()->GetDX();
 
-  CheckFileExists_("resources/particle/circle.png");
-  CheckFileExists_("resources/sound/select.mp3");
+  resSphere_ = mm->Load("resources/sphere/sphere.obj");
+  resCube_ = mm->Load("resources/cube/cube.obj");
+  resAnimCube_ = mm->Load("resources/AnimatedCube/AnimatedCube.gltf");
+  animCubeAnim_ = AnimationManager::GetInstance()->LoadAnimation(
+      "resources/AnimatedCube", "AnimatedCube.gltf");
+  resEffect_ = mm->Load("resources/particle/particle.obj");
 
-  {
-    ModelInstance::CreateInfo ci{};
-    ci.resource = resSphere_;
-    ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
-    ci.lightingMode = 0;
-    CheckBoolOrDie_(modelSphere_.Initialize(ci), "modelSphere_.Initialize");
-  }
+  modelSphere_.Initialize({resSphere_, {1, 1, 1, 1}, 0});
+  modelAnimCube_.Initialize({resAnimCube_, {1, 1, 1, 1}, 1});
+  if (animCubeAnim_)
+    modelAnimCube_.PlayAnimation(animCubeAnim_, true);
 
-  {
-    ModelInstance::CreateInfo ci{};
-    ci.resource = resAnimCube_;
-    ci.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
-    ci.lightingMode = 1;
-    CheckBoolOrDie_(modelAnimCube_.Initialize(ci), "modelAnimCube_.Initialize");
-    if (animCubeAnim_) {
-      modelAnimCube_.PlayAnimation(animCubeAnim_, true);
-    }
-  }
+  resSimpleSkin_ = mm->Load("resources/simpleSkin/simpleSkin.gltf");
+  animSimpleSkin_ = AnimationManager::GetInstance()->LoadAnimation(
+      "resources/simpleSkin", "simpleSkin.gltf");
+  modelSimpleSkin_.Initialize({resSimpleSkin_, {1, 1, 1, 1}, 1});
+  if (animSimpleSkin_)
+    modelSimpleSkin_.PlayAnimation(animSimpleSkin_, true);
 
-  {
-    resSimpleSkin_ = ModelManager::GetInstance()->Load("resources/simpleSkin/simpleSkin.gltf");
-    animSimpleSkin_ = AnimationManager::GetInstance()->LoadAnimation("resources/simpleSkin", "simpleSkin.gltf");
-    
-    ModelInstance::CreateInfo ci{};
-    ci.resource = resSimpleSkin_;
-    ci.baseColor = {1,1,1,1};
-    ci.lightingMode = 1;
-    CheckBoolOrDie_(modelSimpleSkin_.Initialize(ci), "modelSimpleSkin_.Initialize");
-    if (animSimpleSkin_) modelSimpleSkin_.PlayAnimation(animSimpleSkin_, true);
-  }
+  resHuman_ = mm->Load("resources/human/walk.gltf");
+  animHuman_ = AnimationManager::GetInstance()->LoadAnimation("resources/human",
+                                                              "walk.gltf");
+  modelHuman_.Initialize({resHuman_, {1, 1, 1, 1}, 1});
+  if (animHuman_)
+    modelHuman_.PlayAnimation(animHuman_, true);
 
-  {
-    resHuman_ = ModelManager::GetInstance()->Load("resources/human/walk.gltf");
-    animHuman_ = AnimationManager::GetInstance()->LoadAnimation("resources/human", "walk.gltf");
+  modelEmitterSphere_.Initialize({resSphere_, {0.3f, 0.8f, 1.0f, 0.3f}, 0});
+  modelEmitterBox_.Initialize({resCube_, {1.0f, 0.8f, 0.2f, 0.3f}, 0});
 
-    ModelInstance::CreateInfo ci{};
-    ci.resource = resHuman_;
-    ci.baseColor = {1,1,1,1};
-    ci.lightingMode = 1;
-    CheckBoolOrDie_(modelHuman_.Initialize(ci), "modelHuman_.Initialize");
-    if (animHuman_) modelHuman_.PlayAnimation(animHuman_, true);
-  }
+  sprite_.Initialize(
+      {"resources/plane/uvChecker.png", {640, 360}, {1, 1, 1, 1}});
+  skybox_.Initialize("resources/dds/dds.dds");
 
-  {
-    ModelInstance::CreateInfo ci{};
-    ci.resource = resSphere_;
-    ci.baseColor = {0.3f, 0.8f, 1.0f, 0.3f};
-    ci.lightingMode = 0;
-    CheckBoolOrDie_(modelEmitterSphere_.Initialize(ci),
-                    "modelEmitterSphere_.Initialize");
-  }
+  // Ring 初期化
+  ringParams_.divide = 32;
+  ringParams_.outerRadius = 2.0f;
+  ringParams_.innerRadius = 1.8f;
+  ringParams_.colorInner = {1, 1, 1, 1};
+  ringParams_.colorOuter = {1, 1, 1, 1};
+  ringParams_.alphaReference = 0.0f;
+  ring_.Initialize(dx->GetDevice(), ringParams_);
+  texRing_ = tm->Load("resources/gradationLine.png");
+  ringTransform_.translate = {0.0f, 2.0f, 0.0f};
+  ringUVScale_ = {10.0f, 1.0f};
 
-  {
-    ModelInstance::CreateInfo ci{};
-    ci.resource = resCube_;
-    ci.baseColor = {1.0f, 0.8f, 0.2f, 0.3f};
-    ci.lightingMode = 0;
-    CheckBoolOrDie_(modelEmitterBox_.Initialize(ci),
-                    "modelEmitterBox_.Initialize");
-  }
+  // Cylinder 初期化
+  cylinderParams_.divide = 32;
+  cylinderParams_.topRadiusX = 0.5f;
+  cylinderParams_.topRadiusZ = 0.5f;
+  cylinderParams_.bottomRadiusX = 0.5f;
+  cylinderParams_.bottomRadiusZ = 0.5f;
+  cylinderParams_.height = 4.0f;
+  cylinderParams_.colorTop = {1, 1, 1, 1};
+  cylinderParams_.colorBottom = {1, 1, 1, 1};
+  cylinder_.Initialize(dx->GetDevice(), cylinderParams_);
+  texCylinder_ = tm->Load("resources/gradationLine.png");
+  cylinderTransform_.translate = {-4.0f, 0.0f, 0.0f};
+  cylinderUVScale_ = {5.0f, 1.0f};
 
-  {
-    Sprite::CreateInfo sprInfo{};
-    sprInfo.texturePath = "resources/plane/uvChecker.png";
-    sprInfo.size = {640.0f, 360.0f};
-    sprInfo.color = {1.0f, 1.0f, 1.0f, 1.0f};
-
-    bool spriteInitOk = sprite_.Initialize(sprInfo);
-    OutputDebugStringA(spriteInitOk
-                           ? "[DDS CHECK] sprite_.Initialize success\n"
-                           : "[DDS CHECK] sprite_.Initialize failed\n");
-
-    CheckBoolOrDie_(spriteInitOk, "sprite_.Initialize");
-  }
-
-  {
-    CheckBoolOrDie_(ParticleManager::GetInstance()->CreateParticleGroup(
-                        particleGroupName_, "resources/particle/circle.png",
-                        kParticleCount_),
-                    "ParticleManager::CreateParticleGroup");
-
-    ParticleEmitter::Params params{};
-    params.groupName = particleGroupName_;
-    params.shape = EmitterShape::Box;
-    params.localCenter = {0.0f, 0.0f, 0.0f};
-    params.extent = {1.0f, 1.0f, 1.0f};
-    params.baseDir = {0.0f, 1.0f, 0.0f};
-    params.dirRandomness = 0.5f;
-    params.speedMin = 0.5f;
-    params.speedMax = 2.0f;
-    params.lifeMin = 1.0f;
-    params.lifeMax = 3.0f;
-    params.particleScale = {0.5f, 0.5f, 0.5f};
-    params.emitRate = 10.0f;
-    params.colorMode = ParticleColorMode::RandomRGB;
-    params.baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
-
-    particleEmitter_.Initialize(ParticleManager::GetInstance(), params);
-    particleEmitter_.Burst(std::min(initialParticleCount_, kParticleCount_));
-  }
-
-  {
-    ringParams_.divide = 32;
-    ringParams_.outerRadius = 2.0f;
-    ringParams_.innerRadius = 0.5f;
-    ringParams_.colorInner = { 1.0f, 1.0f, 1.0f, 1.0f };
-    ringParams_.colorOuter = { 1.0f, 1.0f, 1.0f, 1.0f };
-    ringParams_.alphaReference = 0.5f; // デフォルトで半分削る
-    
-    auto* dx = Renderer::GetInstance()->GetDX();
-    ring_.Initialize(dx->GetDevice(), ringParams_);
-    texRing_ = TextureManager::GetInstance()->Load("resources/gradationLine.png");
-    
-    ringTransform_.translate = { 0.0f, 2.0f, 0.0f };
-    ringUVScale_ = { 10.0f, 1.0f }; // 10回繰り返して柱っぽくする
-  }
-
-  {
-    cylinderParams_.divide = 32;
-    cylinderParams_.topRadiusX = 1.0f;
-    cylinderParams_.topRadiusZ = 1.0f;
-    cylinderParams_.bottomRadiusX = 1.0f;
-    cylinderParams_.bottomRadiusZ = 1.0f;
-    cylinderParams_.height = 3.0f;
-    cylinderParams_.colorTop = { 1.0f, 1.0f, 1.0f, 1.0f };
-    cylinderParams_.colorBottom = { 1.0f, 1.0f, 1.0f, 1.0f };
-    cylinderParams_.alphaReference = 0.5f;
-    
-    auto* dx = Renderer::GetInstance()->GetDX();
-    cylinder_.Initialize(dx->GetDevice(), cylinderParams_);
-    texCylinder_ = TextureManager::GetInstance()->Load("resources/gradationLine.png");
-    
-    cylinderTransform_.translate = { -3.0f, 0.0f, 0.0f };
-    cylinderUVScale_ = { 10.0f, 1.0f };
-  }
-
-  {
-    CheckBoolOrDie_(
-        skybox_.Initialize("resources/dds/dds.dds"),
-        "skybox_.Initialize");
-  }
+  ParticleManager::GetInstance()->CreateParticleGroup(
+      particleGroupName_, "resources/particle/circle.png", kParticleCount_);
+  ParticleEmitter::Params p{};
+  p.groupName = particleGroupName_;
+  p.shape = EmitterShape::Box;
+  p.emitRate = 10.0f;
+  particleEmitter_.Initialize(ParticleManager::GetInstance(), p);
 
   // ライト初期値
   {
@@ -863,35 +494,14 @@ void GameScene::InitResources_() {
 }
 
 void GameScene::InitCamera_() {
-  transform_.scale = {1.0f, 1.0f, 1.0f};
-  transform_.rotate = {0.0f, 0.0f, 0.0f};
-  transform_.translate = {0.0f, 0.0f, 0.0f};
-
-  cameraTransform_.scale = {1.0f, 1.0f, 1.0f};
-  cameraTransform_.rotate = {0.0f, 0.0f, 0.0f};
-  cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
-  
-  transformSimpleSkin_.scale = {1.0f, 1.0f, 1.0f};
-  transformSimpleSkin_.rotate = {0.0f, 0.0f, 0.0f};
-  transformSimpleSkin_.translate = {2.0f, 0.0f, 0.0f};
-
-  transformHuman_.scale = {1.0f, 1.0f, 1.0f};
-  transformHuman_.rotate = {0.0f, 0.0f, 0.0f};
-  transformHuman_.translate = {4.0f, 0.0f, 0.0f};
-
-  transformSprite_.scale = {1.0f, 1.0f, 1.0f};
-  transformSprite_.rotate = {0.0f, 0.0f, 0.0f};
-  transformSprite_.translate = {0.0f, 0.0f, 0.0f};
-
-  uvTransformSprite_.scale = {1.0f, 1.0f, 1.0f};
-  uvTransformSprite_.rotate = {0.0f, 0.0f, 0.0f};
-  uvTransformSprite_.translate = {0.0f, 0.0f, 0.0f};
-
-  const float aspect = Renderer::GetInstance()->GetAspectRatio();
-
-  if (camera_) {
-    camera_->SetPerspective(0.45f, aspect, 0.1f, 100.0f);
-  }
+  transform_.scale = {1, 1, 1};
+  cameraTransform_.translate = {0, 0, -15};
+  transformSimpleSkin_.translate = {3, 0, 0};
+  transformHuman_.translate = {6, 0, 0};
+  transformAnimCube_.translate = {-3, 0, 0};
+  if (camera_)
+    camera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(),
+                            0.1f, 1000.0f);
 }
 
 void GameScene::SpawnHitEffect(const Vector3 &pos) {
@@ -907,7 +517,7 @@ void GameScene::SpawnHitEffect(const Vector3 &pos) {
   ef.isActive = true;
   hitEffects_.push_back(std::move(ef));*/
 
-  // 2. 放射状の縦長パーティクルを8個バースト発生 (資料3〜4枚目)
+  // 2. 放射状の縦長パーティクルを8個バースト発生
   std::mt19937& rng = []() -> std::mt19937& {
       static std::mt19937 engine{ std::random_device{}() };
       return engine;
@@ -915,7 +525,7 @@ void GameScene::SpawnHitEffect(const Vector3 &pos) {
   std::uniform_real_distribution<float> distRotate(-3.14159265f, 3.14159265f);
   std::uniform_real_distribution<float> distScale(0.4f, 1.5f);
 
-  Vector3 baseScale = { 0.05f, 1.0f, 1.0f }; // 資料3枚目
+  Vector3 baseScale = { 0.05f, 1.0f, 1.0f };
 
   for (int i = 0; i < 8; ++i) {
       float rotZ = distRotate(rng);

@@ -34,13 +34,14 @@ struct MaterialData {
 
 struct MeshData {
   std::vector<VertexData> vertices;
+  std::vector<uint32_t> indices;
   std::vector<VertexBoneData> skinningData;
   int materialIndex = -1;
 };
 
 struct Node {
   QuaternionTransform transform;
-  Matrix4x4 localMatrix;
+  Matrix4x4 localMatrix{};
   std::string name;
   std::vector<uint32_t> meshIndices;
   std::vector<Node> children;
@@ -48,12 +49,12 @@ struct Node {
 
 struct Joint {
   QuaternionTransform transform;
-  Matrix4x4 localMatrix;
-  Matrix4x4 skeletonSpaceMatrix;
+  Matrix4x4 localMatrix{};
+  Matrix4x4 skeletonSpaceMatrix{};
   std::string name;
   std::vector<int32_t> children; // 資料に合わせてchildrenIndicesからchildrenにリネーム
-  int32_t index;
-  Matrix4x4 inverseBindPoseMatrix;
+  int32_t index = 0;
+  Matrix4x4 inverseBindPoseMatrix{};
 };
 
 struct Skeleton {
@@ -86,5 +87,6 @@ VertexData FixupVertex_AssimpToEngine(const VertexData &v,
 void FlipTriangleWinding(VertexData &a, VertexData &b, VertexData &c);
 
 std::vector<VertexData> FlattenVertices(const ModelData &model);
+std::vector<uint32_t> FlattenIndices(const ModelData &model);
 std::vector<VertexBoneData> FlattenSkinningData(const ModelData &model);
 std::string PickDiffuseTexturePath(const ModelData &model);

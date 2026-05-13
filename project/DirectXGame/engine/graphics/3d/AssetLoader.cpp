@@ -106,61 +106,59 @@ AssetLoader::LoadModel(const std::string &directoryPath,
       defaultJointIndex = meshToJointMap[meshIndex];
     }
 
+    // Load Vertices
+    meshData.vertices.reserve(mesh->mNumVertices);
+    meshData.skinningData.reserve(mesh->mNumVertices);
+    for (uint32_t vi = 0; vi < mesh->mNumVertices; ++vi) {
+      const aiVector3D &p = mesh->mVertices[vi];
+      const aiVector3D &n =
+          mesh->HasNormals() ? mesh->mNormals[vi] : aiVector3D(0, 1, 0);
+      const aiVector3D &uv = (mesh->HasTextureCoords(0))
+                                 ? mesh->mTextureCoords[0][vi]
+                                 : aiVector3D(0, 0, 0);
+
+      VertexData v{};
+      v.position = {p.x, p.y, p.z, 1.0f};
+      v.normal = {n.x, n.y, n.z};
+      v.texcoord = {uv.x, uv.y};
+      meshData.vertices.push_back(FixupVertex_AssimpToEngine(v, uvOpt));
+
+      // Skinning data
+      VertexBoneData vbd{};
+      auto it = vertexWeightMap.find(vi);
+      if (it != vertexWeightMap.end()) {
+        auto &weights = it->second;
+        std::sort(weights.begin(), weights.end(),
+                  [](const auto &a, const auto &b) {
+                    return a.second > b.second;
+                  });
+        float totalWeight = 0.0f;
+        for (size_t k = 0; k < 4 && k < weights.size(); ++k) {
+          vbd.boneIDs[k] = weights[k].first;
+          vbd.weights[k] = weights[k].second;
+          totalWeight += weights[k].second;
+        }
+        if (totalWeight > 0.0f) {
+          for (size_t k = 0; k < 4; ++k) {
+            vbd.weights[k] /= totalWeight;
+          }
+        }
+      } else {
+        vbd.boneIDs[0] = defaultJointIndex;
+        vbd.weights[0] = 1.0f;
+      }
+      meshData.skinningData.push_back(vbd);
+    }
+
+    // Load Indices
+    meshData.indices.reserve(mesh->mNumFaces * 3);
     for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
       const aiFace &face = mesh->mFaces[faceIndex];
-      if (face.mNumIndices != 3) {
-        continue;
-      }
-
-      VertexData tri[3]{};
-
-      for (uint32_t e = 0; e < 3; ++e) {
-        const uint32_t vi = face.mIndices[e];
-
-        const aiVector3D &p = mesh->mVertices[vi];
-        const aiVector3D &n =
-            mesh->HasNormals() ? mesh->mNormals[vi] : aiVector3D(0, 1, 0);
-        const aiVector3D &uv = (mesh->HasTextureCoords(0))
-                                   ? mesh->mTextureCoords[0][vi]
-                                   : aiVector3D(0, 0, 0);
-
-        VertexData v{};
-        v.position = {p.x, p.y, p.z, 1.0f};
-        v.normal = {n.x, n.y, n.z};
-        v.texcoord = {uv.x, uv.y};
-
-        tri[e] = FixupVertex_AssimpToEngine(v, uvOpt);
-        
-        // If the model has ANY joints, we must provide skinning data for all vertices
-        VertexBoneData vbd{};
-        auto it = vertexWeightMap.find(vi);
-        if (it != vertexWeightMap.end()) {
-            auto& weights = it->second;
-            std::sort(weights.begin(), weights.end(), [](const auto& a, const auto& b) {
-                return a.second > b.second;
-            });
-            float totalWeight = 0.0f;
-            for (size_t k = 0; k < 4 && k < weights.size(); ++k) {
-                vbd.boneIDs[k] = weights[k].first;
-                vbd.weights[k] = weights[k].second;
-                totalWeight += weights[k].second;
-            }
-            if (totalWeight > 0.0f) {
-                for (size_t k = 0; k < 4; ++k) {
-                    vbd.weights[k] /= totalWeight;
-                }
-            }
-        } else {
-            // No explicit weights - assign to the node's joint or root
-            vbd.boneIDs[0] = defaultJointIndex;
-            vbd.weights[0] = 1.0f;
+      if (face.mNumIndices == 3) {
+        for (uint32_t e = 0; e < 3; ++e) {
+          meshData.indices.push_back(face.mIndices[e]);
         }
-        meshData.skinningData.push_back(vbd);
       }
-
-      meshData.vertices.push_back(tri[0]);
-      meshData.vertices.push_back(tri[1]);
-      meshData.vertices.push_back(tri[2]);
     }
 
     modelData->meshes[meshIndex] = std::move(meshData);

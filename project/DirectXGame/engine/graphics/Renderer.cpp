@@ -5,6 +5,7 @@
 #include "ModelInstance.h"
 #include "ModelResource.h"
 #include "ParticleManager.h"
+#include "particle/GPUParticleManager.h"
 #include "Ring.h"
 #include "Cylinder.h"
 #include "ShaderCompilerUtils.h"
@@ -169,11 +170,135 @@ void Renderer::Initialize(DirectXCommon *dx) {
   spotLightCB_ = CreateUploadBuffer(align256(sizeof(SpotLightGroupCB)));
   spotLightCB_->Map(0, nullptr, reinterpret_cast<void **>(&spotLightMapped_));
 
+  skinningInformationCB_ = CreateUploadBuffer(align256(sizeof(SkinningInformation)));
+  skinningInformationCB_->Map(0, nullptr, reinterpret_cast<void **>(&skinningInformationMapped_));
+
+  GPUParticleManager::GetInstance()->Initialize(dx_);
+
   // Primitive用定数バッファ
   primitiveTransformCB_ = CreateUploadBuffer(sizeof(TransformCB));
   primitiveTransformCB_->Map(
       0, nullptr, reinterpret_cast<void **>(&primitiveTransformMapped_));
+
+  InitSkinningPipeline_();
+}
+
+void Renderer::InitSkinningPipeline_() {
+  auto* device = dx_->GetDevice();
+
+  // Root Signature
+  D3D12_DESCRIPTOR_RANGE ranges[4]{};
+  // t0: Palette
+  ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  ranges[0].NumDescriptors = 1;
+  ranges[0].BaseShaderRegister = 0;
+  // t1: InputVertices
+  ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  ranges[1].NumDescriptors = 1;
+  ranges[1].BaseShaderRegister = 1;
+  // t2: Influences
+  ranges[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  ranges[2].NumDescriptors = 1;
+  ranges[2].BaseShaderRegister = 2;
+  // u0: OutputVertices
+  ranges[3].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+  ranges[3].NumDescriptors = 1;
+  ranges[3].BaseShaderRegister = 0;
+
+  D3D12_ROOT_PARAMETER params[5]{};
+  params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+  params[0].DescriptorTable.NumDescriptorRanges = 1;
+  params[0].DescriptorTable.pDescriptorRanges = &ranges[0];
+  params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+  params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+  params[1].DescriptorTable.NumDescriptorRanges = 1;
+  params[1].DescriptorTable.pDescriptorRanges = &ranges[1];
+  params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+  params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+  params[2].DescriptorTable.NumDescriptorRanges = 1;
+  params[2].DescriptorTable.pDescriptorRanges = &ranges[2];
+  params[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+  params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+  params[3].DescriptorTable.NumDescriptorRanges = 1;
+  params[3].DescriptorTable.pDescriptorRanges = &ranges[3];
+  params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+  params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+  params[4].Descriptor.ShaderRegister = 0;
+  params[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+  D3D12_ROOT_SIGNATURE_DESC rsDesc{};
+  rsDesc.NumParameters = 5;
+  rsDesc.pParameters = params;
+  rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+  ComPtr<ID3DBlob> blob, err;
+  D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err);
+  if (err) {
+    OutputDebugStringA((const char*)err->GetBufferPointer());
   }
+  device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&skinningRootSignature_));
+
+  // Pipeline State
+  ComPtr<IDxcBlob> csBlob = CompileShader(L"resources/shaders/Skinning.CS.hlsl", L"cs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
+  assert(csBlob);
+
+  D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc{};
+  psoDesc.pRootSignature = skinningRootSignature_.Get();
+  psoDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
+  psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+  device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&skinningPipelineState_));
+}
+
+void Renderer::DispatchSkinning(ModelInstance* instance) {
+  if (!instance || !instance->GetResource() || !instance->GetSkinCluster()) return;
+  auto* resource = instance->GetResource();
+  auto* skinCluster = instance->GetSkinCluster();
+  auto* cmdList = dx_->GetCommandList();
+
+  // 1. バリア設定 (VertexBuffer -> UAV)
+  D3D12_RESOURCE_BARRIER barrier{};
+  barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+  barrier.Transition.pResource = skinCluster->skinnedVertexBuffer.Get();
+  barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+  barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+  barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+  cmdList->ResourceBarrier(1, &barrier);
+
+  // 2. パイプラインセット
+  cmdList->SetComputeRootSignature(skinningRootSignature_.Get());
+  cmdList->SetPipelineState(skinningPipelineState_.Get());
+
+  // 3. ディスクリプタセット
+  ID3D12DescriptorHeap* heaps[] = { dx_->GetSRVHeap() };
+  cmdList->SetDescriptorHeaps(1, heaps);
+
+  auto& srvAlloc = dx_->GetSrvAllocator();
+  // t0: Palette
+  cmdList->SetComputeRootDescriptorTable(0, srvAlloc.Gpu(skinCluster->srvIndex));
+  // t1: InputVertices
+  cmdList->SetComputeRootDescriptorTable(1, srvAlloc.Gpu(resource->GetVertexSRVIndex()));
+  // t2: Influences
+  cmdList->SetComputeRootDescriptorTable(2, srvAlloc.Gpu(resource->GetBoneSRVIndex()));
+  // u0: OutputVertices
+  cmdList->SetComputeRootDescriptorTable(3, srvAlloc.Gpu(skinCluster->uavIndex));
+  // b0: SkinningInformation
+  skinningInformationMapped_->numVertices = resource->GetVertexCount();
+  cmdList->SetComputeRootConstantBufferView(4, skinningInformationCB_->GetGPUVirtualAddress());
+
+  // 4. Dispatch
+  uint32_t numVertices = resource->GetVertexCount();
+  cmdList->Dispatch((numVertices + 1023) / 1024, 1, 1);
+
+  // 5. バリア設定 (UAV -> VertexBuffer)
+  barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+  barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+  cmdList->ResourceBarrier(1, &barrier);
+}
 
 void Renderer::SetCamera(const Camera &camera) {
   view_ = camera.GetViewMatrix();
@@ -290,10 +415,13 @@ void Renderer::DrawModel(ModelInstance *instance) {
 
   // 1. パイプライン設定
   bool hasBones = resource->HasBones();
+  SkinCluster* skinCluster = instance->GetSkinCluster();
+
   UnifiedPipeline *pipeline = nullptr;
-  if (hasBones) {
-    pipeline = instance->IsWireframe() ? skinnedPipelineWireframe_.get()
-                                       : skinnedPipelineOpaque_.get();
+  if (hasBones && skinCluster) {
+    // CSでスキニング済みのため、非スキニング用パイプラインを使用する
+    pipeline = instance->IsWireframe() ? objPipelineWireframe_.get()
+                                       : objPipelineOpaque_.get();
   } else {
     pipeline = instance->IsWireframe() ? objPipelineWireframe_.get()
                                        : objPipelineOpaque_.get();
@@ -301,19 +429,26 @@ void Renderer::DrawModel(ModelInstance *instance) {
   pipeline->SetPipelineState(cmdList);
 
   // 2. 頂点バッファ設定
-  D3D12_VERTEX_BUFFER_VIEW vbv[2]{};
-  vbv[0].BufferLocation = resource->GetVBVAddress();
-  vbv[0].SizeInBytes = resource->GetVBVSize();
-  vbv[0].StrideInBytes = resource->GetVBVStride();
-  int numVBV = 1;
-
-  if (hasBones) {
-    vbv[1].BufferLocation = resource->GetBoneVBVAddress();
-    vbv[1].SizeInBytes = resource->GetBoneVBVSize();
-    vbv[1].StrideInBytes = resource->GetBoneVBVStride();
-    numVBV = 2;
+  D3D12_VERTEX_BUFFER_VIEW vbv{};
+  if (hasBones && skinCluster) {
+    // スキニング済みバッファを使用
+    vbv = skinCluster->vbView;
+  } else {
+    // 静的バッファを使用
+    vbv.BufferLocation = resource->GetVBVAddress();
+    vbv.SizeInBytes = resource->GetVBVSize();
+    vbv.StrideInBytes = resource->GetVBVStride();
   }
-  cmdList->IASetVertexBuffers(0, numVBV, vbv);
+  cmdList->IASetVertexBuffers(0, 1, &vbv);
+  
+  // Index Buffer
+  if (resource->GetIndexCount() > 0) {
+    D3D12_INDEX_BUFFER_VIEW ibv{};
+    ibv.BufferLocation = resource->GetIBVAddress();
+    ibv.Format = DXGI_FORMAT_R32_UINT;
+    ibv.SizeInBytes = resource->GetIBVSize();
+    cmdList->IASetIndexBuffer(&ibv);
+  }
 
   // 3. 定数バッファ (Material / Transform)
   cmdList->SetGraphicsRootConstantBufferView(0,
@@ -345,14 +480,14 @@ void Renderer::DrawModel(ModelInstance *instance) {
   cmdList->SetGraphicsRootConstantBufferView(
       6, spotLightCB_->GetGPUVirtualAddress());
 
-  if (hasBones && instance->GetSkinCluster()) {
-    cmdList->SetGraphicsRootConstantBufferView(
-        8, instance->GetSkinCluster()->paletteResource->GetGPUVirtualAddress());
-  }
 
   // 6. 描画
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+  if (resource->GetIndexCount() > 0) {
+    cmdList->DrawIndexedInstanced(resource->GetIndexCount(), 1, 0, 0, 0);
+  } else {
+    cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+  }
 }
 
 void Renderer::DrawSprite(Sprite *sprite) {
@@ -479,6 +614,15 @@ void Renderer::DrawEffectModel(ModelInstance *instance) {
   vbv.StrideInBytes = resource->GetVBVStride();
   cmdList->IASetVertexBuffers(0, 1, &vbv);
 
+  // Index Buffer
+  if (resource->GetIndexCount() > 0) {
+    D3D12_INDEX_BUFFER_VIEW ibv{};
+    ibv.BufferLocation = resource->GetIBVAddress();
+    ibv.Format = DXGI_FORMAT_R32_UINT;
+    ibv.SizeInBytes = resource->GetIBVSize();
+    cmdList->IASetIndexBuffer(&ibv);
+  }
+
   // 定数バッファ (0:マテリアル, 1:トランスフォーム)
   cmdList->SetGraphicsRootConstantBufferView(0,
                                              instance->GetMaterialCBAddress());
@@ -504,7 +648,11 @@ void Renderer::DrawEffectModel(ModelInstance *instance) {
 
   // 描画実行
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+  if (resource->GetIndexCount() > 0) {
+    cmdList->DrawIndexedInstanced(resource->GetIndexCount(), 1, 0, 0, 0);
+  } else {
+    cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+  }
 }
 
 void Renderer::DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle) {
@@ -603,7 +751,36 @@ Microsoft::WRL::ComPtr<ID3D12Resource> Renderer::CreateBuffer(size_t size) {
   return CreateUploadBuffer(size);
 }
 
+Microsoft::WRL::ComPtr<ID3D12Resource> Renderer::CreateUAVBuffer(size_t size) {
+  auto device = dx_->GetDevice();
+  Microsoft::WRL::ComPtr<ID3D12Resource> res;
+  D3D12_HEAP_PROPERTIES heapProps{};
+  heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+  D3D12_RESOURCE_DESC desc{};
+  desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+  desc.Width = size;
+  desc.Height = 1;
+  desc.DepthOrArraySize = 1;
+  desc.MipLevels = 1;
+  desc.SampleDesc.Count = 1;
+  desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+  HRESULT hr = device->CreateCommittedResource(
+      &heapProps, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COMMON,
+      nullptr, IID_PPV_ARGS(&res));
+  if (FAILED(hr)) {
+    return nullptr;
+  }
+  return res;
+}
+
 // 描画予約をDrawerへ流す
+void Renderer::DrawGPUParticles() {
+  GPUParticleManager::GetInstance()->Update();
+  GPUParticleManager::GetInstance()->Draw();
+}
+
 void Renderer::DrawLine(const Vector3 &start, const Vector3 &end,
                         const Vector4 &color) {
   primitiveDrawer_->AddLine(start, end, color);
