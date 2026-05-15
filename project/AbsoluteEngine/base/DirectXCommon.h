@@ -69,8 +69,21 @@ public:
 	const SrvAllocator& GetSrvAllocator() const { return *srvAlloc_; }
 
 	UINT GetSRVDescriptorSize() const { return descriptorSizeSRV_; }
+	UINT GetDSVDescriptorSize() const { return descriptorSizeDSV_; }
 	int GetBackBufferCount() const { return swapChainDesc_.BufferCount; }
 	DXGI_FORMAT GetRTVFormat() const { return rtvDesc_.Format; }
+
+	// RTV割当
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateRtv();
+
+	// レンダーターゲット切り替え
+	void SetRenderTarget(class RenderTexture* target);
+	void FinishRendering(class RenderTexture* target); // リソース遷移を行ってからバックバッファへ
+	void ResetRenderTarget(); // 強制的にバックバッファへ（遷移なし）
+
+	ID3D12Resource* GetCurrentBackBuffer() const {
+		return swapChainResources_[swapChain_->GetCurrentBackBufferIndex()].Get();
+	}
 
 private:
 	void CreateDeviceAndFactory_();
@@ -113,6 +126,8 @@ private:
 	uint32_t descriptorSizeRTV_ = 0;
 	uint32_t descriptorSizeSRV_ = 0;
 	uint32_t descriptorSizeDSV_ = 0;
+
+	uint32_t nextRtvIndex_ = 0;
 
 	// SRV割当器
 	std::unique_ptr<SrvAllocator> srvAlloc_;

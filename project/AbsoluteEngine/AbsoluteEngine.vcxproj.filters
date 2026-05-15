@@ -183,6 +183,7 @@
     <ClCompile Include="scene\SceneManager.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\texture\RenderTexture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="audio\Audio.h">
@@ -338,5 +339,6 @@
     <ClInclude Include="Type\Vector.h">
       <Filter>engine\Type</Filter>
     </ClInclude>
+    <ClInclude Include="graphics\texture\RenderTexture.h" />
   </ItemGroup>
 </Project>

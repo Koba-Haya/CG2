@@ -153,6 +153,24 @@ void Renderer::Initialize(DirectXCommon *dx) {
                                              includeHandler, cylinderDesc));
   }
 
+  // CopyImage Pipeline
+  {
+    PipelineDesc desc = UnifiedPipeline::MakeCopyImageDesc();
+    copyImagePipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(copyImagePipeline_->Initialize(device, utils, compiler,
+                                              includeHandler, desc));
+    
+    PipelineDesc grayDesc = UnifiedPipeline::MakeGrayscaleDesc();
+    grayscalePipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(grayscalePipeline_->Initialize(device, utils, compiler,
+                                               includeHandler, grayDesc));
+
+    PipelineDesc sepiaDesc = UnifiedPipeline::MakeSepiaDesc();
+    sepiaPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(sepiaPipeline_->Initialize(device, utils, compiler,
+                                             includeHandler, sepiaDesc));
+  }
+
   // Primitive Drawer
   primitiveDrawer_ = std::make_unique<PrimitiveDrawer>();
   primitiveDrawer_->Initialize(dx_);
@@ -526,7 +544,7 @@ void Renderer::DrawSprite(Sprite *sprite) {
   // テクスチャ
   ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
   cmdList->SetDescriptorHeaps(1, heaps);
-  cmdList->SetGraphicsRootDescriptorTable(2, res->GetTexture()->GetSrvGpu());
+  cmdList->SetGraphicsRootDescriptorTable(2, sprite->GetTextureHandle());
 
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   cmdList->DrawIndexedInstanced(res->GetIndexCount(), 1, 0, 0, 0);
@@ -788,4 +806,34 @@ void Renderer::DrawLine(const Vector3 &start, const Vector3 &end,
 
 void Renderer::DrawGrid(float size, int divisions, const Vector4 &color) {
   primitiveDrawer_->AddGrid(size, divisions, color);
+}
+
+void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode) {
+  UnifiedPipeline *pipeline = nullptr;
+  switch (mode) {
+  case PostProcessMode::Normal:
+    pipeline = copyImagePipeline_.get();
+    break;
+  case PostProcessMode::Grayscale:
+    pipeline = grayscalePipeline_.get();
+    break;
+  case PostProcessMode::Sepia:
+    pipeline = sepiaPipeline_.get();
+    break;
+  }
+
+  if (!pipeline)
+    return;
+
+  auto *cmdList = dx_->GetCommandList();
+
+  // パイプライン設定
+  pipeline->SetPipelineState(cmdList);
+
+  // テクスチャをセット (t0)
+  cmdList->SetGraphicsRootDescriptorTable(0, textureHandle);
+
+  // 頂点バッファなしで3頂点描画（大きな三角形1つで全画面を覆う）
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawInstanced(3, 1, 0, 0);
 }

@@ -2,7 +2,9 @@
 #include "GameScene.h"
 #include "Renderer.h"
 #include "DebugCamera.h"
+#ifdef USE_IMGUI
 #include <imgui.h>
+#endif
 
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
@@ -19,9 +21,11 @@ void GameScene::Update() {
   if (camera_) {
     camera_->Update(*services_.input);
   }
-
+  
+#ifdef USE_IMGUI
   ImGui::Begin("GameScene");
   ImGui::End();
+#endif
 }
 
 void GameScene::Draw() {

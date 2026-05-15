@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include "SpriteManager.h"
 #include "SpriteResource.h"
+#include "TextureResource.h"
 #include <cassert>
 #include <d3d12.h>
 #include <wrl/client.h>
@@ -14,8 +15,8 @@ static constexpr UINT Align256_(UINT n) { return (n + 255u) & ~255u; }
 struct Sprite::Impl {
   Microsoft::WRL::ComPtr<ID3D12Resource> materialBuffer;
   Microsoft::WRL::ComPtr<ID3D12Resource> transformBuffer;
-  MaterialCB *materialMapped = nullptr;
-  TransformCB *transformMapped = nullptr;
+  Sprite::MaterialCB *materialMapped = nullptr;
+  Sprite::TransformCB *transformMapped = nullptr;
   std::shared_ptr<SpriteResource> resource;
 };
 
@@ -76,4 +77,11 @@ SpriteResource *Sprite::GetResource() const { return pImpl_->resource.get(); }
 
 Sprite::TransformCB *Sprite::GetTransformMapped() {
   return pImpl_->transformMapped;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE Sprite::GetTextureHandle() const {
+  if (overrideTextureHandle_.ptr != 0) {
+    return overrideTextureHandle_;
+  }
+  return pImpl_->resource->GetTexture()->GetSrvGpu();
 }

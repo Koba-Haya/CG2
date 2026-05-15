@@ -204,6 +204,7 @@
     </ProjectReference>
     <ProjectReference Include="..\externals\imgui\imgui.vcxproj">
       <Project>{FD003BB1-BCA8-482F-83FF-68516FC10C64}</Project>
+      <LinkLibraryDependencies Condition="'$(Configuration)'=='Release'">false</LinkLibraryDependencies>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

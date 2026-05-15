@@ -9,7 +9,9 @@
 #include "graphics/texture/TextureManager.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
+#ifdef USE_IMGUI
 #include <imgui.h>
+#endif
 #include <Windows.h>
 #include <algorithm>
 #include <cassert>
@@ -53,7 +55,8 @@ void DevScene::Update() {
   }
 
   const float deltaTime = 1.0f / 60.0f;
-
+  
+#ifdef USE_IMGUI
   // --- デバッグメニュー ---
   ImGui::Begin("DevScene - Engine Test");
   if (ImGui::Button("Back to Title")) {
@@ -140,6 +143,15 @@ void DevScene::Update() {
     if (enableReflection_) {
       ImGui::SliderFloat("Reflection Weight", &reflectionWeight_, 0.0f, 1.0f);
     }
+    
+    ImGui::SeparatorText("PostProcess");
+    int mode = static_cast<int>(postProcessMode_);
+    if (ImGui::RadioButton("Normal", &mode, static_cast<int>(Renderer::PostProcessMode::Normal))) postProcessMode_ = Renderer::PostProcessMode::Normal;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Grayscale", &mode, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = Renderer::PostProcessMode::Grayscale;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
+
     const char *blendModeItems[] = {"Alpha", "Add", "Subtract", "Multiply", "Screen"};
     ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems, IM_ARRAYSIZE(blendModeItems));
 
@@ -150,6 +162,7 @@ void DevScene::Update() {
   }
 
   ImGui::End();
+#endif
 
   ringTransform_.rotate.z += 1.5f * deltaTime;
   cylinderTransform_.rotate.y += 1.0f * deltaTime;
@@ -182,6 +195,79 @@ void DevScene::Update() {
 
 void DevScene::Draw() {
   auto* renderer = Renderer::GetInstance();
+  auto* dx = renderer->GetDX();
+
+  // --- オフスクリーン描画パス ---
+  if (renderTexture_) {
+      dx->SetRenderTarget(renderTexture_.get());
+      
+      // クリア（資料に合わせて赤色）
+      float clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
+      dx->GetCommandList()->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
+      
+      // 深度もクリア
+      D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetCPUDescriptorHandle(dx->GetDSVHeap(), dx->GetDSVDescriptorSize(), 0);
+      dx->GetCommandList()->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+      
+      // メインカメラをセットして描画
+      if (camera_) renderer->SetCamera(*camera_);
+      
+      modelSphere_.SetWorld(MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate));
+      modelSphere_.Draw();
+
+      modelTerrain_.SetWorld(MakeAffineMatrix(transformTerrain_.scale,
+                                               transformTerrain_.rotate,
+                                              transformTerrain_.translate));
+      modelTerrain_.Draw();
+
+      modelAnimCube_.SetWorld(MakeAffineMatrix(transformAnimCube_.scale,
+                                               transformAnimCube_.rotate,
+                                               transformAnimCube_.translate));
+      modelAnimCube_.Draw();
+
+      modelSimpleSkin_.Draw();
+      modelHuman_.Draw();
+
+      if (showSkeleton_) {
+        modelSimpleSkin_.DrawSkeleton();
+        modelHuman_.DrawSkeleton();
+        modelAnimCube_.DrawSkeleton();
+      }
+
+      // Ring & Cylinder
+      {
+        ring_.SetTransform(
+            MakeAffineMatrix(ringTransform_.scale, ringTransform_.rotate,
+                             ringTransform_.translate),
+            camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
+        ring_.SetMaterial(
+            {1.0f, 1.0f, 1.0f, 1.0f},
+            MakeScaleMatrix({ringUVScale_.x, ringUVScale_.y, 1.0f}));
+        if (texRing_)
+          renderer->DrawRing(&ring_, texRing_->GetSrvGpu());
+
+        cylinder_.SetTransform(MakeAffineMatrix(cylinderTransform_.scale,
+                                                cylinderTransform_.rotate,
+                                                cylinderTransform_.translate),
+                               camera_->GetViewMatrix(),
+                               camera_->GetProjectionMatrix());
+        cylinder_.SetMaterial(
+            {1.0f, 1.0f, 1.0f, 1.0f},
+            MakeScaleMatrix({cylinderUVScale_.x, cylinderUVScale_.y, 1.0f}));
+        if (texCylinder_)
+          renderer->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
+      }
+
+      for (auto &ef : hitEffects_)
+        renderer->DrawEffectModel(&ef.instance);
+
+      renderer->DrawGPUParticles();
+
+      // 終了
+      dx->FinishRendering(renderTexture_.get());
+  }
+
+  // --- メイン描画パス（バックバッファ） ---
   if (camera_) renderer->SetCamera(*camera_);
 
   renderer->SetEnvironmentMap(skybox_.GetTexture());
@@ -223,6 +309,11 @@ void DevScene::Draw() {
 
   ParticleManager::GetInstance()->Draw(static_cast<BlendMode>(particleBlendMode_));
   renderer->DrawGPUParticles();
+
+  // オフスクリーンの結果を全画面に表示
+  if (renderTexture_) {
+    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+  }
 }
 
 void DevScene::InitLogging_() {
@@ -236,12 +327,14 @@ void DevScene::InitResources_() {
   auto *dx = Renderer::GetInstance()->GetDX();
 
   resSphere_ = mm->Load("resources/app/sphere/sphere.obj");
+  resTerrain_ = mm->Load("resources/app/terrain/terrain.obj");
   resCube_ = mm->Load("resources/app/cube/cube.obj");
   resAnimCube_ = mm->Load("resources/app/AnimatedCube/AnimatedCube.gltf");
   animCubeAnim_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/AnimatedCube", "AnimatedCube.gltf");
   resEffect_ = mm->Load("resources/app/particle/particle.obj");
 
   modelSphere_.Initialize({resSphere_, {1, 1, 1, 1}, 0});
+    modelTerrain_.Initialize({resTerrain_, {1, 1, 1, 1}, 0});
   modelAnimCube_.Initialize({resAnimCube_, {1, 1, 1, 1}, 1});
   if (animCubeAnim_) modelAnimCube_.PlayAnimation(animCubeAnim_, true);
 
@@ -283,10 +376,14 @@ void DevScene::InitResources_() {
 
   dirLights_.push_back({{1,1,1}, {0,-1,0}, 1.0f});
   pointLights_.push_back({{1,1,1}, {0,2,-2}, 1.0f, 10.0f, 2.0f});
+
+  // オフスクリーンテスト初期化
+  renderTexture_ = std::make_unique<RenderTexture>();
+  renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
 }
 
 void DevScene::InitCamera_() {
-  transform_.scale = {1, 1, 1};
+  transformTerrain_.translate = {0, -5.0f, 0};
   cameraTransform_.translate = {0, 0, -15};
   transformSimpleSkin_.translate = {3, 0, 0};
   transformHuman_.translate = {6, 0, 0};

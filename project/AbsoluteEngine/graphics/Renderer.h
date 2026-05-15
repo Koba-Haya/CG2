@@ -133,6 +133,13 @@ public:
   void DrawEffectModel(ModelInstance *model);
   void DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
   void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
+  
+  enum class PostProcessMode {
+    Normal,
+    Grayscale,
+    Sepia
+  };
+  void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal);
 
   void DispatchSkinning(ModelInstance* instance);
 
@@ -205,4 +212,7 @@ private:
   std::unique_ptr<UnifiedPipeline> effectPipeline_; // エフェクト用
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
   std::unique_ptr<UnifiedPipeline> cylinderPipeline_;
+  std::unique_ptr<UnifiedPipeline> copyImagePipeline_;
+  std::unique_ptr<UnifiedPipeline> grayscalePipeline_;
+  std::unique_ptr<UnifiedPipeline> sepiaPipeline_;
 };
