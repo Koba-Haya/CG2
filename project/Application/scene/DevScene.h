@@ -17,6 +17,7 @@
 #include "Vector.h"
 #include "graphics/texture/TextureResource.h"
 #include "graphics/texture/RenderTexture.h"
+#include "graphics/Renderer.h"
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -128,5 +129,5 @@ private:
 
   // オフスクリーンテスト用
   std::unique_ptr<RenderTexture> renderTexture_;
-  Sprite previewSprite_;
+  Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
 };

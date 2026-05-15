@@ -529,11 +529,23 @@ PipelineDesc UnifiedPipeline::MakeRingDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeGrayscaleDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/Grayscale.PS.hlsl";
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeSepiaDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/Sepia.PS.hlsl";
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeCopyImageDesc() {
   PipelineDesc d{};
   d.inputElements = {}; // 頂点バッファなし
-  d.vsPath = L"resources/engine/shaders/CopyImage.VS.hlsl";
-  d.psPath = L"resources/engine/shaders/CopyImage.PS.hlsl";
+  d.vsPath = L"resources/engine/shaders/Fullscreen.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Fullscreen.PS.hlsl";
   d.usePSMaterial_b0 = false;
   d.useVSTransform_b0 = false;
   d.usePSTextureTable_t0 = true; // t0: RenderTexture

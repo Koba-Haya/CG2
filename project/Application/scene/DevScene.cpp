@@ -9,7 +9,9 @@
 #include "graphics/texture/TextureManager.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
+#ifdef USE_IMGUI
 #include <imgui.h>
+#endif
 #include <Windows.h>
 #include <algorithm>
 #include <cassert>
@@ -53,7 +55,8 @@ void DevScene::Update() {
   }
 
   const float deltaTime = 1.0f / 60.0f;
-
+  
+#ifdef USE_IMGUI
   // --- デバッグメニュー ---
   ImGui::Begin("DevScene - Engine Test");
   if (ImGui::Button("Back to Title")) {
@@ -140,6 +143,15 @@ void DevScene::Update() {
     if (enableReflection_) {
       ImGui::SliderFloat("Reflection Weight", &reflectionWeight_, 0.0f, 1.0f);
     }
+    
+    ImGui::SeparatorText("PostProcess");
+    int mode = static_cast<int>(postProcessMode_);
+    if (ImGui::RadioButton("Normal", &mode, static_cast<int>(Renderer::PostProcessMode::Normal))) postProcessMode_ = Renderer::PostProcessMode::Normal;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Grayscale", &mode, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = Renderer::PostProcessMode::Grayscale;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
+
     const char *blendModeItems[] = {"Alpha", "Add", "Subtract", "Multiply", "Screen"};
     ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems, IM_ARRAYSIZE(blendModeItems));
 
@@ -150,6 +162,7 @@ void DevScene::Update() {
   }
 
   ImGui::End();
+#endif
 
   ringTransform_.rotate.z += 1.5f * deltaTime;
   cylinderTransform_.rotate.y += 1.0f * deltaTime;
@@ -299,7 +312,7 @@ void DevScene::Draw() {
 
   // オフスクリーンの結果を全画面に表示
   if (renderTexture_) {
-    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle());
+    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
   }
 }
 

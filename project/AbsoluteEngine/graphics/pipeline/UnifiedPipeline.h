@@ -95,6 +95,8 @@ public:
   static PipelineDesc MakeRingDesc();
   static PipelineDesc MakeCylinderDesc();
   static PipelineDesc MakeCopyImageDesc();
+  static PipelineDesc MakeGrayscaleDesc();
+  static PipelineDesc MakeSepiaDesc();
 
 private:
   ComPtr<ID3D12RootSignature> rootSignature_;

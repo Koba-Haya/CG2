@@ -159,6 +159,16 @@ void Renderer::Initialize(DirectXCommon *dx) {
     copyImagePipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(copyImagePipeline_->Initialize(device, utils, compiler,
                                               includeHandler, desc));
+    
+    PipelineDesc grayDesc = UnifiedPipeline::MakeGrayscaleDesc();
+    grayscalePipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(grayscalePipeline_->Initialize(device, utils, compiler,
+                                               includeHandler, grayDesc));
+
+    PipelineDesc sepiaDesc = UnifiedPipeline::MakeSepiaDesc();
+    sepiaPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(sepiaPipeline_->Initialize(device, utils, compiler,
+                                             includeHandler, sepiaDesc));
   }
 
   // Primitive Drawer
@@ -798,14 +808,27 @@ void Renderer::DrawGrid(float size, int divisions, const Vector4 &color) {
   primitiveDrawer_->AddGrid(size, divisions, color);
 }
 
-void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle) {
-  if (!copyImagePipeline_)
+void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode) {
+  UnifiedPipeline *pipeline = nullptr;
+  switch (mode) {
+  case PostProcessMode::Normal:
+    pipeline = copyImagePipeline_.get();
+    break;
+  case PostProcessMode::Grayscale:
+    pipeline = grayscalePipeline_.get();
+    break;
+  case PostProcessMode::Sepia:
+    pipeline = sepiaPipeline_.get();
+    break;
+  }
+
+  if (!pipeline)
     return;
 
   auto *cmdList = dx_->GetCommandList();
 
   // パイプライン設定
-  copyImagePipeline_->SetPipelineState(cmdList);
+  pipeline->SetPipelineState(cmdList);
 
   // テクスチャをセット (t0)
   cmdList->SetGraphicsRootDescriptorTable(0, textureHandle);
