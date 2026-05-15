@@ -133,6 +133,7 @@ public:
   void DrawEffectModel(ModelInstance *model);
   void DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
   void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
+  void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
 
   void DispatchSkinning(ModelInstance* instance);
 
@@ -205,4 +206,5 @@ private:
   std::unique_ptr<UnifiedPipeline> effectPipeline_; // エフェクト用
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
   std::unique_ptr<UnifiedPipeline> cylinderPipeline_;
+  std::unique_ptr<UnifiedPipeline> copyImagePipeline_;
 };

@@ -1,5 +1,6 @@
 #include "DirectXCommon.h"
 #include "DirectXResourceUtils.h"
+#include "graphics/texture/RenderTexture.h"
 #include <cassert>
 #include <dxcapi.h>
 
@@ -215,7 +216,7 @@ void DirectXCommon::CreateSwapChain_() {
 }
 
 void DirectXCommon::CreateDescriptorHeaps_() {
-  rtvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2, false);
+  rtvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 16, false);
   srvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
   dsvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, false);
 
@@ -237,6 +238,8 @@ void DirectXCommon::CreateRTVs_() {
 
   rtvHandles_[1].ptr = rtvHandles_[0].ptr + descriptorSizeRTV_;
   device_->CreateRenderTargetView(swapChainResources_[1].Get(), &rtvDesc_, rtvHandles_[1]);
+
+  nextRtvIndex_ = 2; // バックバッファ2枚分を予約
 }
 
 void DirectXCommon::CreateDepthStencil_() {
@@ -301,4 +304,50 @@ void DirectXCommon::TransitionBackBufferToPresent_() {
   b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
   b.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
   commandList_->ResourceBarrier(1, &b);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::AllocateRtv() {
+  assert(nextRtvIndex_ < 16);
+  D3D12_CPU_DESCRIPTOR_HANDLE handle = GetCPUDescriptorHandle(rtvDescriptorHeap_, descriptorSizeRTV_, nextRtvIndex_);
+  nextRtvIndex_++;
+  return handle;
+}
+
+void DirectXCommon::SetRenderTarget(RenderTexture* target) {
+    assert(target);
+    
+    // 1. リソースバリア (SRV -> RT)
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = target->GetResource();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    commandList_->ResourceBarrier(1, &barrier);
+
+    // 2. レンダーターゲット設定
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = target->GetRtvHandle();
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetCPUDescriptorHandle(dsvDescriptorHeap_.Get(), descriptorSizeDSV_, 0);
+    commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+}
+
+void DirectXCommon::FinishRendering(RenderTexture* target) {
+    assert(target);
+
+    // 1. リソースバリア (RT -> SRV)
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = target->GetResource();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    commandList_->ResourceBarrier(1, &barrier);
+
+    // 2. バックバッファに戻す
+    ResetRenderTarget();
+}
+
+void DirectXCommon::ResetRenderTarget() {
+    // 常にバックバッファに戻る前提
+    UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetCPUDescriptorHandle(dsvDescriptorHeap_.Get(), descriptorSizeDSV_, 0);
+    commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex], FALSE, &dsvHandle);
 }

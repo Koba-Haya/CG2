@@ -16,6 +16,7 @@
 #include "Transform.h"
 #include "Vector.h"
 #include "graphics/texture/TextureResource.h"
+#include "graphics/texture/RenderTexture.h"
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -44,8 +45,10 @@ private:
   std::shared_ptr<ModelResource> resSphere_;
   std::shared_ptr<ModelResource> resCube_;
   std::shared_ptr<ModelResource> resAnimCube_;
+  std::shared_ptr<ModelResource> resTerrain_;
 
   ModelInstance modelSphere_;
+  ModelInstance modelTerrain_;
   ModelInstance modelEmitterSphere_;
   ModelInstance modelEmitterBox_;
   ModelInstance modelAnimCube_;
@@ -91,6 +94,7 @@ private:
   int particleBlendMode_ = 1;
 
   Transform transform_;
+  Transform transformTerrain_;
   Transform cameraTransform_;
   Transform transformSprite_;
   Transform uvTransformSprite_;
@@ -121,4 +125,8 @@ private:
   Cylinder::Params cylinderParams_;
   Transform cylinderTransform_;
   Vector2 cylinderUVScale_ = {1.0f, 1.0f};
+
+  // オフスクリーンテスト用
+  std::unique_ptr<RenderTexture> renderTexture_;
+  Sprite previewSprite_;
 };

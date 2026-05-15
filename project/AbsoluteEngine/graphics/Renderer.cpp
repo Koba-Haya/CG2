@@ -153,6 +153,14 @@ void Renderer::Initialize(DirectXCommon *dx) {
                                              includeHandler, cylinderDesc));
   }
 
+  // CopyImage Pipeline
+  {
+    PipelineDesc desc = UnifiedPipeline::MakeCopyImageDesc();
+    copyImagePipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(copyImagePipeline_->Initialize(device, utils, compiler,
+                                              includeHandler, desc));
+  }
+
   // Primitive Drawer
   primitiveDrawer_ = std::make_unique<PrimitiveDrawer>();
   primitiveDrawer_->Initialize(dx_);
@@ -526,7 +534,7 @@ void Renderer::DrawSprite(Sprite *sprite) {
   // テクスチャ
   ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
   cmdList->SetDescriptorHeaps(1, heaps);
-  cmdList->SetGraphicsRootDescriptorTable(2, res->GetTexture()->GetSrvGpu());
+  cmdList->SetGraphicsRootDescriptorTable(2, sprite->GetTextureHandle());
 
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   cmdList->DrawIndexedInstanced(res->GetIndexCount(), 1, 0, 0, 0);
@@ -788,4 +796,21 @@ void Renderer::DrawLine(const Vector3 &start, const Vector3 &end,
 
 void Renderer::DrawGrid(float size, int divisions, const Vector4 &color) {
   primitiveDrawer_->AddGrid(size, divisions, color);
+}
+
+void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle) {
+  if (!copyImagePipeline_)
+    return;
+
+  auto *cmdList = dx_->GetCommandList();
+
+  // パイプライン設定
+  copyImagePipeline_->SetPipelineState(cmdList);
+
+  // テクスチャをセット (t0)
+  cmdList->SetGraphicsRootDescriptorTable(0, textureHandle);
+
+  // 頂点バッファなしで3頂点描画（大きな三角形1つで全画面を覆う）
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawInstanced(3, 1, 0, 0);
 }

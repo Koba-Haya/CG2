@@ -5,6 +5,7 @@
 #include "Vector.h"
 #include <memory>
 #include <string>
+#include <d3d12.h>
 
 // 前方宣言
 class SpriteResource;
@@ -39,6 +40,7 @@ public:
   void SetUVTransform(const Matrix4x4 &uv) { uvMatrix_ = uv; }
   void SetColor(const Vector4 &color) { color_ = color; }
   void SetBlendMode(BlendMode mode) { blendMode_ = mode; }
+  void SetTextureOverride(D3D12_GPU_DESCRIPTOR_HANDLE handle) { overrideTextureHandle_ = handle; }
 
   void Draw();
 
@@ -51,6 +53,7 @@ public:
 
   // RendererがWVPを計算・転送するための内部アクセサ
   TransformCB *GetTransformMapped();
+  D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const;
 
 private:
   struct Impl;
@@ -64,4 +67,5 @@ private:
   Matrix4x4 uvMatrix_ = MakeIdentity4x4();
   Matrix4x4 worldMatrix_ = MakeIdentity4x4();
   BlendMode blendMode_ = BlendMode::Alpha;
+  D3D12_GPU_DESCRIPTOR_HANDLE overrideTextureHandle_{};
 };

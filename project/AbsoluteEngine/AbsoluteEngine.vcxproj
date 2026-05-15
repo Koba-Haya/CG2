@@ -149,6 +149,7 @@
     <ClCompile Include="graphics\primitive\Ring.cpp" />
     <ClCompile Include="graphics\shader\ShaderCompiler.cpp" />
     <ClCompile Include="graphics\shader\ShaderCompilerUtils.cpp" />
+    <ClCompile Include="graphics\texture\RenderTexture.cpp" />
     <ClCompile Include="graphics\texture\TextureManager.cpp" />
     <ClCompile Include="graphics\texture\TextureResource.cpp" />
     <ClCompile Include="graphics\texture\TextureUtils.cpp" />
@@ -196,6 +197,7 @@
     <ClInclude Include="graphics\resources\ResourceObject.h" />
     <ClInclude Include="graphics\shader\ShaderCompiler.h" />
     <ClInclude Include="graphics\shader\ShaderCompilerUtils.h" />
+    <ClInclude Include="graphics\texture\RenderTexture.h" />
     <ClInclude Include="graphics\texture\TextureManager.h" />
     <ClInclude Include="graphics\texture\TextureResource.h" />
     <ClInclude Include="graphics\texture\TextureUtils.h" />
