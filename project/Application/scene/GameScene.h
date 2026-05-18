@@ -5,6 +5,8 @@
 #include "DebugCamera.h"
 #include "ModelInstance.h"
 #include "ModelResource.h"
+#include "Renderer.h"
+#include "graphics/texture/RenderTexture.h"
 #include "../actor/Player.h"
 #include "../actor/Bullet.h"
 #include "../actor/Enemy.h"
@@ -27,7 +29,10 @@ private:
 private:
   std::unique_ptr<GameCamera> gameCamera_;
   std::unique_ptr<DebugCamera> debugCamera_;
+  std::unique_ptr<RenderTexture> renderTexture_;
+  Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
   class RailCameraController* railController_ = nullptr; // 所有権は gameCamera_ が持つ
+
 
   bool isDebugCamera_ = false;
   bool showDebugRail_ = true;

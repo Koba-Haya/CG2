@@ -1,6 +1,8 @@
 #define NOMINMAX
 #include "GameScene.h"
 #include "Renderer.h"
+#include "DirectXCommon.h"
+#include "DirectXResourceUtils.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
 #include "Input.h"
@@ -70,6 +72,10 @@ void GameScene::Initialize(const SceneServices &services) {
       enemy.Initialize(pos, resEnemy_);
       enemies_.push_back(std::move(enemy));
   }
+
+  auto* dx = Renderer::GetInstance()->GetDX();
+  renderTexture_ = std::make_unique<RenderTexture>();
+  renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
 }
 
 void GameScene::Finalize() {
@@ -197,12 +203,32 @@ void GameScene::Update() {
       gameCamera_->SetContext(ctx);
       gameCamera_->Update(*services_.input);
   }
+
+  ImGui::SeparatorText("Post Process");
+  int mode = static_cast<int>(postProcessMode_);
+  if (ImGui::RadioButton("Normal", &mode, static_cast<int>(Renderer::PostProcessMode::Normal))) postProcessMode_ = Renderer::PostProcessMode::Normal;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Grayscale", &mode, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = Renderer::PostProcessMode::Grayscale;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
+
   ImGui::End();
 #endif
 }
 
 void GameScene::Draw() {
   auto* renderer = Renderer::GetInstance();
+  auto* dx = renderer->GetDX();
+
+  if (renderTexture_) {
+    dx->SetRenderTarget(renderTexture_.get());
+    float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
+    dx->GetCommandList()->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetCPUDescriptorHandle(dx->GetDSVHeap(), dx->GetDSVDescriptorSize(), 0);
+    dx->GetCommandList()->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+  }
+
   if (isDebugCamera_) {
       renderer->SetCamera(*debugCamera_);
   } else {
@@ -268,4 +294,9 @@ void GameScene::Draw() {
 
   renderer->RenderPrimitives();
   //renderer->DrawGPUParticles();
+
+  if (renderTexture_) {
+    dx->FinishRendering(renderTexture_.get());
+    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+  }
 }
