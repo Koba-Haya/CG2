@@ -27,6 +27,12 @@
     <ClCompile Include="actor\Player.cpp">
       <Filter>application\actor</Filter>
     </ClCompile>
+    <ClCompile Include="actor\Bullet.cpp">
+      <Filter>application\actor</Filter>
+    </ClCompile>
+    <ClCompile Include="actor\Enemy.cpp">
+      <Filter>application\actor</Filter>
+    </ClCompile>
     <ClCompile Include="scene\DevScene.cpp">
       <Filter>application\scene</Filter>
     </ClCompile>
@@ -40,6 +46,7 @@
       <Filter>application\scene</Filter>
     </ClCompile>
     <ClCompile Include="..\main.cpp" />
+    <ClCompile Include="camera\RailCameraController.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GameApp.h">
@@ -48,20 +55,19 @@
     <ClInclude Include="actor\Player.h">
       <Filter>application\actor</Filter>
     </ClInclude>
+    <ClInclude Include="actor\Bullet.h">
+      <Filter>application\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="actor\Enemy.h">
+      <Filter>application\actor</Filter>
+    </ClInclude>
     <ClInclude Include="scene\DevScene.h">
       <Filter>application\scene</Filter>
     </ClInclude>
-    <ClInclude Include="GameScene.h">
-      <Filter>application\scene</Filter>
-    </ClInclude>
-    <ClInclude Include="SceneFactory.h">
-      <Filter>application\scene</Filter>
-    </ClInclude>
-    <ClInclude Include="SceneIds.h">
-      <Filter>application\scene</Filter>
-    </ClInclude>
-    <ClInclude Include="TitleScene.h">
-      <Filter>application\scene</Filter>
-    </ClInclude>
+    <ClInclude Include="scene\GameScene.h" />
+    <ClInclude Include="scene\SceneFactory.h" />
+    <ClInclude Include="scene\SceneIds.h" />
+    <ClInclude Include="scene\TitleScene.h" />
+    <ClInclude Include="camera\RailCameraController.h" />
   </ItemGroup>
 </Project>

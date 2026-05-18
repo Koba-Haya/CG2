@@ -68,6 +68,15 @@ AssetLoader::LoadModel(const std::string &directoryPath,
     modelData->materials[i] = std::move(md);
   }
 
+  // モデル全体にボーン（スキニングデータ）が存在するかを事前チェック
+  bool modelHasBones = false;
+  for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
+    if (scene->mMeshes[meshIndex]->HasBones()) {
+      modelHasBones = true;
+      break;
+    }
+  }
+
   // Meshes
   modelData->meshes.resize(scene->mNumMeshes);
 
@@ -108,7 +117,9 @@ AssetLoader::LoadModel(const std::string &directoryPath,
 
     // Load Vertices
     meshData.vertices.reserve(mesh->mNumVertices);
-    meshData.skinningData.reserve(mesh->mNumVertices);
+    if (modelHasBones) {
+      meshData.skinningData.reserve(mesh->mNumVertices);
+    }
     for (uint32_t vi = 0; vi < mesh->mNumVertices; ++vi) {
       const aiVector3D &p = mesh->mVertices[vi];
       const aiVector3D &n =
@@ -123,31 +134,33 @@ AssetLoader::LoadModel(const std::string &directoryPath,
       v.texcoord = {uv.x, uv.y};
       meshData.vertices.push_back(FixupVertex_AssimpToEngine(v, uvOpt));
 
-      // Skinning data
-      VertexBoneData vbd{};
-      auto it = vertexWeightMap.find(vi);
-      if (it != vertexWeightMap.end()) {
-        auto &weights = it->second;
-        std::sort(weights.begin(), weights.end(),
-                  [](const auto &a, const auto &b) {
-                    return a.second > b.second;
-                  });
-        float totalWeight = 0.0f;
-        for (size_t k = 0; k < 4 && k < weights.size(); ++k) {
-          vbd.boneIDs[k] = weights[k].first;
-          vbd.weights[k] = weights[k].second;
-          totalWeight += weights[k].second;
-        }
-        if (totalWeight > 0.0f) {
-          for (size_t k = 0; k < 4; ++k) {
-            vbd.weights[k] /= totalWeight;
+      if (modelHasBones) {
+        // Skinning data
+        VertexBoneData vbd{};
+        auto it = vertexWeightMap.find(vi);
+        if (it != vertexWeightMap.end()) {
+          auto &weights = it->second;
+          std::sort(weights.begin(), weights.end(),
+                    [](const auto &a, const auto &b) {
+                      return a.second > b.second;
+                    });
+          float totalWeight = 0.0f;
+          for (size_t k = 0; k < 4 && k < weights.size(); ++k) {
+            vbd.boneIDs[k] = weights[k].first;
+            vbd.weights[k] = weights[k].second;
+            totalWeight += weights[k].second;
           }
+          if (totalWeight > 0.0f) {
+            for (size_t k = 0; k < 4; ++k) {
+              vbd.weights[k] /= totalWeight;
+            }
+          }
+        } else {
+          vbd.boneIDs[0] = defaultJointIndex;
+          vbd.weights[0] = 1.0f;
         }
-      } else {
-        vbd.boneIDs[0] = defaultJointIndex;
-        vbd.weights[0] = 1.0f;
+        meshData.skinningData.push_back(vbd);
       }
-      meshData.skinningData.push_back(vbd);
     }
 
     // Load Indices

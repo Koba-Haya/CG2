@@ -21,6 +21,10 @@ public:
 	const Vector3& GetTarget() const { return target_; }
 	const Vector3& GetUp() const { return up_; }
 
+	Vector3 GetForward() const;
+	Vector3 GetRight() const;
+	Vector3 GetActualUp() const;
+
 private:
 	CameraContext ctx_{};
 	std::unique_ptr<ICameraController> controller_;

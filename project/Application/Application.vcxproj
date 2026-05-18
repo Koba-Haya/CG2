@@ -92,8 +92,8 @@
     </Link>
     <PostBuildEvent>
       <Command>
-        xcopy "..\AbsoluteEngine\resources" "$(OutDir)resources\engine" /E /I /Y
-        xcopy "resources" "$(OutDir)resources\app" /E /I /Y
+        xcopy "..\AbsoluteEngine\resources" "$(OutDir)resources\engine" /E /I /Y /D
+        xcopy "resources" "$(OutDir)resources\app" /E /I /Y /D
 
         set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
         set OUTDIR="$(OutDir)"
@@ -129,8 +129,8 @@
     </Link>
     <PostBuildEvent>
       <Command>
-        xcopy "..\AbsoluteEngine\resources" "$(OutDir)resources\engine" /E /I /Y
-        xcopy "resources" "$(OutDir)resources\app" /E /I /Y
+        xcopy "..\AbsoluteEngine\resources" "$(OutDir)resources\engine" /E /I /Y /D
+        xcopy "resources" "$(OutDir)resources\app" /E /I /Y /D
 
         set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
         set OUTDIR="$(OutDir)"
@@ -167,8 +167,8 @@
     </Link>
     <PostBuildEvent>
       <Command>
-        xcopy "..\AbsoluteEngine\resources" "$(OutDir)resources\engine" /E /I /Y
-        xcopy "resources" "$(OutDir)resources\app" /E /I /Y
+        xcopy "..\AbsoluteEngine\resources" "$(OutDir)resources\engine" /E /I /Y /D
+        xcopy "resources" "$(OutDir)resources\app" /E /I /Y /D
 
         set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
         set OUTDIR="$(OutDir)"
@@ -178,8 +178,11 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="camera\RailCameraController.cpp" />
     <ClCompile Include="GameApp.cpp" />
     <ClCompile Include="actor\Player.cpp" />
+    <ClCompile Include="actor\Bullet.cpp" />
+    <ClCompile Include="actor\Enemy.cpp" />
     <ClCompile Include="scene\DevScene.cpp" />
     <ClCompile Include="scene\GameScene.cpp" />
     <ClCompile Include="scene\SceneFactory.cpp" />
@@ -187,8 +190,14 @@
     <ClCompile Include="..\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <UpToDateCheckInput Include="resources\**\*.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="camera\RailCameraController.h" />
     <ClInclude Include="GameApp.h" />
     <ClInclude Include="actor\Player.h" />
+    <ClInclude Include="actor\Bullet.h" />
+    <ClInclude Include="actor\Enemy.h" />
     <ClInclude Include="scene\DevScene.h" />
     <ClInclude Include="scene\GameScene.h" />
     <ClInclude Include="scene\SceneFactory.h" />

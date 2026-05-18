@@ -177,6 +177,9 @@
     <ClCompile Include="math\Method.cpp">
       <Filter>engine\math</Filter>
     </ClCompile>
+    <ClCompile Include="math\Spline.cpp">
+      <Filter>engine\math</Filter>
+    </ClCompile>
     <ClCompile Include="scene\BaseScene.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
@@ -313,6 +316,9 @@
       <Filter>engine\graphics\texture</Filter>
     </ClInclude>
     <ClInclude Include="math\Method.h">
+      <Filter>engine\math</Filter>
+    </ClInclude>
+    <ClInclude Include="math\Spline.h">
       <Filter>engine\math</Filter>
     </ClInclude>
     <ClInclude Include="scene\BaseScene.h">

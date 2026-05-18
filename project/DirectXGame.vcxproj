@@ -97,7 +97,7 @@
     <PostBuildEvent>
       <Message>
       </Message>
-      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y
+      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y /D
 
 set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
 set OUTDIR="$(OutDir)"
@@ -139,7 +139,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <PostBuildEvent>
       <Message>
       </Message>
-      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y
+      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y /D
 
 set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
 set OUTDIR="$(OutDir)"
@@ -184,7 +184,7 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
     <PostBuildEvent>
       <Message>
       </Message>
-      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y
+      <Command>xcopy "$(ProjectDir)resources" "$(OutDir)resources" /E /I /Y /D
 
 set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
 set OUTDIR="$(OutDir)"
@@ -345,6 +345,10 @@ copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <UpToDateCheckInput Include="Application\resources\**\*.*" />
+    <UpToDateCheckInput Include="AbsoluteEngine\resources\**\*.*" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">
