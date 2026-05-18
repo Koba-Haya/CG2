@@ -318,23 +318,23 @@ Matrix4x4 MakeLookAtMatrix(const Vector3 &eye, const Vector3 &target,
   Matrix4x4 result;
 
   result.m[0][0] = xAxis.x;
-  result.m[0][1] = xAxis.y;
-  result.m[0][2] = xAxis.z;
-  result.m[0][3] = -Dot(xAxis, eye);
+  result.m[0][1] = yAxis.x;
+  result.m[0][2] = zAxis.x;
+  result.m[0][3] = 0.0f;
 
-  result.m[1][0] = yAxis.x;
+  result.m[1][0] = xAxis.y;
   result.m[1][1] = yAxis.y;
-  result.m[1][2] = yAxis.z;
-  result.m[1][3] = -Dot(yAxis, eye);
+  result.m[1][2] = zAxis.y;
+  result.m[1][3] = 0.0f;
 
-  result.m[2][0] = zAxis.x;
-  result.m[2][1] = zAxis.y;
+  result.m[2][0] = xAxis.z;
+  result.m[2][1] = yAxis.z;
   result.m[2][2] = zAxis.z;
-  result.m[2][3] = -Dot(zAxis, eye);
+  result.m[2][3] = 0.0f;
 
-  result.m[3][0] = 0.0f;
-  result.m[3][1] = 0.0f;
-  result.m[3][2] = 0.0f;
+  result.m[3][0] = -Dot(xAxis, eye);
+  result.m[3][1] = -Dot(yAxis, eye);
+  result.m[3][2] = -Dot(zAxis, eye);
   result.m[3][3] = 1.0f;
 
   return result;

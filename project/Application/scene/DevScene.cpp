@@ -26,6 +26,9 @@ static void FatalBoxAndTerminate_(const std::string &msg) {
   std::terminate();
 }
 
+DevScene::DevScene() {}
+DevScene::~DevScene() {}
+
 void DevScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
 
@@ -37,8 +40,6 @@ void DevScene::Initialize(const SceneServices &services) {
 
   InitCamera_();
 
-  accelerationField_.acceleration = {15.0f, 0.0f, 0.0f};
-  accelerationField_.area.min = {-1.0f, -1.0f, -1.0f};
   accelerationField_.area.max = {1.0f, 1.0f, 1.0f};
 }
 
@@ -50,12 +51,12 @@ void DevScene::Finalize() {
 }
 
 void DevScene::Update() {
+  const float deltaTime = 1.0f / 60.0f;
+  
   if (camera_) {
     camera_->Update(*services_.input);
   }
 
-  const float deltaTime = 1.0f / 60.0f;
-  
 #ifdef USE_IMGUI
   // --- デバッグメニュー ---
   ImGui::Begin("DevScene - Engine Test");
@@ -210,7 +211,9 @@ void DevScene::Draw() {
       dx->GetCommandList()->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
       
       // メインカメラをセットして描画
-      if (camera_) renderer->SetCamera(*camera_);
+      if (camera_) {
+          renderer->SetCamera(*camera_);
+      }
       
       modelSphere_.SetWorld(MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate));
       modelSphere_.Draw();
@@ -268,7 +271,9 @@ void DevScene::Draw() {
   }
 
   // --- メイン描画パス（バックバッファ） ---
-  if (camera_) renderer->SetCamera(*camera_);
+  if (camera_) {
+      renderer->SetCamera(*camera_);
+  }
 
   renderer->SetEnvironmentMap(skybox_.GetTexture());
   renderer->SetDirectionalLights(dirLights_, enableDirectionalLight_);

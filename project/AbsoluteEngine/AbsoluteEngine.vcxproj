@@ -154,6 +154,7 @@
     <ClCompile Include="graphics\texture\TextureResource.cpp" />
     <ClCompile Include="graphics\texture\TextureUtils.cpp" />
     <ClCompile Include="math\Method.cpp" />
+    <ClCompile Include="math\Spline.cpp" />
     <ClCompile Include="scene\BaseScene.cpp" />
     <ClCompile Include="scene\SceneManager.cpp" />
   </ItemGroup>
@@ -202,6 +203,7 @@
     <ClInclude Include="graphics\texture\TextureResource.h" />
     <ClInclude Include="graphics\texture\TextureUtils.h" />
     <ClInclude Include="math\Method.h" />
+    <ClInclude Include="math\Spline.h" />
     <ClInclude Include="scene\BaseScene.h" />
     <ClInclude Include="scene\ISceneFactory.h" />
     <ClInclude Include="scene\SceneManager.h" />

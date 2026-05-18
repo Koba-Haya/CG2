@@ -1,7 +1,15 @@
 #define NOMINMAX
 #include "GameScene.h"
 #include "Renderer.h"
-#include "DebugCamera.h"
+#include "ModelManager.h"
+#include "ParticleManager.h"
+#include "Input.h"
+#include "../camera/RailCameraController.h"
+#include "Spline.h"
+#include "Method.h"
+#include <algorithm>
+#include <cmath>
+
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
@@ -9,31 +17,255 @@
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
 
-  camera_ = std::make_unique<DebugCamera>();
-  camera_->Initialize();
-  camera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
+  auto* mm = ModelManager::GetInstance();
+
+  // リソースのロード
+  resPlayer_ = mm->Load("resources/app/player/player.obj"); // 追加された自機モデル
+  resBullet_ = mm->Load("resources/app/bullet/bullet.obj"); // 追加された弾モデル
+  resEnemy_  = mm->Load("resources/app/cube/cube.obj"); // 敵モデル
+  resEffect_ = mm->Load("resources/app/particle/particle.obj");
+
+  if (!resBullet_) {
+      // 万一 bullet.obj が読み込めない場合は、確実に存在する enemy (cube.obj) を仮割り当てする
+      resBullet_ = resEnemy_;
+  }
+
+  skybox_.Initialize("resources/app/dds/dds.dds");
+
+  // パーティクルグループの初期化（連射ヒット時のアサートクラッシュ防止）
+  ParticleManager::GetInstance()->CreateParticleGroup("default", "resources/app/particle/circle.png", 500);
+
+  // レールカメラの初期化
+  gameCamera_ = std::make_unique<GameCamera>();
+  gameCamera_->Initialize();
+  gameCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
+
+  // デバッグカメラ初期化
+  debugCamera_ = std::make_unique<DebugCamera>();
+  debugCamera_->Initialize();
+  debugCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
+
+  auto railController = std::make_unique<RailCameraController>();
+  railController_ = railController.get();
+  CameraContext ctx{};
+  ctx.deltaTime = 1.0f / 60.0f;
+  gameCamera_->SetController(std::move(railController), ctx);
+  // シーン開始直後の初期視点がワープしないように1度更新して位置を確定させる
+  gameCamera_->Update(*services_.input);
+
+  // プレイヤー初期化
+  player_.Initialize(resPlayer_);
+
+  // 敵の配置 (新コースに合わせた沿線上のポイントに配置)
+  enemies_.clear();
+  std::vector<Vector3> enemyPositions = {
+      { 0.0f,  3.0f,  20.0f}, // 直進エリア
+      { 10.0f, 5.0f,  50.0f}, // 右カーブへの上り手前
+      { 20.0f, 8.0f,  80.0f}, // 右カーブの頂点付近
+      { 0.0f,  5.0f, 110.0f}, // 中央へ戻る下りエリア
+      {-15.0f, 2.0f, 150.0f}  // 左急降下エリアの底
+  };
+  for (const auto& pos : enemyPositions) {
+      Enemy enemy;
+      enemy.Initialize(pos, resEnemy_);
+      enemies_.push_back(std::move(enemy));
+  }
 }
 
 void GameScene::Finalize() {
 }
 
+void GameScene::SpawnHitEffect(const Vector3 &pos) {
+  HitEffect ef;
+  ef.instance.Initialize({ resEffect_, {1, 1, 1, 1}, 0 });
+  ef.position = pos;
+  ef.frame = 0.0f;
+  ef.isActive = true;
+  hitEffects_.push_back(std::move(ef));
+
+  // パーティクルも少し出す
+  for (int i = 0; i < 10; ++i) {
+      ParticleManager::GetInstance()->Emit(
+          "default", pos, Vector3{0, 0, 0}, Vector3{0.1f, 1.0f, 1.0f},
+          Vector3{0, 0, (float)i}, 0.5f, Vector4{1, 0.5f, 0, 1});
+  }
+}
+
 void GameScene::Update() {
-  if (camera_) {
-    camera_->Update(*services_.input);
+  const float deltaTime = 1.0f / 60.0f;
+
+  if (isDebugCamera_) {
+      debugCamera_->Update(*services_.input);
+  } else {
+      // ゲーム（レール）カメラ進行 (GameCamera 内にセットしたコントローラーを正しく動作させる)
+      CameraContext ctx{};
+      ctx.deltaTime = deltaTime;
+      gameCamera_->SetContext(ctx);
+      gameCamera_->Update(*services_.input);
+  }
+
+  // プレイヤー更新 (常にゲームカメラを基準とする)
+  player_.Update(*services_.input, *gameCamera_, deltaTime);
+
+  // 弾の発射（スペースキー）
+  if (shootCooldown_ > 0.0f) shootCooldown_ -= deltaTime;
+  if (services_.input->PressKey(DIK_SPACE) && shootCooldown_ <= 0.0f && resBullet_) {
+      shootCooldown_ = 0.25f; // 連射速度を適正化（光線化を防ぎ1発ずつの独立感を強調）
+      Bullet bullet;
+      Vector3 spawnPos = player_.GetWorldPosition();
+      Vector3 forward = gameCamera_->GetForward();
+      Vector3 vel = { forward.x * 35.0f, forward.y * 35.0f, forward.z * 35.0f }; // 弾速を適正化
+      bullet.Initialize(spawnPos, vel, resBullet_);
+      if (bullet.IsActive()) {
+          bullets_.push_back(std::move(bullet));
+      }
+  }
+
+  // 弾の更新
+  for (auto& bullet : bullets_) {
+      bullet.Update(deltaTime);
+  }
+  // 消えた弾を削除
+  bullets_.erase(std::remove_if(bullets_.begin(), bullets_.end(), [](const Bullet& b) { return !b.IsActive(); }), bullets_.end());
+
+  // 敵の更新
+  for (auto& enemy : enemies_) {
+      enemy.Update(deltaTime);
+  }
+
+  // --- 当たり判定（弾 vs 敵） ---
+  for (auto& bullet : bullets_) {
+      if (!bullet.IsActive()) continue;
+      for (auto& enemy : enemies_) {
+          if (!enemy.IsActive()) continue;
+
+          Vector3 diff = {
+              bullet.GetPosition().x - enemy.GetPosition().x,
+              bullet.GetPosition().y - enemy.GetPosition().y,
+              bullet.GetPosition().z - enemy.GetPosition().z
+          };
+          float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+          float rSum = bullet.GetCollisionRadius() + enemy.GetCollisionRadius();
+
+          if (distSq <= rSum * rSum) {
+              // ヒット！
+              SpawnHitEffect(enemy.GetPosition());
+              enemy.OnHit();
+              bullet.Deactivate();
+              break;
+          }
+      }
+  }
+  // 倒された敵の削除
+  enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(), [](const Enemy& e) { return !e.IsActive(); }), enemies_.end());
+
+  // ヒットエフェクトの更新
+  for (auto& ef : hitEffects_) {
+      if (!ef.isActive) continue;
+      ef.frame += 1.0f;
+      float t = ef.frame / ef.maxFrame;
+      float scaleVal = t * 4.0f;
+      ef.instance.SetWorld(MakeAffineMatrix(Vector3{scaleVal, scaleVal, scaleVal}, Vector3{0.0f, 0.0f, 0.0f}, ef.position));
+      ef.instance.SetColor({1.0f, 0.5f, 0.0f, 1.0f - t});
+      if (ef.frame >= ef.maxFrame) ef.isActive = false;
+  }
+  hitEffects_.erase(std::remove_if(hitEffects_.begin(), hitEffects_.end(), [](const HitEffect& e) { return !e.isActive; }), hitEffects_.end());
+
+#ifdef USE_IMGUI
+  ImGui::Begin("GameScene - Rail Shooter");
+  ImGui::Text("Enemies Remaining: %d", (int)enemies_.size());
+  
+  ImGui::SeparatorText("Bullet Controls & Info");
+  ImGui::Text("Active Bullets: %d", (int)bullets_.size());
+  if (!bullets_.empty()) {
+      const auto& pos = bullets_[0].GetPosition();
+      ImGui::Text("Bullet[0] Pos: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
   }
   
-#ifdef USE_IMGUI
-  ImGui::Begin("GameScene");
+  ImGui::SeparatorText("Camera Controls");
+  Vector3 eye = gameCamera_->GetEye();
+  Vector3 target = gameCamera_->GetTarget();
+  ImGui::Text("Camera Eye: (%.2f, %.2f, %.2f)", eye.x, eye.y, eye.z);
+  ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
+  ImGui::Text("Rail Progress: %.1f %%", railController_->GetProgress() * 100.0f);
+  
+  ImGui::Checkbox("Debug Camera Mode", &isDebugCamera_);
+  ImGui::Checkbox("Show Rail Debug Line", &showDebugRail_);
+  if (ImGui::Button("Reset Rail Camera")) {
+      railController_->ResetProgress();
+      CameraContext ctx{ 1.0f / 60.0f };
+      gameCamera_->SetContext(ctx);
+      gameCamera_->Update(*services_.input);
+  }
   ImGui::End();
 #endif
 }
 
 void GameScene::Draw() {
   auto* renderer = Renderer::GetInstance();
-  if (camera_) {
-    renderer->SetCamera(*camera_);
+  if (isDebugCamera_) {
+      renderer->SetCamera(*debugCamera_);
+  } else {
+      renderer->SetCamera(*gameCamera_);
+  }
+  renderer->SetEnvironmentMap(skybox_.GetTexture());
+
+  // オブジェクトの描画
+  skybox_.Draw();
+
+  for (auto& enemy : enemies_) {
+      enemy.Draw();
   }
 
-  // グリッドなどの描画
+  for (auto& bullet : bullets_) {
+      bullet.Draw();
+  }
+
+  player_.Draw();
+
+  for (auto& ef : hitEffects_) {
+      renderer->DrawEffectModel(&ef.instance);
+  }
+
+  // --- デバッグラインの描画 ---
+  if (showDebugRail_) {
+      const auto& waypoints = railController_->GetWaypoints();
+      if (waypoints.size() >= 2) {
+          Matrix4x4 viewMat = renderer->GetViewMatrix();
+          Matrix4x4 invView = Inverse(viewMat);
+          Vector3 camEye = { invView.m[3][0], invView.m[3][1], invView.m[3][2] };
+          // カメラ自身のワールド空間における正確な正面ベクトル（invViewの第3行）
+          Vector3 camForward = { invView.m[2][0], invView.m[2][1], invView.m[2][2] };
+
+          Vector4 color = {1.0f, 1.0f, 0.0f, 1.0f}; // 黄色
+          const int subdivisions = 100;
+          Vector3 prevPoint = Spline::GetPoint(waypoints, 0.0f);
+          for (int i = 1; i <= subdivisions; ++i) {
+              float t = (float)i / (float)subdivisions;
+              Vector3 currPoint = Spline::GetPoint(waypoints, t);
+              
+              // カメラより前にあるポイント間だけを描画（距離の大小に影響されない厳格な前方カリング）
+              Vector3 diff1 = { prevPoint.x - camEye.x, prevPoint.y - camEye.y, prevPoint.z - camEye.z };
+              Vector3 diff2 = { currPoint.x - camEye.x, currPoint.y - camEye.y, currPoint.z - camEye.z };
+              if (Dot(diff1, camForward) > 0.0f && Dot(diff2, camForward) > 0.0f) {
+                  renderer->DrawLine(prevPoint, currPoint, color);
+              }
+              prevPoint = currPoint;
+          }
+          // ウェイポイントマーカーも同様に厳格に前方カリング
+          for (const auto& wp : waypoints) {
+              Vector3 diff = { wp.x - camEye.x, wp.y - camEye.y, wp.z - camEye.z };
+              if (Dot(diff, camForward) > 0.0f) {
+                  renderer->DrawLine(Vector3{wp.x, wp.y - 1.0f, wp.z}, Vector3{wp.x, wp.y + 1.0f, wp.z}, Vector4{1, 0, 0, 1});
+                  renderer->DrawLine(Vector3{wp.x - 1.0f, wp.y, wp.z}, Vector3{wp.x + 1.0f, wp.y, wp.z}, Vector4{1, 0, 0, 1});
+              }
+          }
+      }
+  }
+
+  // 進行速度と空間の奥行きを実感しやすくするため、地面に広大なグリッドを描画
+  renderer->DrawGrid(500.0f, 50, Vector4{0.2f, 0.4f, 0.8f, 0.5f});
+
   renderer->RenderPrimitives();
+  //renderer->DrawGPUParticles();
 }

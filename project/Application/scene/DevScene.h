@@ -26,8 +26,8 @@
 
 class DevScene final : public BaseScene {
 public:
-  DevScene() = default;
-  ~DevScene() override = default;
+  DevScene();
+  ~DevScene() override;
 
   void Initialize(const SceneServices &services) override;
   void Finalize() override;
