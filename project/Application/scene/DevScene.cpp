@@ -153,6 +153,9 @@ void DevScene::Update() {
     ImGui::SameLine();
     if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
 
+    // BlendMode enum は Opaque=0, Alpha=1, Add=2, ... と定義されているが、
+    // このリストは Opaque を除いて Alpha から始まるため index に +1 のオフセットが必要。
+    // GPUパーティクルへ接続する際は static_cast<BlendMode>(particleBlendMode_ + 1) を使う。
     const char *blendModeItems[] = {"Alpha", "Add", "Subtract", "Multiply", "Screen"};
     ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems, IM_ARRAYSIZE(blendModeItems));
 
@@ -199,76 +202,78 @@ void DevScene::Draw() {
   auto* dx = renderer->GetDX();
 
   // --- オフスクリーン描画パス ---
-  if (renderTexture_) {
-      dx->SetRenderTarget(renderTexture_.get());
-      
-      // クリア（資料に合わせて赤色）
-      float clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
-      dx->GetCommandList()->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
-      
-      // 深度もクリア
-      D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetCPUDescriptorHandle(dx->GetDSVHeap(), dx->GetDSVDescriptorSize(), 0);
-      dx->GetCommandList()->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-      
-      // メインカメラをセットして描画
-      if (camera_) {
-          renderer->SetCamera(*camera_);
-      }
-      
-      modelSphere_.SetWorld(MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate));
-      modelSphere_.Draw();
+  //if (renderTexture_) {
+  //    dx->SetRenderTarget(renderTexture_.get());
+  //    
+  //    // クリア（資料に合わせて赤色）
+  //    float clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
+  //    dx->GetCommandList()->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
+  //    
+  //    // 深度もクリア
+  //    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetCPUDescriptorHandle(dx->GetDSVHeap(), dx->GetDSVDescriptorSize(), 0);
+  //    dx->GetCommandList()->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+  //    
+  //    // メインカメラをセットして描画
+  //    if (camera_) {
+  //        renderer->SetCamera(*camera_);
+  //    }
+  //    
+  //    modelSphere_.SetWorld(MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate));
+  //    modelSphere_.Draw();
 
-      modelTerrain_.SetWorld(MakeAffineMatrix(transformTerrain_.scale,
-                                               transformTerrain_.rotate,
-                                              transformTerrain_.translate));
-      modelTerrain_.Draw();
+  //    modelTerrain_.SetWorld(MakeAffineMatrix(transformTerrain_.scale,
+  //                                             transformTerrain_.rotate,
+  //                                            transformTerrain_.translate));
+  //    modelTerrain_.Draw();
 
-      modelAnimCube_.SetWorld(MakeAffineMatrix(transformAnimCube_.scale,
-                                               transformAnimCube_.rotate,
-                                               transformAnimCube_.translate));
-      modelAnimCube_.Draw();
+  //    modelAnimCube_.SetWorld(MakeAffineMatrix(transformAnimCube_.scale,
+  //                                             transformAnimCube_.rotate,
+  //                                             transformAnimCube_.translate));
+  //    modelAnimCube_.Draw();
 
-      modelSimpleSkin_.Draw();
-      modelHuman_.Draw();
+  //    modelSimpleSkin_.Draw();
+  //    modelHuman_.Draw();
 
-      if (showSkeleton_) {
-        modelSimpleSkin_.DrawSkeleton();
-        modelHuman_.DrawSkeleton();
-        modelAnimCube_.DrawSkeleton();
-      }
+  //    if (showSkeleton_) {
+  //      modelSimpleSkin_.DrawSkeleton();
+  //      modelHuman_.DrawSkeleton();
+  //      modelAnimCube_.DrawSkeleton();
+  //    }
 
-      // Ring & Cylinder
-      {
-        ring_.SetTransform(
-            MakeAffineMatrix(ringTransform_.scale, ringTransform_.rotate,
-                             ringTransform_.translate),
-            camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
-        ring_.SetMaterial(
-            {1.0f, 1.0f, 1.0f, 1.0f},
-            MakeScaleMatrix({ringUVScale_.x, ringUVScale_.y, 1.0f}));
-        if (texRing_)
-          renderer->DrawRing(&ring_, texRing_->GetSrvGpu());
+  //    // Ring & Cylinder
+  //    {
+  //      ring_.SetTransform(
+  //          MakeAffineMatrix(ringTransform_.scale, ringTransform_.rotate,
+  //                           ringTransform_.translate),
+  //          camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
+  //      ring_.SetMaterial(
+  //          {1.0f, 1.0f, 1.0f, 1.0f},
+  //          MakeScaleMatrix({ringUVScale_.x, ringUVScale_.y, 1.0f}));
+  //      if (texRing_)
+  //        renderer->DrawRing(&ring_, texRing_->GetSrvGpu());
 
-        cylinder_.SetTransform(MakeAffineMatrix(cylinderTransform_.scale,
-                                                cylinderTransform_.rotate,
-                                                cylinderTransform_.translate),
-                               camera_->GetViewMatrix(),
-                               camera_->GetProjectionMatrix());
-        cylinder_.SetMaterial(
-            {1.0f, 1.0f, 1.0f, 1.0f},
-            MakeScaleMatrix({cylinderUVScale_.x, cylinderUVScale_.y, 1.0f}));
-        if (texCylinder_)
-          renderer->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
-      }
+  //      cylinder_.SetTransform(MakeAffineMatrix(cylinderTransform_.scale,
+  //                                              cylinderTransform_.rotate,
+  //                                              cylinderTransform_.translate),
+  //                             camera_->GetViewMatrix(),
+  //                             camera_->GetProjectionMatrix());
+  //      cylinder_.SetMaterial(
+  //          {1.0f, 1.0f, 1.0f, 1.0f},
+  //          MakeScaleMatrix({cylinderUVScale_.x, cylinderUVScale_.y, 1.0f}));
+  //      if (texCylinder_)
+  //        renderer->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
+  //    }
 
-      for (auto &ef : hitEffects_)
-        renderer->DrawEffectModel(&ef.instance);
+  //    for (auto &ef : hitEffects_)
+  //      renderer->DrawEffectModel(&ef.instance);
 
-      renderer->DrawGPUParticles();
+  //    ParticleManager::GetInstance()->Draw(
+  //        static_cast<BlendMode>(particleBlendMode_));
+  //    renderer->DrawGPUParticles();
 
-      // 終了
-      dx->FinishRendering(renderTexture_.get());
-  }
+  //    // 終了
+  //    dx->FinishRendering(renderTexture_.get());
+  //}
 
   // --- メイン描画パス（バックバッファ） ---
   if (camera_) {
@@ -312,13 +317,15 @@ void DevScene::Draw() {
 
   for (auto &ef : hitEffects_) renderer->DrawEffectModel(&ef.instance);
 
-  ParticleManager::GetInstance()->Draw(static_cast<BlendMode>(particleBlendMode_));
-  renderer->DrawGPUParticles();
+  // CPUパーティクルは使用しない。GPUパーティクルのみ描画する。
+  // particleBlendMode_ は ImGui のリスト index (0=Alpha, 1=Add, ...)
+  // BlendMode enum は Opaque=0, Alpha=1, ... なので +1 して変換する
+  renderer->DrawGPUParticles(static_cast<BlendMode>(particleBlendMode_ + 1));
 
   // オフスクリーンの結果を全画面に表示
-  if (renderTexture_) {
+  /*if (renderTexture_) {
     renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-  }
+  }*/
 }
 
 void DevScene::InitLogging_() {

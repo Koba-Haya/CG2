@@ -3,7 +3,8 @@
 ConstantBuffer<EmitterSphere> gEmitter : register(b0);
 ConstantBuffer<PerFrame> gPerFrame : register(b1);
 RWStructuredBuffer<GPUParticle> gParticles : register(u0);
-RWStructuredBuffer<int32_t> gFreeCounter : register(u1);
+RWStructuredBuffer<int32_t> gFreeListIndex : register(u1);
+RWStructuredBuffer<uint32_t> gFreeList : register(u2);
 
 static const uint32_t kMaxParticles = 1024;
 
@@ -15,12 +16,14 @@ void main(uint32_t3 DTid : SV_DispatchThreadID) {
         generator.seed = (float32_t3(DTid) + gPerFrame.time) * gPerFrame.time;
         
         for (uint32_t countIndex = 0; countIndex < gEmitter.count; ++countIndex) {
-            int32_t particleIndex;
-            // アトミック加算で書き込み先のインデックスを取得
-            InterlockedAdd(gFreeCounter[0], 1, particleIndex);
+            int32_t freeListIndex;
+            // FreeListのIndexを1つ前に設定し、現在のIndexを取得する
+            InterlockedAdd(gFreeListIndex[0], -1, freeListIndex);
             
-            if (particleIndex < kMaxParticles) {
-                // パーティクルの初期化
+            if (0 <= freeListIndex && freeListIndex < kMaxParticles) {
+                uint32_t particleIndex = gFreeList[freeListIndex];
+                
+                // 取得できたparticleIndexに対してParticleの初期値を入れていく
                 gParticles[particleIndex].scale = generator.Generate3d() * 0.3f + 0.1f;
                 
                 // エミッターの範囲（球状）内にランダム配置
@@ -34,6 +37,10 @@ void main(uint32_t3 DTid : SV_DispatchThreadID) {
                 gParticles[particleIndex].velocity = (generator.Generate3d() * 2.0f - 1.0f) * 2.0f;
                 gParticles[particleIndex].lifeTime = 1.0f + generator.Generate1d() * 2.0f;
                 gParticles[particleIndex].currentTime = 0.0f;
+            } else {
+                // 発生させられなかったので、減らしてしまった分もとに戻す
+                InterlockedAdd(gFreeListIndex[0], 1);
+                break;
             }
         }
     }

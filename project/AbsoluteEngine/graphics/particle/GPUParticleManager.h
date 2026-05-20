@@ -4,6 +4,7 @@
 #include <memory>
 #include "GPUParticle.h"
 #include "Matrix.h"
+#include "BlendMode.h" // ブレンドモード列挙体
 #include <vector>
 
 class DirectXCommon;
@@ -17,7 +18,8 @@ public:
 
     void Initialize(DirectXCommon* dx);
     void Update();
-    void Draw();
+    // blendMode: 描画に使用するブレンドモード（デフォルト Alpha）
+    void Draw(BlendMode blendMode = BlendMode::Alpha);
 
 private:
     GPUParticleManager() = default;
@@ -41,9 +43,13 @@ private:
 
     ComPtr<ID3D12RootSignature> emitRootSignature_;
     ComPtr<ID3D12PipelineState> emitPipelineState_;
+    ComPtr<ID3D12PipelineState> updatePipelineState_;
 
     ComPtr<ID3D12RootSignature> graphicsRootSignature_;
-    ComPtr<ID3D12PipelineState> graphicsPipelineState_;
+    // ブレンドモードごとのパイプライン（インデックスは BlendMode の enum 値と対応）
+    // [0]=Opaque相当, [1]=Alpha, [2]=Add, [3]=Subtract, [4]=Multiply, [5]=Screen
+    static constexpr int kBlendModeCount = 6;
+    ComPtr<ID3D12PipelineState> graphicsPipelineStates_[kBlendModeCount];
 
     // Constant Buffer for PerView
     struct PerView {
@@ -63,8 +69,10 @@ private:
     ComPtr<ID3D12Resource> emitterCB_;
     EmitterSphere* emitterMapped_ = nullptr;
 
-    ComPtr<ID3D12Resource> freeCounterBuffer_;
-    uint32_t counterUavIndex_ = 0;
+    ComPtr<ID3D12Resource> freeListIndexBuffer_;
+    ComPtr<ID3D12Resource> freeListBuffer_;
+    uint32_t freeListIndexUavIndex_ = 0;
+    uint32_t freeListUavIndex_ = 0;
 
     std::unique_ptr<TextureResource> texture_;
 

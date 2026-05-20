@@ -793,10 +793,10 @@ Microsoft::WRL::ComPtr<ID3D12Resource> Renderer::CreateUAVBuffer(size_t size) {
   return res;
 }
 
-// 描画予約をDrawerへ流す
-void Renderer::DrawGPUParticles() {
+// GPU パーティクルの更新と描画（blendMode でブレンドモードを選択）
+void Renderer::DrawGPUParticles(BlendMode blendMode) {
   GPUParticleManager::GetInstance()->Update();
-  GPUParticleManager::GetInstance()->Draw();
+  GPUParticleManager::GetInstance()->Draw(blendMode);
 }
 
 void Renderer::DrawLine(const Vector3 &start, const Vector3 &end,

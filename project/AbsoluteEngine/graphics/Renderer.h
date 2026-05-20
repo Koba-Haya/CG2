@@ -125,7 +125,8 @@ public:
   void DrawSkybox(Skybox *skybox);
   void DrawParticles(ParticleManager *pm,
                      BlendMode blendMode = BlendMode::Alpha);
-  void DrawGPUParticles();
+  // blendMode: GPU パーティクルの描画に使うブレンドモード（デフォルト Alpha）
+  void DrawGPUParticles(BlendMode blendMode = BlendMode::Alpha);
   void DrawLine(const Vector3 &start, const Vector3 &end, const Vector4 &color);
   void DrawGrid(float size, int divisions, const Vector4 &color);
   void RenderPrimitives();
