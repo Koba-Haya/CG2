@@ -18,6 +18,10 @@ public:
 	void End();
 	void Draw(ID3D12GraphicsCommandList* cmdList);
 
+	// マルチビューポート対応：PostDraw の後に呼ぶ
+	// ViewportsEnable 時に OS ウィンドウへの ImGui ポップアウトを更新・描画する
+	void UpdateViewports();
+
 private:
 	bool initialized_ = false;
 	bool frameBegun_ = false;

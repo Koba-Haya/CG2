@@ -17,4 +17,8 @@ protected:
 
 private:
   std::unique_ptr<SceneManager> sceneManager_;
+
+  // DockBuilder による初期レイアウト構築済みフラグ
+  // true になると以降はフレームごとに再構築しない
+  bool dockBuilt_ = false;
 };

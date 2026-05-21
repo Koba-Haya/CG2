@@ -178,7 +178,20 @@ void GameScene::Update() {
   hitEffects_.erase(std::remove_if(hitEffects_.begin(), hitEffects_.end(), [](const HitEffect& e) { return !e.isActive; }), hitEffects_.end());
 
 #ifdef USE_IMGUI
-  ImGui::Begin("GameScene - Rail Shooter");
+  // --- ゲームビューポートウィンドウ ---
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::Begin("Viewport##GameView");
+  ImGui::PopStyleVar();
+  if (renderTexture_) {
+    ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+    if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
+    if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = renderTexture_->GetSrvGpuHandle();
+    ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
+  }
+  ImGui::End();
+
+  ImGui::Begin("GameScene Controls##LeftPanel");
   ImGui::Text("Enemies Remaining: %d", (int)enemies_.size());
   
   ImGui::SeparatorText("Bullet Controls & Info");
@@ -297,6 +310,6 @@ void GameScene::Draw() {
 
   if (renderTexture_) {
     dx->FinishRendering(renderTexture_.get());
-    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+    // renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
   }
 }
