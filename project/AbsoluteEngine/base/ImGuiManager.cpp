@@ -1,6 +1,7 @@
 #include "ImGuiManager.h"
 #include "WinApp.h"
 #include "DirectXCommon.h"
+#include "SrvAllocator.h"
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
@@ -32,38 +33,59 @@ void ImGuiManager::Initialize(WinApp* winApp, DirectXCommon* dx) {
 #ifdef USE_IMGUI
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+
+	// --- Docking を有効化 ---
+	// ViewportsEnable はOSウィンドウへのポップアウト機能だが、
+	// 別スワップチェーン作成が必要で環境依存のクラッシュが起きるため無効化する
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // ウィンドウ同士のドッキング
+
 	ImGui::StyleColorsDark();
 
-	// Win32 backend
+	// Win32 backend 初期化
 	ImGui_ImplWin32_Init(winApp_->GetHwnd());
 
-	// DX12 backend
-	// DirectXCommon側がこれらを提供できる前提
-	ID3D12Device* device = dx_->GetDevice();
-	ID3D12DescriptorHeap* srvHeap = dx_->GetSRVHeap();
-	const int backBufferCount = dx_->GetBackBufferCount();
-	const DXGI_FORMAT rtvFormat = dx_->GetRTVFormat();
+	// DX12 backend 初期化（新API: ImGui_ImplDX12_InitInfo 構造体を使用）
+	ImGui_ImplDX12_InitInfo dx12Info{};
+	dx12Info.Device            = dx_->GetDevice();
+	dx12Info.CommandQueue      = dx_->GetCommandQueue();     // テクスチャアップロード用
+	dx12Info.NumFramesInFlight = dx_->GetBackBufferCount();
+	dx12Info.RTVFormat         = dx_->GetRTVFormat();
+	dx12Info.DSVFormat         = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	dx12Info.SrvDescriptorHeap = dx_->GetSRVHeap();
 
-	// ImGui用フォントSRVは heap の先頭を使う想定（必要なら allocator で0番固定などにしてね）
-	D3D12_CPU_DESCRIPTOR_HANDLE fontCpu = srvHeap->GetCPUDescriptorHandleForHeapStart();
-	D3D12_GPU_DESCRIPTOR_HANDLE fontGpu = srvHeap->GetGPUDescriptorHandleForHeapStart();
+	// SRV ディスクリプタの確保コールバック（SrvAllocator 経由で動的に割り当て）
+	dx12Info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo* info,
+		D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu,
+		D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu)
+	{
+		auto* dx = static_cast<DirectXCommon*>(info->UserData);
+		SrvAllocator& alloc = dx->GetSrvAllocator();
+		uint32_t index = alloc.Allocate();
+		*out_cpu = alloc.Cpu(index);
+		*out_gpu = alloc.Gpu(index);
+	};
 
-	ImGui_ImplDX12_Init(
-		device,
-		backBufferCount,
-		rtvFormat,
-		srvHeap,
-		fontCpu,
-		fontGpu
-	);
+	// SRV ディスクリプタの解放コールバック（現状 SrvAllocator に Free がなければ何もしない）
+	dx12Info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo* /*info*/,
+		D3D12_CPU_DESCRIPTOR_HANDLE /*cpu*/,
+		D3D12_GPU_DESCRIPTOR_HANDLE /*gpu*/)
+	{
+		// 将来 SrvAllocator に Free 機能を追加した場合はここで呼ぶ
+	};
 
-	// WinAppに「メッセージフック」を登録（WinAppはImGuiを知らない）
+	// UserData に DirectXCommon を渡してコールバック内で参照できるようにする
+	dx12Info.UserData = dx_;
+
+	ImGui_ImplDX12_Init(&dx12Info);
+
+	// WinApp に「メッセージフック」を登録（WinApp は ImGui を知らない）
 	winApp_->SetMessageHandler([](HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) -> bool {
 		if (ImGui::GetCurrentContext() == nullptr) {
 			return false;
 		}
 		return ImGui_ImplWin32_WndProcHandler(hwnd, msg, wp, lp) != 0;
-		});
+	});
 
 	initialized_ = true;
 #else
@@ -158,5 +180,21 @@ void ImGuiManager::Draw(ID3D12GraphicsCommandList* cmdList) {
 	cmdList->SetDescriptorHeaps(1, heaps);
 
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmdList);
+#endif
+}
+
+void ImGuiManager::UpdateViewports() {
+#ifdef USE_IMGUI
+	if (!initialized_) {
+		return;
+	}
+
+	// ViewportsEnable 時：ImGui がポップアウトした OS ウィンドウを更新・描画する
+	// PostDraw（Present）の後に呼ぶ必要がある
+	ImGuiIO& io = ImGui::GetIO();
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault(nullptr, nullptr);
+	}
 #endif
 }
