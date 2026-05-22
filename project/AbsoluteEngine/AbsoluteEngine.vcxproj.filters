@@ -187,6 +187,11 @@
       <Filter>engine\scene</Filter>
     </ClCompile>
     <ClCompile Include="graphics\texture\RenderTexture.cpp" />
+    <ClCompile Include="editor\EditorCamera.cpp" />
+    <ClCompile Include="editor\EditorUIManager.cpp" />
+    <ClCompile Include="scene\GameObject.cpp" />
+    <ClCompile Include="..\externals\ImGuizmo\ImGuizmo.cpp" />
+    <ClCompile Include="scene\SceneSerializer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="audio\Audio.h">
@@ -346,5 +351,10 @@
       <Filter>engine\Type</Filter>
     </ClInclude>
     <ClInclude Include="graphics\texture\RenderTexture.h" />
+    <ClInclude Include="editor\EditorCamera.h" />
+    <ClInclude Include="editor\EditorUIManager.h" />
+    <ClInclude Include="scene\GameObject.h" />
+    <ClInclude Include="..\externals\ImGuizmo\ImGuizmo.h" />
+    <ClInclude Include="scene\SceneSerializer.h" />
   </ItemGroup>
 </Project>

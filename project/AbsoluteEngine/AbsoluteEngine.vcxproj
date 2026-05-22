@@ -117,6 +117,7 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\externals\ImGuizmo\ImGuizmo.cpp" />
     <ClCompile Include="audio\Audio.cpp" />
     <ClCompile Include="base\DirectXCommon.cpp" />
     <ClCompile Include="base\DirectXResourceUtils.cpp" />
@@ -127,6 +128,8 @@
     <ClCompile Include="camera\Camera.cpp" />
     <ClCompile Include="camera\DebugCamera.cpp" />
     <ClCompile Include="camera\GameCamera.cpp" />
+    <ClCompile Include="editor\EditorCamera.cpp" />
+    <ClCompile Include="editor\EditorUIManager.cpp" />
     <ClCompile Include="graphics\Renderer.cpp" />
     <ClCompile Include="graphics\Skybox.cpp" />
     <ClCompile Include="graphics\2d\Sprite.cpp" />
@@ -156,9 +159,12 @@
     <ClCompile Include="math\Method.cpp" />
     <ClCompile Include="math\Spline.cpp" />
     <ClCompile Include="scene\BaseScene.cpp" />
+    <ClCompile Include="scene\GameObject.cpp" />
     <ClCompile Include="scene\SceneManager.cpp" />
+    <ClCompile Include="scene\SceneSerializer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\externals\ImGuizmo\ImGuizmo.h" />
     <ClInclude Include="audio\Audio.h" />
     <ClInclude Include="base\DirectXCommon.h" />
     <ClInclude Include="base\DirectXResourceUtils.h" />
@@ -170,6 +176,8 @@
     <ClInclude Include="camera\DebugCamera.h" />
     <ClInclude Include="camera\GameCamera.h" />
     <ClInclude Include="camera\ICameraController.h" />
+    <ClInclude Include="editor\EditorCamera.h" />
+    <ClInclude Include="editor\EditorUIManager.h" />
     <ClInclude Include="graphics\LightTypes.h" />
     <ClInclude Include="graphics\Renderer.h" />
     <ClInclude Include="graphics\Skybox.h" />
@@ -205,8 +213,10 @@
     <ClInclude Include="math\Method.h" />
     <ClInclude Include="math\Spline.h" />
     <ClInclude Include="scene\BaseScene.h" />
+    <ClInclude Include="scene\GameObject.h" />
     <ClInclude Include="scene\ISceneFactory.h" />
     <ClInclude Include="scene\SceneManager.h" />
+    <ClInclude Include="scene\SceneSerializer.h" />
     <ClInclude Include="scene\SceneServices.h" />
     <ClInclude Include="Type\AABB.h" />
     <ClInclude Include="Type\Matrix.h" />

@@ -41,6 +41,22 @@ void DevScene::Initialize(const SceneServices &services) {
   InitCamera_();
 
   accelerationField_.area.max = {1.0f, 1.0f, 1.0f};
+
+  // --- エディタUIの初期化とテストオブジェクト追加 ---
+  editorUIManager_ = std::make_unique<AbsoluteEngine::EditorUIManager>();
+  
+  auto obj1 = std::make_shared<AbsoluteEngine::GameObject>("Player");
+  obj1->GetTransform().translate = { 0.0f, 0.0f, 0.0f };
+  
+  auto obj2 = std::make_shared<AbsoluteEngine::GameObject>("Enemy");
+  obj2->GetTransform().translate = { 5.0f, 0.0f, 0.0f };
+  
+  auto obj3 = std::make_shared<AbsoluteEngine::GameObject>("Weapon");
+  obj3->GetTransform().translate = { 1.0f, 0.0f, 0.0f };
+  obj1->AddChild(obj3); // Playerの子にする
+  
+  rootObjects_.push_back(obj1);
+  rootObjects_.push_back(obj2);
 }
 
 void DevScene::Finalize() {
@@ -176,6 +192,12 @@ void DevScene::Update() {
   ImGui::DragFloat3("Human Pos", &transformHuman_.translate.x, 0.1f);
   ImGui::DragFloat3("Camera Pos", &cameraTransform_.translate.x, 0.1f);
   ImGui::End();
+
+  // --- エディタUIの描画（Hierarchy, Inspector, Gizmo） ---
+  if (editorUIManager_ && camera_) {
+    editorUIManager_->DrawUI(rootObjects_, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
+  }
+
 #endif
 
   ringTransform_.rotate.z += 1.5f * deltaTime;
