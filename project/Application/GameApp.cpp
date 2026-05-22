@@ -84,24 +84,25 @@ void GameApp::Update() {
         ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(dockspaceId, mainViewport->WorkSize);
 
-        // 左(20%) | 中央右(80%)
+        // 左(20%=Hierarchy) | 中央右(80%)
         ImGuiID leftId, centerRightId;
         ImGui::DockBuilderSplitNode(dockspaceId, ImGuiDir_Left, 0.20f, &leftId, &centerRightId);
 
-        // 中央右 → 中央(78%) | 右(22%)
+        // 中央右 → 中央(75%) | 右(25%=Inspector)
         ImGuiID rightId, centerId;
-        ImGui::DockBuilderSplitNode(centerRightId, ImGuiDir_Right, 0.22f, &rightId, &centerId);
+        ImGui::DockBuilderSplitNode(centerRightId, ImGuiDir_Right, 0.25f, &rightId, &centerId);
 
-        // 中央 → 上(75%=Viewport) | 下(25%=Objects)
+        // 中央 → 上(75%=Viewport) | 下(25%=Assets/Console)
         ImGuiID bottomId, centerTopId;
         ImGui::DockBuilderSplitNode(centerId, ImGuiDir_Down, 0.25f, &bottomId, &centerTopId);
 
         // 各ウィンドウを対応ノードにドック
-        ImGui::DockBuilderDockWindow("Viewport##GameView",    centerTopId); // 中央上：ゲーム画面
-        ImGui::DockBuilderDockWindow("Lights##LeftPanel",     leftId);      // 左：ライト設定
-        ImGui::DockBuilderDockWindow("DebugMenu",             leftId);      // 左：デバッグメニュー（タブ）
-        ImGui::DockBuilderDockWindow("Primitives##RightPanel",rightId);     // 右：プリミティブ設定
-        ImGui::DockBuilderDockWindow("Objects##BottomPanel",  bottomId);    // 下：オブジェクト設定
+        ImGui::DockBuilderDockWindow("Viewport##GameView", centerTopId); // 中央上：ゲーム画面
+        ImGui::DockBuilderDockWindow("Hierarchy",          leftId);      // 左：ヒエラルキー
+        ImGui::DockBuilderDockWindow("Inspector",          rightId);     // 右：インスペクタ（プロパティ）
+        ImGui::DockBuilderDockWindow("Assets",             bottomId);    // 下：アセット
+        ImGui::DockBuilderDockWindow("Console",            bottomId);    // 下：コンソール
+        ImGui::DockBuilderDockWindow("DebugMenu",          bottomId);    // 下：デバッグメニュー
 
         ImGui::DockBuilderFinish(dockspaceId);
       }

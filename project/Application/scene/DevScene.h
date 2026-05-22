@@ -24,6 +24,9 @@
 #include <string>
 #include <vector>
 
+#include "GameObject.h"
+#include "AbsoluteEngine/editor/EditorUIManager.h"
+
 class DevScene final : public BaseScene {
 public:
   DevScene();
@@ -130,4 +133,8 @@ private:
   // オフスクリーンテスト用
   std::unique_ptr<RenderTexture> renderTexture_;
   Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
+
+  // エディタ機能
+  std::unique_ptr<AbsoluteEngine::EditorUIManager> editorUIManager_;
+  std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> rootObjects_;
 };
