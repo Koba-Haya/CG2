@@ -14,9 +14,13 @@ namespace AbsoluteEngine {
 void EditorUIManager::DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
 #ifdef USE_IMGUI
   DrawMenuBar(rootObjects);
+  DrawToolbar();
+  DrawAssetBrowser(rootObjects);
+  DrawPrefabsBrowser(rootObjects);
   DrawHierarchy(rootObjects);
   DrawInspector();
   DrawGizmo(rootObjects, viewMatrix, projectionMatrix);
+  HandleShortcuts(rootObjects);
 #endif
 }
 
@@ -43,13 +47,169 @@ void EditorUIManager::DrawMenuBar(std::vector<std::shared_ptr<GameObject>>& root
   }
 }
 
-void EditorUIManager::DrawGizmo(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+void EditorUIManager::DrawToolbar() {
+  ImGui::Begin("Toolbar");
+  if (ImGui::RadioButton("Translate (Q)", currentGizmoOperation_ == ImGuizmo::TRANSLATE)) currentGizmoOperation_ = ImGuizmo::TRANSLATE;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Rotate (W)", currentGizmoOperation_ == ImGuizmo::ROTATE)) currentGizmoOperation_ = ImGuizmo::ROTATE;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Scale (R)", currentGizmoOperation_ == ImGuizmo::SCALE)) currentGizmoOperation_ = ImGuizmo::SCALE;
+  ImGui::End();
+}
+
+void EditorUIManager::DrawAssetBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+  ImGui::Begin("Assets");
+  std::string resourcesPath = "C:/Users/haya2/source/repos/CG2/project/Application/resources";
+  
+  if (std::filesystem::exists(resourcesPath)) {
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(resourcesPath)) {
+      if (entry.is_regular_file()) {
+        std::string ext = entry.path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        
+        ImVec4 color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
+        std::string payloadType = "";
+        
+        if (ext == ".obj" || ext == ".gltf") {
+          color = ImVec4(0.4f, 0.8f, 1.0f, 1.0f); // Light blue
+          payloadType = "ASSET_MODEL_PATH";
+        } else if (ext == ".png" || ext == ".jpg" || ext == ".dds") {
+          color = ImVec4(0.4f, 1.0f, 0.4f, 1.0f); // Green
+          payloadType = "ASSET_TEXTURE_PATH";
+        } else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {
+          color = ImVec4(1.0f, 1.0f, 0.4f, 1.0f); // Yellow
+        } else if (ext == ".json") {
+          color = ImVec4(1.0f, 0.6f, 0.8f, 1.0f); // Pink
+          payloadType = "ASSET_PREFAB_PATH";
+        }
+        
+        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        std::string filename = entry.path().filename().string();
+        ImGui::Selectable(filename.c_str());
+        
+        if (!payloadType.empty() && ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+          std::string relPath = "resources/" + std::filesystem::relative(entry.path(), resourcesPath).string();
+          std::replace(relPath.begin(), relPath.end(), '\\', '/');
+          ImGui::SetDragDropPayload(payloadType.c_str(), relPath.c_str(), relPath.size() + 1);
+          ImGui::Text("Drag %s", filename.c_str());
+          ImGui::EndDragDropSource();
+        }
+        
+        ImGui::PopStyleColor();
+      }
+    }
+  }
+  ImGui::End();
+}
+
+void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+  ImGui::Begin("Prefabs");
+  std::string prefabsPath = "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs";
+  
+  if (std::filesystem::exists(prefabsPath)) {
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(prefabsPath)) {
+      if (entry.is_regular_file() && entry.path().extension() == ".json") {
+        std::string filename = entry.path().filename().string();
+        std::string prefabName = entry.path().stem().string();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.6f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.5f, 0.7f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.3f, 0.5f, 1.0f));
+        
+        if (ImGui::Button(prefabName.c_str(), ImVec2(-FLT_MIN, 30))) {
+            // クリックでも配置できるようにする
+            std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/" + filename;
+            auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
+            if (prefabInstance) {
+                rootObjects.push_back(prefabInstance);
+                selectedObject_ = prefabInstance;
+            }
+        }
+
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+          std::string relPath = "resources/prefabs/" + filename;
+          ImGui::SetDragDropPayload("ASSET_PREFAB_PATH", relPath.c_str(), relPath.size() + 1);
+          ImGui::Text("Place Prefab: %s", prefabName.c_str());
+          ImGui::EndDragDropSource();
+        }
+
+        ImGui::PopStyleColor(3);
+        ImGui::Spacing();
+      }
+    }
+  } else {
+    ImGui::Text("No prefabs found.");
+  }
+  ImGui::End();
+}
+
+void EditorUIManager::HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+  // 右クリック押下中はカメラ操作のためショートカット無効
+  if (ImGui::IsMouseDown(1)) return;
+
+  ImGuiIO& io = ImGui::GetIO();
+  if (!io.WantTextInput) { // テキスト入力中でない場合のみショートカットを有効化
+    if (ImGui::IsKeyPressed(ImGuiKey_Q)) currentGizmoOperation_ = ImGuizmo::TRANSLATE;
+    if (ImGui::IsKeyPressed(ImGuiKey_W)) currentGizmoOperation_ = ImGuizmo::ROTATE;
+    if (ImGui::IsKeyPressed(ImGuiKey_R)) currentGizmoOperation_ = ImGuizmo::SCALE;
+
+    auto sel = selectedObject_.lock();
+    if (sel) {
+      // Deleteキーで削除
+      if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        auto parent = sel->GetParent();
+        if (parent) {
+          parent->RemoveChild(sel);
+        } else {
+          auto it = std::find(rootObjects.begin(), rootObjects.end(), sel);
+          if (it != rootObjects.end()) rootObjects.erase(it);
+        }
+        selectedObject_.reset();
+      }
+
+      // Ctrl+Cでコピー
+      if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C)) {
+        clipboardObject_ = SceneSerializer::CopyGameObject(sel);
+      }
+    }
+
+    // Ctrl+Vでペースト
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && clipboardObject_) {
+      auto newObj = SceneSerializer::CopyGameObject(clipboardObject_);
+      if (sel) {
+        sel->AddChild(newObj); // 選択中のオブジェクトの子としてペースト
+      } else {
+        rootObjects.push_back(newObj); // 選択なしならルートにペースト
+      }
+      selectedObject_ = newObj; // ペーストしたものを選択状態に
+    }
+  }
+}
+
+void EditorUIManager::DrawGizmo(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
   // ImGuizmoの設定
   ImGuizmo::SetOrthographic(false);
   ImGuizmo::BeginFrame();
 
   // "Viewport##GameView" ウィンドウ
   ImGui::Begin("Viewport##GameView");
+
+  // Viewport全体をドロップ可能にするためのダミー
+  ImVec2 cursorPosBefore = ImGui::GetCursorPos();
+  ImGui::Dummy(ImGui::GetContentRegionAvail());
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
+      const char* payloadPath = (const char*)payload->Data;
+      std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
+      auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
+      if (prefabInstance) {
+        rootObjects.push_back(prefabInstance);
+        selectedObject_ = prefabInstance; // ドロップされたものを選択状態に
+      }
+    }
+    ImGui::EndDragDropTarget();
+  }
+  ImGui::SetCursorPos(cursorPosBefore); // カーソルを戻して描画への影響をなくす
 
   // ウィンドウ内でのマウスピッキング処理（BeginとEndの間で行うことでHoveredが正しくとれる）
   HandleMousePicking(rootObjects, viewMatrix, projectionMatrix);
@@ -87,7 +247,7 @@ void EditorUIManager::DrawGizmo(const std::vector<std::shared_ptr<GameObject>>& 
   ImGuizmo::RecomposeMatrixFromComponents(translation, rotation, scale, objectMatrix);
 
   // マニピュレーターの描画と操作
-  ImGuizmo::Manipulate(&viewMatrix.m[0][0], &projectionMatrix.m[0][0], ImGuizmo::TRANSLATE, ImGuizmo::LOCAL, objectMatrix);
+  ImGuizmo::Manipulate(&viewMatrix.m[0][0], &projectionMatrix.m[0][0], currentGizmoOperation_, ImGuizmo::LOCAL, objectMatrix);
 
   // 操作されたら Transform に反映
   if (ImGuizmo::IsUsing()) {
@@ -301,12 +461,27 @@ void EditorUIManager::DrawColliderDebug(const std::vector<std::shared_ptr<GameOb
 }
 #endif
 #ifdef USE_IMGUI
-void EditorUIManager::DrawHierarchy(const std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
   ImGui::Begin("Hierarchy");
 
   // 階層のルートオブジェクトからツリーを描画
   for (const auto& obj : rootObjects) {
-    DrawGameObjectNode(obj);
+    DrawGameObjectNode(obj, rootObjects);
+  }
+
+  // Hierarchyウィンドウ全体へのドロップ受け入れ
+  ImGui::Dummy(ImGui::GetContentRegionAvail()); // 残りのスペースをダミーで埋める
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
+      const char* payloadPath = (const char*)payload->Data;
+      std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
+      auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
+      if (prefabInstance) {
+        rootObjects.push_back(prefabInstance);
+        selectedObject_ = prefabInstance;
+      }
+    }
+    ImGui::EndDragDropTarget();
   }
 
   // 余白をクリックしたら選択解除
@@ -317,7 +492,7 @@ void EditorUIManager::DrawHierarchy(const std::vector<std::shared_ptr<GameObject
   ImGui::End();
 }
 
-void EditorUIManager::DrawGameObjectNode(std::shared_ptr<GameObject> obj) {
+void EditorUIManager::DrawGameObjectNode(std::shared_ptr<GameObject> obj, std::vector<std::shared_ptr<GameObject>>& rootObjects) {
   if (!obj) return;
 
   ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -340,7 +515,7 @@ void EditorUIManager::DrawGameObjectNode(std::shared_ptr<GameObject> obj) {
 
   if (isOpen && !obj->GetChildren().empty()) {
     for (const auto& child : obj->GetChildren()) {
-      DrawGameObjectNode(child);
+      DrawGameObjectNode(child, rootObjects);
     }
     ImGui::TreePop();
   }
@@ -363,6 +538,24 @@ void EditorUIManager::DrawInspector() {
     strncpy_s(tagBuffer, obj->GetTag().c_str(), sizeof(tagBuffer));
     if (ImGui::InputText("Tag", tagBuffer, sizeof(tagBuffer))) {
       obj->SetTag(tagBuffer);
+    }
+
+    ImGui::Separator();
+    
+    // モデルとテクスチャの設定表示
+    if (ImGui::CollapsingHeader("Model & Texture", ImGuiTreeNodeFlags_DefaultOpen)) {
+      ImGui::Text("Model: %s", obj->GetModelPath().empty() ? "None" : obj->GetModelPath().c_str());
+      ImGui::Text("Texture: %s", obj->GetTexturePath().empty() ? "None" : obj->GetTexturePath().c_str());
+      
+      // テクスチャ適用用のドロップエリア
+      ImGui::Button("Drop Texture Here (.png/.dds)", ImVec2(-FLT_MIN, 30));
+      if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+          const char* payloadPath = (const char*)payload->Data;
+          obj->LoadTexture(payloadPath);
+        }
+        ImGui::EndDragDropTarget();
+      }
     }
 
     ImGui::Separator();
@@ -411,6 +604,28 @@ void EditorUIManager::DrawInspector() {
         }
       }
     }
+
+    ImGui::Separator();
+    
+    // プレハブ関連操作
+    if (ImGui::CollapsingHeader("Prefab", ImGuiTreeNodeFlags_DefaultOpen)) {
+      if (obj->IsPrefabInstance()) {
+        ImGui::Text("Prefab: %s", obj->GetPrefabPath().c_str());
+      } else {
+        ImGui::Text("Prefab: Not a prefab instance.");
+      }
+
+      if (ImGui::Button("Save as Prefab", ImVec2(-FLT_MIN, 30))) {
+        std::string prefabDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/";
+        std::filesystem::create_directories(prefabDir);
+        std::string filename = obj->GetName() + ".json";
+        std::string filepath = prefabDir + filename;
+        if (SceneSerializer::SavePrefab(filepath, obj)) {
+            obj->SetPrefabPath(filepath);
+        }
+      }
+    }
+
   } else {
     ImGui::Text("No Object Selected");
   }

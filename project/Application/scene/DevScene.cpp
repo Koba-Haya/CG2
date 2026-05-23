@@ -87,14 +87,30 @@ void DevScene::Update() {
     if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = renderTexture_->GetSrvGpuHandle();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
+
+    // ビューポートへのドロップ（モデル生成）
+    if (ImGui::BeginDragDropTarget()) {
+      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
+        const char* payloadPath = (const char*)payload->Data;
+        auto newObj = std::make_shared<AbsoluteEngine::GameObject>("Model");
+        newObj->LoadModel(payloadPath);
+        
+        // カメラの前方などに配置するのが理想ですが、今回は原点配置
+        newObj->GetTransform().translate = {0, 0, 0};
+        
+        rootObjects_.push_back(newObj);
+        
+        if (editorUIManager_) {
+          editorUIManager_->SetSelectedObject(newObj);
+        }
+      }
+      ImGui::EndDragDropTarget();
+    }
   }
   ImGui::End();
 
   // --- 左パネル：ライト設定 ---
   ImGui::Begin("Lights##LeftPanel");
-  if (ImGui::Button("Back to Title")) {
-    sceneManager_->RequestChange(SceneId::Title);
-  }
   ImGui::Separator();
 
   if (ImGui::CollapsingHeader("DirectionalLights")) {
@@ -190,7 +206,19 @@ void DevScene::Update() {
   ImGui::SeparatorText("Transform");
   ImGui::DragFloat3("Sphere Pos", &transform_.translate.x, 0.1f);
   ImGui::DragFloat3("Human Pos", &transformHuman_.translate.x, 0.1f);
-  ImGui::DragFloat3("Camera Pos", &cameraTransform_.translate.x, 0.1f);
+  auto* debugCamera = dynamic_cast<DebugCamera*>(camera_.get());
+  if (debugCamera) {
+      Vector3 camPos = debugCamera->GetTranslate();
+      if (ImGui::DragFloat3("Camera Pos", &camPos.x, 0.1f)) {
+          debugCamera->SetTranslate(camPos);
+      }
+      Vector3 camRot = debugCamera->GetRotation();
+      if (ImGui::DragFloat3("Camera Rot(Pitch,Yaw,Roll)", &camRot.x, 0.05f)) {
+          debugCamera->SetRotation(camRot);
+      }
+  } else {
+      ImGui::DragFloat3("Camera Pos (Not Linked)", &cameraTransform_.translate.x, 0.1f);
+  }
   ImGui::End();
 
   // --- エディタUIの描画（Hierarchy, Inspector, Gizmo） ---
@@ -272,6 +300,11 @@ void DevScene::Draw() {
       modelSimpleSkin_.DrawSkeleton();
       modelHuman_.DrawSkeleton();
       modelAnimCube_.DrawSkeleton();
+    }
+
+    // --- エディタ上で配置したオブジェクト群の描画 ---
+    for (auto& obj : rootObjects_) {
+      obj->Draw();
     }
 
     renderer->RenderPrimitives();

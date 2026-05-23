@@ -2,9 +2,17 @@
 #include "TextureResource.h"
 #include <Windows.h>
 
+#include <filesystem>
+
 static void TexFatal_(const std::string &msg) {
   MessageBoxA(nullptr, msg.c_str(), "Texture Fatal", MB_OK | MB_ICONERROR);
-  std::terminate();
+}
+
+static std::string ResolveTexPath_(const std::string& path) {
+  if (std::filesystem::exists(path)) return path;
+  std::string altPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + path;
+  if (std::filesystem::exists(altPath)) return altPath;
+  return path;
 }
 
 std::shared_ptr<TextureResource> TextureManager::Load(const std::string &path) {
@@ -20,9 +28,11 @@ std::shared_ptr<TextureResource> TextureManager::Load(const std::string &path) {
 
   auto tex = std::make_shared<TextureResource>();
 
-  const bool ok = tex->CreateFromFile(dx_, path);
+  const std::string resolvedPath = ResolveTexPath_(path);
+  const bool ok = tex->CreateFromFile(dx_, resolvedPath);
   if (!ok) {
-    TexFatal_(std::string("[TextureManager] CreateFromFile failed:\n") + path);
+    TexFatal_(std::string("[TextureManager] CreateFromFile failed:\n") + resolvedPath);
+    return nullptr;
   }
 
   cache_[path] = tex;

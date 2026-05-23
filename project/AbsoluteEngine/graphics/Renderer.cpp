@@ -480,7 +480,11 @@ void Renderer::DrawModel(ModelInstance *instance) {
 
   // 通常テクスチャ
   D3D12_GPU_DESCRIPTOR_HANDLE texHandle{};
-  texHandle.ptr = resource->GetTextureHandleGPUAsUInt64();
+  if (instance->GetOverrideTexture()) {
+    texHandle.ptr = instance->GetOverrideTexture()->GetSrvGpu().ptr;
+  } else {
+    texHandle.ptr = resource->GetTextureHandleGPUAsUInt64();
+  }
   cmdList->SetGraphicsRootDescriptorTable(2, texHandle);
 
   // t1: 環境マップ 

@@ -4,6 +4,7 @@
 
 #ifdef USE_IMGUI
 #include <imgui.h>
+#include "../../externals/ImGuizmo/ImGuizmo.h"
 #endif
 
 #include "../Type/Matrix.h"
@@ -23,14 +24,19 @@ public:
 
   // 現在選択されているオブジェクトを取得
   std::shared_ptr<GameObject> GetSelectedObject() const { return selectedObject_.lock(); }
+  void SetSelectedObject(std::shared_ptr<GameObject> obj) { selectedObject_ = obj; }
 
 private:
 #ifdef USE_IMGUI
   void DrawMenuBar(std::vector<std::shared_ptr<GameObject>>& rootObjects);
-  void DrawHierarchy(const std::vector<std::shared_ptr<GameObject>>& rootObjects);
-  void DrawGameObjectNode(std::shared_ptr<GameObject> obj);
+  void DrawToolbar();
+  void DrawAssetBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects);
+  void DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects);
+  void DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& rootObjects); // constを外す（Delete処理のため）
+  void DrawGameObjectNode(std::shared_ptr<GameObject> obj, std::vector<std::shared_ptr<GameObject>>& rootObjects);
   void DrawInspector();
-  void DrawGizmo(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
+  void DrawGizmo(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
+  void HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& rootObjects);
   
   void HandleMousePicking(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
   void CheckIntersection(std::shared_ptr<GameObject> obj, const Vector3& rayOrigin, const Vector3& rayDir, std::shared_ptr<GameObject>& hitObject, float& minT);
@@ -38,6 +44,11 @@ private:
 #endif
 
   std::weak_ptr<GameObject> selectedObject_;
+  std::shared_ptr<GameObject> clipboardObject_; // コピー＆ペースト用のバッファ
+
+#ifdef USE_IMGUI
+  ImGuizmo::OPERATION currentGizmoOperation_ = ImGuizmo::TRANSLATE;
+#endif
 };
 
 } // namespace AbsoluteEngine

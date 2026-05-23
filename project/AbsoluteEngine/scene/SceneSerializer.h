@@ -12,6 +12,13 @@ public:
 
   // JSON からシーンツリーを読み込み
   static bool Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects);
+
+  // プレハブの保存と読み込み
+  static bool SavePrefab(const std::string& filepath, std::shared_ptr<GameObject> obj);
+  static std::shared_ptr<GameObject> LoadPrefab(const std::string& filepath);
+
+  // オブジェクトのディープコピーを作成（シリアライズの仕組みを利用）
+  static std::shared_ptr<GameObject> CopyGameObject(std::shared_ptr<GameObject> src);
 };
 
 } // namespace AbsoluteEngine

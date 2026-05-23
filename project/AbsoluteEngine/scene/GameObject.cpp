@@ -1,5 +1,7 @@
 #include "GameObject.h"
 #include <algorithm>
+#include "../graphics/3d/model/ModelManager.h"
+#include "../graphics/texture/TextureManager.h"
 
 namespace AbsoluteEngine {
 
@@ -27,6 +29,56 @@ void GameObject::Update(float deltaTime) {
   // 子のUpdateを呼ぶ
   for (auto& child : children_) {
     child->Update(deltaTime);
+  }
+}
+
+void GameObject::Draw() {
+  if (modelInstance_) {
+    // 自身のTransformからWorld行列を計算してモデルに渡す
+    Matrix4x4 world = MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    // もし親の行列も考慮するならここで乗算する（今回は簡易的にローカルのみか、親を計算するか要検討。現状は階層計算なしの仕様に見える）
+    
+    // もし親がいれば、親のワールド行列を乗算するべきだが、現状 Transform がシンプルなので簡易的に自身のみ
+    if (auto p = parent_.lock()) {
+      // 本来は再帰的にワールド行列を計算すべき。ここでは簡易対応として親のTransformを加算/乗算
+      // ここでは複雑になるため、Transformクラス側にCalculateWorldMatrix等が必要。
+      // とりあえず今回はローカルTransformのみを反映。
+    }
+
+    modelInstance_->SetWorld(world);
+    modelInstance_->Draw();
+  }
+
+  // 子のDrawを呼ぶ
+  for (auto& child : children_) {
+    child->Draw();
+  }
+}
+
+void GameObject::LoadModel(const std::string& path) {
+  auto res = ModelManager::GetInstance()->Load(path);
+  if (!res) return; // ロードに失敗した場合は何もしない
+
+  modelPath_ = path;
+  modelInstance_ = std::make_unique<ModelInstance>();
+  ModelInstance::CreateInfo ci{};
+  ci.resource = res;
+  ci.baseColor = {1, 1, 1, 1};
+  ci.lightingMode = 1;
+  modelInstance_->Initialize(ci);
+  
+  if (!texturePath_.empty()) {
+    LoadTexture(texturePath_);
+  }
+}
+
+void GameObject::LoadTexture(const std::string& path) {
+  texturePath_ = path;
+  if (modelInstance_) {
+    auto tex = TextureManager::GetInstance()->Load(path);
+    if (tex) {
+      modelInstance_->SetOverrideTexture(tex);
+    }
   }
 }
 

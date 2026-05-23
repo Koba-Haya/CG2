@@ -7,6 +7,7 @@
 #include "SkinCluster.h"
 #include "Animation.h"
 #include "ModelUtils.h"
+#include "TextureResource.h"
 
 namespace {
 static constexpr UINT Align256_(UINT n) { return (n + 255u) & ~255u; }
@@ -24,6 +25,7 @@ struct ModelInstance::Impl {
   bool animationLoop = true;
   std::unique_ptr<Skeleton> skeleton;
   std::unique_ptr<SkinCluster> skinCluster;
+  std::shared_ptr<TextureResource> overrideTexture;
 };
 
 ModelInstance::ModelInstance() : pImpl_(std::make_unique<Impl>()) {}
@@ -100,6 +102,14 @@ void ModelInstance::SetShininess(float s) {
 void ModelInstance::SetEnvironmentCoefficient(float c) { // 追加
   if (pImpl_->cbMatMapped)
     pImpl_->cbMatMapped->environmentCoefficient = c;
+}
+
+void ModelInstance::SetOverrideTexture(std::shared_ptr<TextureResource> tex) {
+  pImpl_->overrideTexture = tex;
+}
+
+TextureResource* ModelInstance::GetOverrideTexture() const {
+  return pImpl_->overrideTexture.get();
 }
 
 void ModelInstance::Draw() {

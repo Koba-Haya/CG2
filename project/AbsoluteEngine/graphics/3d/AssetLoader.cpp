@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cassert>
 #include <filesystem>
+#include <Windows.h>
 
 static std::string ToLower_(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(),
@@ -16,6 +17,13 @@ static std::string GetExtLower_(const std::string &filename) {
   return ToLower_(filename.substr(pos + 1));
 }
 
+std::string ResolvePath_(const std::string& path) {
+  if (std::filesystem::exists(path)) return path;
+  std::string altPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + path;
+  if (std::filesystem::exists(altPath)) return altPath;
+  return path;
+}
+
 std::shared_ptr<const ModelData>
 AssetLoader::LoadModel(const std::string &directoryPath,
                        const std::string &filename) {
@@ -26,15 +34,19 @@ AssetLoader::LoadModel(const std::string &directoryPath,
 
   Assimp::Importer importer;
   const std::string filePath = directoryPath + "/" + filename;
+  const std::string resolvedPath = ResolvePath_(filePath);
 
   const unsigned flags = aiProcess_Triangulate | aiProcess_MakeLeftHanded |
                          aiProcess_FlipWindingOrder |
                          aiProcess_GenSmoothNormals |
                          aiProcess_JoinIdenticalVertices;
 
-  const aiScene *scene = importer.ReadFile(filePath.c_str(), flags);
-  assert(scene);
-  assert(scene->mRootNode);
+  const aiScene *scene = importer.ReadFile(resolvedPath.c_str(), flags);
+  if (!scene || !scene->mRootNode) {
+    std::string errorMsg = "Failed to load model:\nPath: " + resolvedPath + "\nError: " + importer.GetErrorString();
+    MessageBoxA(nullptr, errorMsg.c_str(), "AssetLoader Error", MB_OK | MB_ICONERROR);
+    return nullptr;
+  }
 
   const std::string ext = GetExtLower_(filename);
 

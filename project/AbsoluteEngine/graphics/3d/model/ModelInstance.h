@@ -9,6 +9,7 @@ class ModelResource;
 struct Animation;
 struct Skeleton;
 struct SkinCluster;
+class TextureResource;
 
 class ModelInstance {
 public:
@@ -61,6 +62,9 @@ public:
 
   void SetWireframe(bool wireframe) { isWireframe_ = wireframe; }
   bool IsWireframe() const { return isWireframe_; }
+
+  void SetOverrideTexture(std::shared_ptr<TextureResource> tex);
+  TextureResource* GetOverrideTexture() const;
 
   void Draw();
   void DrawSkeleton();

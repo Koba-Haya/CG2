@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include "Transform.h"
+#include "../graphics/3d/model/ModelInstance.h"
 
 namespace AbsoluteEngine {
 
@@ -40,9 +41,24 @@ public:
   // 毎フレームの更新（派生クラスでオーバーライドするか、コンポーネントを回す）
   virtual void Update(float deltaTime);
 
+  // オブジェクトと子ノードの描画
+  virtual void Draw();
+
+  // モデルとテクスチャのロード
+  void LoadModel(const std::string& path);
+  void LoadTexture(const std::string& path);
+
+  const std::string& GetModelPath() const { return modelPath_; }
+  const std::string& GetTexturePath() const { return texturePath_; }
+
   // メタデータプロパティ
   const std::string& GetTag() const { return tag_; }
   void SetTag(const std::string& tag) { tag_ = tag; }
+
+  // プレハブパス
+  const std::string& GetPrefabPath() const { return prefabPath_; }
+  void SetPrefabPath(const std::string& path) { prefabPath_ = path; }
+  bool IsPrefabInstance() const { return !prefabPath_.empty(); }
 
   ColliderInfo& GetCollider() { return collider_; }
   const ColliderInfo& GetCollider() const { return collider_; }
@@ -50,8 +66,13 @@ public:
 private:
   std::string name_;
   std::string tag_ = "Untagged";
+  std::string prefabPath_ = "";
   Transform transform_;
   ColliderInfo collider_;
+
+  std::string modelPath_;
+  std::string texturePath_;
+  std::unique_ptr<ModelInstance> modelInstance_;
 
   std::weak_ptr<GameObject> parent_;
   std::vector<std::shared_ptr<GameObject>> children_;

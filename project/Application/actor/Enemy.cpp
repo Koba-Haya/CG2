@@ -3,7 +3,7 @@
 
 void Enemy::Initialize(const Vector3 &pos, std::shared_ptr<ModelResource> modelRes) {
   position_ = pos;
-  rotation_ = { 0.0f, 0.0f, 0.0f };
+  rotation_ = { 0.0f, 3.14159265f, 0.0f };
   modelInstance_.Initialize({ modelRes, {1, 1, 1, 1}, 0 });
   isActive_ = true;
 }
