@@ -58,8 +58,10 @@ bool ParticleManager::CreateParticleGroup(const std::string& name, const std::st
     assert(maxInstances > 0);
 
     if (groups_.contains(name)) {
-        assert(false && "ParticleGroup already exists");
-        return false;
+        // シーン切り替え等ですでに同名のグループが存在する場合は、
+        // アサートで落とさずにパーティクルをリセットして再利用する
+        ClearParticleGroup(name);
+        return true;
     }
 
     ParticleGroup g{};

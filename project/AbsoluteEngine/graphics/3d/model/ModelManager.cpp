@@ -15,7 +15,7 @@ std::shared_ptr<ModelResource> ModelManager::Load(const std::string &path) {
   }
 
   auto md = AssetLoader::GetInstance()->LoadModel(path);
-  assert(md);
+  if (!md) return nullptr;
 
   auto res = std::make_shared<ModelResource>();
 

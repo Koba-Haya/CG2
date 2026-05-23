@@ -18,13 +18,15 @@ void EditorCamera::Update(const Input& input) {
 
     Vector3 move = { 0.0f, 0.0f, 0.0f };
 
-    // キーボード移動（ローカル座標系）
-    if (input.PressKey(DIK_W)) { move.z += keyMoveSpeed; }
-    if (input.PressKey(DIK_S)) { move.z -= keyMoveSpeed; }
-    if (input.PressKey(DIK_A)) { move.x -= keyMoveSpeed; }
-    if (input.PressKey(DIK_D)) { move.x += keyMoveSpeed; }
-    if (input.PressKey(DIK_Q)) { move.y += keyMoveSpeed; }
-    if (input.PressKey(DIK_E)) { move.y -= keyMoveSpeed; }
+    // キーボード移動（ローカル座標系：右クリック中のみ有効）
+    if (input.IsMouseDown(1)) {
+        if (input.PressKey(DIK_W)) { move.z += keyMoveSpeed; }
+        if (input.PressKey(DIK_S)) { move.z -= keyMoveSpeed; }
+        if (input.PressKey(DIK_A)) { move.x -= keyMoveSpeed; }
+        if (input.PressKey(DIK_D)) { move.x += keyMoveSpeed; }
+        if (input.PressKey(DIK_Q)) { move.y += keyMoveSpeed; }
+        if (input.PressKey(DIK_E)) { move.y -= keyMoveSpeed; }
+    }
 
     auto mouse = input.GetMouse();
 

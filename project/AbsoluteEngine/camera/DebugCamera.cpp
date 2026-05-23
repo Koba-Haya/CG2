@@ -10,59 +10,25 @@ void DebugCamera::Initialize() {
 
 void DebugCamera::Update(const Input& input) {
     // ======================
-    // 平行移動
-    // ======================
-    const float keyMoveSpeed = 0.05f;
-    const float mousePanSpeed = 0.02f;
-    const float wheelMoveSpeed = 0.002f;
-
-    Vector3 move = { 0.0f, 0.0f, 0.0f };
-
-    // キーボード移動（ローカル座標系）
-    if (input.PressKey(DIK_W)) { move.z += keyMoveSpeed; }
-    if (input.PressKey(DIK_S)) { move.z -= keyMoveSpeed; }
-    if (input.PressKey(DIK_A)) { move.x -= keyMoveSpeed; }
-    if (input.PressKey(DIK_D)) { move.x += keyMoveSpeed; }
-    if (input.PressKey(DIK_Q)) { move.y += keyMoveSpeed; }
-    if (input.PressKey(DIK_E)) { move.y -= keyMoveSpeed; }
-
-    // マウス状態
-    auto mouse = input.GetMouse();
-
-    // 中ボタン押下中：ドラッグでパン（平行移動）
-    if (input.IsMouseDown(2)) {
-        move.x += -mouse.dx * mousePanSpeed;
-        // move.y +=  mouse.dy * mousePanSpeed; // 必要なら有効化
-    }
-
-    // ホイール前後移動（ローカル Z）
-    if (mouse.wheel != 0) {
-        move.z += mouse.wheel * wheelMoveSpeed;
-    }
-
-    // ローカル移動を回転でワールド方向へ
-    move = TransformNormal(move, matRot_);
-    translate_ = Add(translate_, move);
-
-    // ======================
     // 回転
     // ======================
     const float rotSpeedKey = 0.05f;
     const float rotSpeedMouse = 0.005f;
 
-    Matrix4x4 rotDelta = MakeIdentity4x4();
+    auto mouse = input.GetMouse();
 
     // キーボード回転
-    if (input.PressKey(DIK_LEFT)) { rotDelta = Multiply(MakeRotateYMatrix(+rotSpeedKey), rotDelta); }
-    if (input.PressKey(DIK_RIGHT)) { rotDelta = Multiply(MakeRotateYMatrix(-rotSpeedKey), rotDelta); }
-    if (input.PressKey(DIK_UP)) { rotDelta = Multiply(MakeRotateXMatrix(+rotSpeedKey), rotDelta); }
-    if (input.PressKey(DIK_DOWN)) { rotDelta = Multiply(MakeRotateXMatrix(-rotSpeedKey), rotDelta); }
-    if (input.PressKey(DIK_Z)) { rotDelta = Multiply(MakeRotateZMatrix(+rotSpeedKey), rotDelta); }
-    if (input.PressKey(DIK_C)) { rotDelta = Multiply(MakeRotateZMatrix(-rotSpeedKey), rotDelta); }
-    // 右ドラッグ：Yaw 回転
+    if (input.PressKey(DIK_LEFT))  { yaw_   -= rotSpeedKey; }
+    if (input.PressKey(DIK_RIGHT)) { yaw_   += rotSpeedKey; }
+    if (input.PressKey(DIK_UP))    { pitch_ -= rotSpeedKey; }
+    if (input.PressKey(DIK_DOWN))  { pitch_ += rotSpeedKey; }
+    if (input.PressKey(DIK_Z))     { roll_  += rotSpeedKey; }
+    if (input.PressKey(DIK_C))     { roll_  -= rotSpeedKey; }
+
+    // 右ドラッグ：Yaw, Pitch 回転
     if (input.IsMouseDown(1)) {
-      yaw_ += mouse.dx * rotSpeedMouse;   // これが横回転
-      pitch_ += mouse.dy * rotSpeedMouse; // これが縦回転
+      yaw_ += mouse.dx * rotSpeedMouse;   // 横回転
+      pitch_ += mouse.dy * rotSpeedMouse; // 縦回転
     }
 
     const float limit = (std::numbers::pi_v<float> * 0.5f) - 0.001f;
@@ -74,11 +40,43 @@ void DebugCamera::Update(const Input& input) {
     matRot_ = Multiply(rotZ, Multiply(rotX, rotY));
 
     // ======================
+    // 平行移動
+    // ======================
+    const float keyMoveSpeed = 0.5f;
+    const float mousePanSpeed = 0.02f;
+    const float wheelMoveSpeed = 0.005f;
+
+    Vector3 localMove = { 0.0f, 0.0f, 0.0f };
+
+    // キーボード移動（ローカル座標系）
+    if (input.PressKey(DIK_W)) { localMove.z += keyMoveSpeed; }
+    if (input.PressKey(DIK_S)) { localMove.z -= keyMoveSpeed; }
+    if (input.PressKey(DIK_A)) { localMove.x -= keyMoveSpeed; }
+    if (input.PressKey(DIK_D)) { localMove.x += keyMoveSpeed; }
+    if (input.PressKey(DIK_Q)) { localMove.y += keyMoveSpeed; }
+    if (input.PressKey(DIK_E)) { localMove.y -= keyMoveSpeed; }
+
+    // 中ボタン押下中：ドラッグでパン（平行移動）
+    if (input.IsMouseDown(2)) {
+        localMove.x -= mouse.dx * mousePanSpeed;
+        localMove.y += mouse.dy * mousePanSpeed;
+    }
+
+    // ホイール前後移動（ローカル Z）
+    if (mouse.wheel != 0) {
+        localMove.z += mouse.wheel * wheelMoveSpeed;
+    }
+
+    // ローカル移動を現在の回転でワールド移動に変換して加算
+    Vector3 worldMove = TransformNormal(localMove, matRot_);
+    translate_ = Add(translate_, worldMove);
+
+    // ======================
     // View 行列更新
     // ======================
-    // ※あなたの現行ロジックを保持（挙動が変わると困るので）
-    Vector3 cameraPosition = TransformNormal(translate_, matRot_);
-    Matrix4x4 translateMatrix = MakeTranslateMatrix(cameraPosition);
+    Matrix4x4 translateMatrix = MakeTranslateMatrix(translate_);
+    // ワールド行列 = R * T (※ DirectXTKなどの左乗算系の場合。このエンジンのMultiplyの仕様に合わせて順序を組む)
+    // 既存コードに倣い、matRot_ -> translateMatrix の順で掛けることで、移動成分がそのまま translate_ になるようにする
     Matrix4x4 worldMatrix = Multiply(matRot_, translateMatrix);
 
     view_ = Inverse(worldMatrix);

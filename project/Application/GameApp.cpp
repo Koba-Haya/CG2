@@ -116,6 +116,14 @@ void GameApp::Update() {
 
   // --- デバッグメニュー ---
   ImGui::Begin("DebugMenu");
+  if (ImGui::Button("Go to TitleScene")) {
+    sceneManager_->RequestChange(SceneId::Title);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Go to GameScene")) {
+    sceneManager_->RequestChange(SceneId::Game);
+  }
+  ImGui::SameLine();
   if (ImGui::Button("Go to DevScene")) {
     sceneManager_->RequestChange(SceneId::Dev);
   }

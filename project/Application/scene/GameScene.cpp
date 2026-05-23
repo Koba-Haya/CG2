@@ -61,11 +61,11 @@ void GameScene::Initialize(const SceneServices &services) {
   // 敵の配置 (新コースに合わせた沿線上のポイントに配置)
   enemies_.clear();
   std::vector<Vector3> enemyPositions = {
-      { 0.0f,  3.0f,  20.0f}, // 直進エリア
-      { 10.0f, 5.0f,  50.0f}, // 右カーブへの上り手前
-      { 20.0f, 8.0f,  80.0f}, // 右カーブの頂点付近
-      { 0.0f,  5.0f, 110.0f}, // 中央へ戻る下りエリア
-      {-15.0f, 2.0f, 150.0f}  // 左急降下エリアの底
+      { 0.0f,  3.0f, -20.0f}, // 直進エリア
+      { 10.0f, 5.0f, -50.0f}, // 右カーブへの上り手前
+      { 20.0f, 8.0f, -80.0f}, // 右カーブの頂点付近
+      { 0.0f,  5.0f,-110.0f}, // 中央へ戻る下りエリア
+      {-15.0f, 2.0f,-150.0f}  // 左急降下エリアの底
   };
   for (const auto& pos : enemyPositions) {
       Enemy enemy;
@@ -209,6 +209,16 @@ void GameScene::Update() {
   ImGui::Text("Rail Progress: %.1f %%", railController_->GetProgress() * 100.0f);
   
   ImGui::Checkbox("Debug Camera Mode", &isDebugCamera_);
+  if (isDebugCamera_) {
+      Vector3 camPos = debugCamera_->GetTranslate();
+      if (ImGui::DragFloat3("Debug Camera Pos", &camPos.x, 0.1f)) {
+          debugCamera_->SetTranslate(camPos);
+      }
+      Vector3 camRot = debugCamera_->GetRotation();
+      if (ImGui::DragFloat3("Debug Camera Rot", &camRot.x, 0.05f)) {
+          debugCamera_->SetRotation(camRot);
+      }
+  }
   ImGui::Checkbox("Show Rail Debug Line", &showDebugRail_);
   if (ImGui::Button("Reset Rail Camera")) {
       railController_->ResetProgress();

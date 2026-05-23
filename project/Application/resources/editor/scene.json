@@ -18,8 +18,10 @@
                         },
                         "type": 1
                     },
+                    "modelPath": "",
                     "name": "Weapon",
                     "tag": "Untagged",
+                    "texturePath": "",
                     "transform": {
                         "rotate": {
                             "x": 0.0,
@@ -51,10 +53,12 @@
                     "y": 1.0,
                     "z": 1.0
                 },
-                "type": 2
+                "type": 1
             },
+            "modelPath": "",
             "name": "Player",
             "tag": "Untagged",
+            "texturePath": "",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -87,10 +91,12 @@
                     "y": 1.0,
                     "z": 1.0
                 },
-                "type": 2
+                "type": 1
             },
+            "modelPath": "",
             "name": "Enemy",
             "tag": "Untagged",
+            "texturePath": "",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -98,12 +104,50 @@
                     "z": 0.0
                 },
                 "scale": {
-                    "x": 1.5,
-                    "y": 1.600000023841858,
+                    "x": 1.0,
+                    "y": 1.0,
                     "z": 1.0
                 },
                 "translate": {
-                    "x": 3.9000000953674316,
+                    "x": 5.0,
+                    "y": 0.0,
+                    "z": 0.0
+                }
+            }
+        },
+        {
+            "children": [],
+            "collider": {
+                "centerOffset": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "radius": 1.0,
+                "size": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "type": 1
+            },
+            "modelPath": "resources/axis/axis.obj",
+            "name": "Model",
+            "tag": "Untagged",
+            "texturePath": "resources/cube/white100x100.png",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 2.5533394813537598,
                     "y": 0.0,
                     "z": 0.0
                 }
