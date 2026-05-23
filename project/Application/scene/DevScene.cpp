@@ -3,6 +3,7 @@
 #include "SceneIds.h"
 #include "SceneManager.h"
 #include "DebugCamera.h"
+#include "AbsoluteEngine/editor/EditorCamera.h"
 #include "DirectXCommon.h"
 #include "Renderer.h"
 #include "TextureResource.h"
@@ -35,7 +36,7 @@ void DevScene::Initialize(const SceneServices &services) {
   InitLogging_();
   InitResources_();
 
-  camera_ = std::make_unique<DebugCamera>();
+  camera_ = std::make_unique<AbsoluteEngine::EditorCamera>();
   camera_->Initialize();
 
   InitCamera_();
@@ -206,15 +207,15 @@ void DevScene::Update() {
   ImGui::SeparatorText("Transform");
   ImGui::DragFloat3("Sphere Pos", &transform_.translate.x, 0.1f);
   ImGui::DragFloat3("Human Pos", &transformHuman_.translate.x, 0.1f);
-  auto* debugCamera = dynamic_cast<DebugCamera*>(camera_.get());
-  if (debugCamera) {
-      Vector3 camPos = debugCamera->GetTranslate();
+  auto* editorCamera = dynamic_cast<AbsoluteEngine::EditorCamera*>(camera_.get());
+  if (editorCamera) {
+      Vector3 camPos = editorCamera->GetTranslate();
       if (ImGui::DragFloat3("Camera Pos", &camPos.x, 0.1f)) {
-          debugCamera->SetTranslate(camPos);
+          editorCamera->SetTranslate(camPos);
       }
-      Vector3 camRot = debugCamera->GetRotation();
+      Vector3 camRot = editorCamera->GetRotation();
       if (ImGui::DragFloat3("Camera Rot(Pitch,Yaw,Roll)", &camRot.x, 0.05f)) {
-          debugCamera->SetRotation(camRot);
+          editorCamera->SetRotation(camRot);
       }
   } else {
       ImGui::DragFloat3("Camera Pos (Not Linked)", &cameraTransform_.translate.x, 0.1f);
@@ -223,7 +224,7 @@ void DevScene::Update() {
 
   // --- エディタUIの描画（Hierarchy, Inspector, Gizmo） ---
   if (editorUIManager_ && camera_) {
-    editorUIManager_->DrawUI(rootObjects_, camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
+    editorUIManager_->DrawUI(rootObjects_, camera_->GetViewMatrix(), camera_->GetProjectionMatrix(), dynamic_cast<AbsoluteEngine::EditorCamera*>(camera_.get()));
   }
 
 #endif

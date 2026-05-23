@@ -15,8 +15,15 @@ public:
   void Initialize() override;
   void Update(const Input &input) override;
 
-  // エディタカメラ専用の機能（後々追加予定）
-  // void FocusOn(const Vector3& targetPosition);
+  // エディタカメラ専用の機能
+  void FocusOn(const Vector3& targetPosition, float distance = 10.0f);
+
+  Vector3 GetTranslate() const { return translate_; }
+  void SetTranslate(const Vector3& t) { translate_ = t; }
+  Vector3 GetRotation() const { return {pitch_, yaw_, roll_}; }
+  void SetRotation(const Vector3& r) { 
+      pitch_ = r.x; yaw_ = r.y; roll_ = r.z; 
+  }
 
 private:
   Matrix4x4 matRot_ = MakeIdentity4x4();

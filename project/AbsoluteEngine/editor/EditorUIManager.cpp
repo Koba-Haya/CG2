@@ -1,6 +1,7 @@
 #include "EditorUIManager.h"
 #include "../scene/GameObject.h"
 #include "../scene/SceneSerializer.h"
+#include "EditorCamera.h"
 #include "Method.h"
 #include <filesystem>
 
@@ -11,7 +12,7 @@
 
 namespace AbsoluteEngine {
 
-void EditorUIManager::DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+void EditorUIManager::DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, EditorCamera* camera) {
 #ifdef USE_IMGUI
   DrawMenuBar(rootObjects);
   DrawToolbar();
@@ -20,7 +21,7 @@ void EditorUIManager::DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjec
   DrawHierarchy(rootObjects);
   DrawInspector();
   DrawGizmo(rootObjects, viewMatrix, projectionMatrix);
-  HandleShortcuts(rootObjects);
+  HandleShortcuts(rootObjects, camera);
 #endif
 }
 
@@ -54,6 +55,13 @@ void EditorUIManager::DrawToolbar() {
   if (ImGui::RadioButton("Rotate (W)", currentGizmoOperation_ == ImGuizmo::ROTATE)) currentGizmoOperation_ = ImGuizmo::ROTATE;
   ImGui::SameLine();
   if (ImGui::RadioButton("Scale (R)", currentGizmoOperation_ == ImGuizmo::SCALE)) currentGizmoOperation_ = ImGuizmo::SCALE;
+  
+  ImGui::Separator();
+  ImGui::Checkbox("Snap", &useSnap_);
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(100.0f);
+  ImGui::DragFloat("Snap Value", &snapValue_, 0.1f, 0.1f, 100.0f);
+  
   ImGui::End();
 }
 
@@ -121,7 +129,11 @@ void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>
             std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/" + filename;
             auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
             if (prefabInstance) {
-                rootObjects.push_back(prefabInstance);
+                if (commandManager_) {
+                  commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
+              } else {
+                  rootObjects.push_back(prefabInstance);
+              }
                 selectedObject_ = prefabInstance;
             }
         }
@@ -143,44 +155,59 @@ void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>
   ImGui::End();
 }
 
-void EditorUIManager::HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+void EditorUIManager::HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& rootObjects, EditorCamera* camera) {
   // 右クリック押下中はカメラ操作のためショートカット無効
   if (ImGui::IsMouseDown(1)) return;
 
   ImGuiIO& io = ImGui::GetIO();
   if (!io.WantTextInput) { // テキスト入力中でない場合のみショートカットを有効化
+    bool ctrl = io.KeyCtrl;
+    if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z)) {
+        if (commandManager_) commandManager_->Undo();
+    }
+    if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y)) {
+        if (commandManager_) commandManager_->Redo();
+    }
+
     if (ImGui::IsKeyPressed(ImGuiKey_Q)) currentGizmoOperation_ = ImGuizmo::TRANSLATE;
     if (ImGui::IsKeyPressed(ImGuiKey_W)) currentGizmoOperation_ = ImGuizmo::ROTATE;
     if (ImGui::IsKeyPressed(ImGuiKey_R)) currentGizmoOperation_ = ImGuizmo::SCALE;
 
     auto sel = selectedObject_.lock();
     if (sel) {
+      if (ImGui::IsKeyPressed(ImGuiKey_F) && camera) {
+        camera->FocusOn(sel->GetTransform().translate);
+      }
+
       // Deleteキーで削除
       if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
         auto parent = sel->GetParent();
+        std::shared_ptr<ICommand> cmd;
         if (parent) {
-          parent->RemoveChild(sel);
+          cmd = std::make_shared<DeleteObjectCommand>(sel, parent);
         } else {
-          auto it = std::find(rootObjects.begin(), rootObjects.end(), sel);
-          if (it != rootObjects.end()) rootObjects.erase(it);
+          cmd = std::make_shared<DeleteObjectCommand>(sel, &rootObjects);
         }
+        if (commandManager_) commandManager_->ExecuteCommand(cmd);
         selectedObject_.reset();
       }
 
       // Ctrl+Cでコピー
-      if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C)) {
+      if (ctrl && ImGui::IsKeyPressed(ImGuiKey_C)) {
         clipboardObject_ = SceneSerializer::CopyGameObject(sel);
       }
     }
 
     // Ctrl+Vでペースト
-    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && clipboardObject_) {
+    if (ctrl && ImGui::IsKeyPressed(ImGuiKey_V) && clipboardObject_) {
       auto newObj = SceneSerializer::CopyGameObject(clipboardObject_);
+      std::shared_ptr<ICommand> cmd;
       if (sel) {
-        sel->AddChild(newObj); // 選択中のオブジェクトの子としてペースト
+        cmd = std::make_shared<CreateObjectCommand>(newObj, sel);
       } else {
-        rootObjects.push_back(newObj); // 選択なしならルートにペースト
+        cmd = std::make_shared<CreateObjectCommand>(newObj, &rootObjects);
       }
+      if (commandManager_) commandManager_->ExecuteCommand(cmd);
       selectedObject_ = newObj; // ペーストしたものを選択状態に
     }
   }
@@ -203,7 +230,11 @@ void EditorUIManager::DrawGizmo(std::vector<std::shared_ptr<GameObject>>& rootOb
       std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
       auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
       if (prefabInstance) {
-        rootObjects.push_back(prefabInstance);
+        if (commandManager_) {
+          commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
+        } else {
+          rootObjects.push_back(prefabInstance);
+        }
         selectedObject_ = prefabInstance; // ドロップされたものを選択状態に
       }
     }
@@ -246,15 +277,39 @@ void EditorUIManager::DrawGizmo(std::vector<std::shared_ptr<GameObject>>& rootOb
   float objectMatrix[16];
   ImGuizmo::RecomposeMatrixFromComponents(translation, rotation, scale, objectMatrix);
 
+  float snapValues[3] = { snapValue_, snapValue_, snapValue_ };
+
   // マニピュレーターの描画と操作
-  ImGuizmo::Manipulate(&viewMatrix.m[0][0], &projectionMatrix.m[0][0], currentGizmoOperation_, ImGuizmo::LOCAL, objectMatrix);
+  ImGuizmo::Manipulate(&viewMatrix.m[0][0], &projectionMatrix.m[0][0], currentGizmoOperation_, ImGuizmo::LOCAL, objectMatrix, nullptr, useSnap_ ? snapValues : nullptr);
 
   // 操作されたら Transform に反映
-  if (ImGuizmo::IsUsing()) {
+  bool wasGizmoUsing = isGizmoUsing_;
+  isGizmoUsing_ = ImGuizmo::IsUsing();
+
+  if (!wasGizmoUsing && isGizmoUsing_) {
+      // 操作開始時
+      transformBeforeGizmo_ = obj->GetTransform();
+  }
+
+  if (isGizmoUsing_) {
     ImGuizmo::DecomposeMatrixToComponents(objectMatrix, translation, rotation, scale);
     t.translate = { translation[0], translation[1], translation[2] };
     t.rotate = { rotation[0] * 3.14159265f / 180.0f, rotation[1] * 3.14159265f / 180.0f, rotation[2] * 3.14159265f / 180.0f };
     t.scale = { scale[0], scale[1], scale[2] };
+  }
+
+  if (wasGizmoUsing && !isGizmoUsing_) {
+      // 操作終了時
+      auto afterTransform = obj->GetTransform();
+      if (transformBeforeGizmo_.translate.x != afterTransform.translate.x || transformBeforeGizmo_.translate.y != afterTransform.translate.y || transformBeforeGizmo_.translate.z != afterTransform.translate.z ||
+          transformBeforeGizmo_.rotate.x != afterTransform.rotate.x || transformBeforeGizmo_.rotate.y != afterTransform.rotate.y || transformBeforeGizmo_.rotate.z != afterTransform.rotate.z ||
+          transformBeforeGizmo_.scale.x != afterTransform.scale.x || transformBeforeGizmo_.scale.y != afterTransform.scale.y || transformBeforeGizmo_.scale.z != afterTransform.scale.z) {
+          
+          auto cmd = std::make_shared<TransformCommand>(obj, transformBeforeGizmo_, afterTransform);
+          if (commandManager_) {
+              commandManager_->AddCommand(cmd);
+          }
+      }
   }
 
   ImGui::End();
@@ -477,7 +532,11 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
       std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
       auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
       if (prefabInstance) {
-        rootObjects.push_back(prefabInstance);
+        if (commandManager_) {
+          commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
+        } else {
+          rootObjects.push_back(prefabInstance);
+        }
         selectedObject_ = prefabInstance;
       }
     }
@@ -569,18 +628,40 @@ void EditorUIManager::DrawInspector() {
       float r[3] = { transform.rotate.x, transform.rotate.y, transform.rotate.z };
       float s[3] = { transform.scale.x, transform.scale.y, transform.scale.z };
 
-      bool changed = false;
+      bool activated = false;
+      bool deactivatedAfterEdit = false;
+
       if (ImGui::DragFloat3("Position", t, 0.1f)) {
         transform.translate = { t[0], t[1], t[2] };
-        changed = true;
       }
+      activated |= ImGui::IsItemActivated();
+      deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
       if (ImGui::DragFloat3("Rotation", r, 0.01f)) {
         transform.rotate = { r[0], r[1], r[2] };
-        changed = true;
       }
+      activated |= ImGui::IsItemActivated();
+      deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
       if (ImGui::DragFloat3("Scale", s, 0.1f)) {
         transform.scale = { s[0], s[1], s[2] };
-        changed = true;
+      }
+      activated |= ImGui::IsItemActivated();
+      deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+      if (activated) {
+          // 入力開始時のTransformを保存（DragFloat開始前）
+          // t, r, s の値は画面上の値なので、実際のtransformの値を保持する
+          // ※DragFloatの同じフレームで呼ばれるとすでに変わっている可能性があるので注意
+          transformBeforeInspector_.translate = { t[0], t[1], t[2] };
+          transformBeforeInspector_.rotate = { r[0], r[1], r[2] };
+          transformBeforeInspector_.scale = { s[0], s[1], s[2] };
+      }
+
+      if (deactivatedAfterEdit) {
+          if (commandManager_) {
+              commandManager_->AddCommand(std::make_shared<TransformCommand>(obj, transformBeforeInspector_, transform));
+          }
       }
     }
 
