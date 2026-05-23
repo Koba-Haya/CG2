@@ -77,4 +77,20 @@ void EditorCamera::Update(const Input& input) {
     view_ = Inverse(worldMatrix);
 }
 
+void EditorCamera::FocusOn(const Vector3& targetPosition, float distance) {
+    // 現在のカメラの向き（matRot_）のZ軸（前方向）ベクトルを取得
+    Vector3 forward = { matRot_.m[2][0], matRot_.m[2][1], matRot_.m[2][2] };
+    
+    // ターゲットから forward 方向に distance だけ手前に引いた位置をカメラ位置にする
+    translate_ = { targetPosition.x - forward.x * distance,
+                   targetPosition.y - forward.y * distance,
+                   targetPosition.z - forward.z * distance };
+    
+    // View行列の再計算
+    Vector3 cameraPosition = TransformNormal(translate_, matRot_);
+    Matrix4x4 translateMatrix = MakeTranslateMatrix(cameraPosition);
+    Matrix4x4 worldMatrix = Multiply(matRot_, translateMatrix);
+    view_ = Inverse(worldMatrix);
+}
+
 } // namespace AbsoluteEngine
