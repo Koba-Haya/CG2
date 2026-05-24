@@ -3,6 +3,9 @@
 #include "SceneIds.h"
 #include "SceneManager.h"
 #include "DebugCamera.h"
+#include "AbsoluteEngine/editor/Command.h"
+#include "AbsoluteEngine/scene/SceneSerializer.h"
+#include "graphics/Renderer.h"
 #include "AbsoluteEngine/editor/EditorCamera.h"
 #include "DirectXCommon.h"
 #include "Renderer.h"
@@ -21,6 +24,33 @@
 #include <filesystem>
 #include <format>
 #include <random>
+#include "AbsoluteEngine/scene/ComponentFactory.h"
+
+// テスト用コンポーネント
+class SpinComponent : public AbsoluteEngine::IComponent {
+public:
+    void Update(float deltaTime) override {
+        if (owner_) {
+            auto& t = owner_->GetTransform();
+            t.rotate.y += 2.0f * deltaTime;
+        }
+    }
+    std::string GetTypeName() const override { return "SpinComponent"; }
+};
+
+class MoveComponent : public AbsoluteEngine::IComponent {
+public:
+    void Update(float deltaTime) override {
+        if (owner_) {
+            auto& t = owner_->GetTransform();
+            t.translate.x += std::sin(frame_ * 0.05f) * 0.05f;
+            frame_ += 1.0f;
+        }
+    }
+    std::string GetTypeName() const override { return "MoveComponent"; }
+private:
+    float frame_ = 0.0f;
+};
 
 static void FatalBoxAndTerminate_(const std::string &msg) {
   MessageBoxA(nullptr, msg.c_str(), "Fatal", MB_OK | MB_ICONERROR);
@@ -42,6 +72,10 @@ void DevScene::Initialize(const SceneServices &services) {
   InitCamera_();
 
   accelerationField_.area.max = {1.0f, 1.0f, 1.0f};
+
+  // --- サンプルコンポーネントの登録 ---
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
 
   // --- エディタUIの初期化とテストオブジェクト追加 ---
   editorUIManager_ = std::make_unique<AbsoluteEngine::EditorUIManager>();
@@ -110,40 +144,7 @@ void DevScene::Update() {
   }
   ImGui::End();
 
-  // --- 左パネル：ライト設定 ---
-  ImGui::Begin("Lights##LeftPanel");
-  ImGui::Separator();
-
-  if (ImGui::CollapsingHeader("DirectionalLights")) {
-    ImGui::Checkbox("Enable DirectionalLights", &enableDirectionalLight_);
-    if (!dirLights_.empty()) {
-      DirLight &dl = dirLights_[0];
-      ImGui::ColorEdit3("DirColor", &dl.color.x);
-      ImGui::DragFloat3("DirDirection", &dl.direction.x, 0.01f, -1.0f, 1.0f);
-      ImGui::SliderFloat("DirIntensity", &dl.intensity, 0.0f, 10.0f);
-    }
-  }
-
-  if (ImGui::CollapsingHeader("PointLights")) {
-    ImGui::Checkbox("Enable PointLights", &enablePointLight_);
-    if (!pointLights_.empty()) {
-      PointLight &pl = pointLights_[0];
-      ImGui::ColorEdit3("PointColor", &pl.color.x);
-      ImGui::DragFloat3("PointPosition", &pl.position.x, 0.1f);
-      ImGui::SliderFloat("PointIntensity", &pl.intensity, 0.0f, 10.0f);
-    }
-  }
-
-  if (ImGui::CollapsingHeader("SpotLights")) {
-    ImGui::Checkbox("Enable SpotLights", &enableSpotLight_);
-    if (!spotLights_.empty()) {
-      SpotLight &sl = spotLights_[0];
-      ImGui::ColorEdit3("SpotColor", &sl.color.x);
-      ImGui::DragFloat3("SpotPosition", &sl.position.x, 0.1f);
-      ImGui::SliderFloat("SpotIntensity", &sl.intensity, 0.0f, 10.0f);
-    }
-  }
-  ImGui::End();
+  // --- 左パネル：ライト設定（UIから削除し、インスペクター側で管理） ---
 
   // --- 右パネル：プリミティブ設定 ---
   ImGui::Begin("Primitives##RightPanel");
@@ -222,6 +223,39 @@ void DevScene::Update() {
   }
   ImGui::End();
 
+  // --- ツールバー（プレイモード切り替え） ---
+  ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize);
+  
+  if (playMode_ == PlayMode::Edit) {
+      if (ImGui::Button("Play")) {
+          backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_);
+          playMode_ = PlayMode::Play;
+      }
+  } else if (playMode_ == PlayMode::Play) {
+      if (ImGui::Button("Pause")) {
+          playMode_ = PlayMode::Pause;
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Stop")) {
+          rootObjects_.clear();
+          AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
+          if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
+          playMode_ = PlayMode::Edit;
+      }
+  } else if (playMode_ == PlayMode::Pause) {
+      if (ImGui::Button("▶ Resume")) {
+          playMode_ = PlayMode::Play;
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("■ Stop")) {
+          rootObjects_.clear();
+          AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
+          if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
+          playMode_ = PlayMode::Edit;
+      }
+  }
+  ImGui::End();
+
   // --- エディタUIの描画（Hierarchy, Inspector, Gizmo） ---
   if (editorUIManager_ && camera_) {
     editorUIManager_->DrawUI(rootObjects_, camera_->GetViewMatrix(), camera_->GetProjectionMatrix(), dynamic_cast<AbsoluteEngine::EditorCamera*>(camera_.get()));
@@ -232,30 +266,40 @@ void DevScene::Update() {
   ringTransform_.rotate.z += 1.5f * deltaTime;
   cylinderTransform_.rotate.y += 1.0f * deltaTime;
 
-  particleEmitter_.Update(deltaTime);
-  ParticleManager::GetInstance()->SetEnableAccelerationField(enableAccelerationField_);
-  ParticleManager::GetInstance()->SetAccelerationField(accelerationField_);
-  ParticleManager::GetInstance()->Update(deltaTime);
+  // ゲームロジックは PlayMode の時のみ更新する
+  if (playMode_ == PlayMode::Play) {
+      // 各オブジェクト（とコンポーネント）の更新
+      for (auto& obj : rootObjects_) {
+          if (obj) {
+              obj->Update(deltaTime);
+          }
+      }
 
-  modelAnimCube_.UpdateAnimation(deltaTime);
-  modelSimpleSkin_.UpdateAnimation(deltaTime);
-  modelHuman_.UpdateAnimation(deltaTime);
+      particleEmitter_.Update(deltaTime);
+      ParticleManager::GetInstance()->SetEnableAccelerationField(enableAccelerationField_);
+      ParticleManager::GetInstance()->SetAccelerationField(accelerationField_);
+      ParticleManager::GetInstance()->Update(deltaTime);
 
-  if (services_.input->TriggerKey(DIK_SPACE)) {
-    SpawnHitEffect({0.0f, 0.0f, -1.0f});
+      modelAnimCube_.UpdateAnimation(deltaTime);
+      modelSimpleSkin_.UpdateAnimation(deltaTime);
+      modelHuman_.UpdateAnimation(deltaTime);
+
+      if (services_.input->TriggerKey(DIK_SPACE)) {
+        SpawnHitEffect({0.0f, 0.0f, -1.0f});
+      }
+
+      // エフェクト更新
+      for (auto &ef : hitEffects_) {
+        if (!ef.isActive) continue;
+        ef.frame += 1.0f;
+        float t = ef.frame / ef.maxFrame;
+        float scaleVal = t * 5.0f;
+        ef.instance.SetWorld(MakeAffineMatrix(Vector3{scaleVal, scaleVal, scaleVal}, Vector3{0, 0, 0}, ef.position));
+        ef.instance.SetColor({1.0f, 1.0f, 1.0f, 1.0f - t});
+        if (ef.frame >= ef.maxFrame) ef.isActive = false;
+      }
+      hitEffects_.erase(std::remove_if(hitEffects_.begin(), hitEffects_.end(), [](const HitEffect &e) { return !e.isActive; }), hitEffects_.end());
   }
-
-  // エフェクト更新
-  for (auto &ef : hitEffects_) {
-    if (!ef.isActive) continue;
-    ef.frame += 1.0f;
-    float t = ef.frame / ef.maxFrame;
-    float scaleVal = t * 5.0f;
-    ef.instance.SetWorld(MakeAffineMatrix(Vector3{scaleVal, scaleVal, scaleVal}, Vector3{0, 0, 0}, ef.position));
-    ef.instance.SetColor({1.0f, 1.0f, 1.0f, 1.0f - t});
-    if (ef.frame >= ef.maxFrame) ef.isActive = false;
-  }
-  hitEffects_.erase(std::remove_if(hitEffects_.begin(), hitEffects_.end(), [](const HitEffect &e) { return !e.isActive; }), hitEffects_.end());
 }
 
 void DevScene::Draw() {
@@ -268,9 +312,67 @@ void DevScene::Draw() {
     renderer->SetCamera(*camera_);
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
-  renderer->SetDirectionalLights(dirLights_, enableDirectionalLight_);
-  renderer->SetPointLights(pointLights_, enablePointLight_);
-  renderer->SetSpotLights(spotLights_, enableSpotLight_);
+  // --- ライトの集約 ---
+  dirLights_.clear();
+  pointLights_.clear();
+  spotLights_.clear();
+
+  auto collectLights = [&](auto& self, const std::shared_ptr<AbsoluteEngine::GameObject>& obj) -> void {
+      if (!obj) return;
+      const auto& light = obj->GetLight();
+      const auto& t = obj->GetTransform();
+
+      // Transformの回転から方向ベクトルを計算
+      Matrix4x4 rotX = MakeRotateXMatrix(t.rotate.x);
+      Matrix4x4 rotY = MakeRotateYMatrix(t.rotate.y);
+      Matrix4x4 rotZ = MakeRotateZMatrix(t.rotate.z);
+      Matrix4x4 rotMatrix = Multiply(Multiply(rotZ, rotX), rotY);
+      
+      Vector3 defaultDir = {0.0f, -1.0f, 0.0f};
+      Vector3 dir = TransformNormal(defaultDir, rotMatrix);
+      dir = Normalize(dir);
+
+      if (light.type == AbsoluteEngine::LightComponent::Type::Directional) {
+          DirLight dl;
+          dl.color = light.color;
+          dl.intensity = light.intensity;
+          dl.direction = dir;
+          dl.enabled = true;
+          dirLights_.push_back(dl);
+      } else if (light.type == AbsoluteEngine::LightComponent::Type::Point) {
+          PointLight pl;
+          pl.color = light.color;
+          pl.intensity = light.intensity;
+          pl.radius = light.radius;
+          pl.decay = light.decay;
+          pl.position = t.translate; // FIXME: 親のTransformが考慮されていないローカル座標
+          pl.enabled = true;
+          pointLights_.push_back(pl);
+      } else if (light.type == AbsoluteEngine::LightComponent::Type::Spot) {
+          SpotLight sl;
+          sl.color = light.color;
+          sl.intensity = light.intensity;
+          sl.distance = light.distance;
+          sl.decay = light.decay;
+          sl.coneAngleDeg = light.coneAngleDeg;
+          sl.position = t.translate;
+          sl.direction = dir;
+          sl.enabled = true;
+          spotLights_.push_back(sl);
+      }
+
+      for (const auto& child : obj->GetChildren()) {
+          self(self, child);
+      }
+  };
+
+  for (const auto& obj : rootObjects_) {
+      collectLights(collectLights, obj);
+  }
+
+  renderer->SetDirectionalLights(dirLights_, true);
+  renderer->SetPointLights(pointLights_, true);
+  renderer->SetSpotLights(spotLights_, true);
 
   // --- オフスクリーン描画パス（RenderTexture → ImGui::Image で表示） ---
   if (renderTexture_) {
@@ -399,8 +501,22 @@ void DevScene::InitResources_() {
   p.emitRate = 10.0f;
   particleEmitter_.Initialize(ParticleManager::GetInstance(), p);
 
-  dirLights_.push_back({{1,1,1}, {0,-1,0}, 1.0f});
-  pointLights_.push_back({{1,1,1}, {0,2,-2}, 1.0f, 10.0f, 2.0f});
+  // --- ライトの初期設定 ---
+  // 最初からシーンに配置しておくライトを rootObjects_ に追加する
+  auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
+  initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f }; // 適当な方向
+  initialDirLight->GetLight().type = AbsoluteEngine::LightComponent::Type::Directional;
+  initialDirLight->GetLight().color = { 1.0f, 1.0f, 1.0f };
+  initialDirLight->GetLight().intensity = 1.0f;
+  rootObjects_.push_back(initialDirLight);
+
+  auto initialPointLight = std::make_shared<AbsoluteEngine::GameObject>("Point Light");
+  initialPointLight->GetTransform().translate = { 0.0f, 2.0f, -2.0f };
+  initialPointLight->GetLight().type = AbsoluteEngine::LightComponent::Type::Point;
+  initialPointLight->GetLight().color = { 1.0f, 1.0f, 1.0f };
+  initialPointLight->GetLight().intensity = 1.0f;
+  initialPointLight->GetLight().radius = 10.0f;
+  rootObjects_.push_back(initialPointLight);
 
   // オフスクリーンテスト初期化
   renderTexture_ = std::make_unique<RenderTexture>();

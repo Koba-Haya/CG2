@@ -106,4 +106,28 @@ private:
     std::vector<std::shared_ptr<GameObject>>* rootObjects_;
 };
 
+// ライト変更のコマンド
+class LightCommand : public ICommand {
+public:
+    LightCommand(std::shared_ptr<GameObject> target, const LightComponent& before, const LightComponent& after)
+        : target_(target), before_(before), after_(after) {}
+
+    void Execute() override {
+        if (auto t = target_.lock()) {
+            t->GetLight() = after_;
+        }
+    }
+
+    void Undo() override {
+        if (auto t = target_.lock()) {
+            t->GetLight() = before_;
+        }
+    }
+
+private:
+    std::weak_ptr<GameObject> target_;
+    LightComponent before_;
+    LightComponent after_;
+};
+
 } // namespace AbsoluteEngine

@@ -9,9 +9,11 @@ class SceneSerializer {
 public:
   // 現在のシーンツリーを JSON 形式で保存
   static bool Serialize(const std::string& filepath, const std::vector<std::shared_ptr<GameObject>>& rootObjects);
+  static std::string SerializeToString(const std::vector<std::shared_ptr<GameObject>>& rootObjects);
 
   // JSON からシーンツリーを読み込み
   static bool Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects);
+  static bool DeserializeFromString(const std::string& jsonString, std::vector<std::shared_ptr<GameObject>>& outRootObjects);
 
   // プレハブの保存と読み込み
   static bool SavePrefab(const std::string& filepath, std::shared_ptr<GameObject> obj);

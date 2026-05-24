@@ -1,6 +1,7 @@
 #include "EditorUIManager.h"
 #include "../scene/GameObject.h"
 #include "../scene/SceneSerializer.h"
+#include "../scene/ComponentFactory.h"
 #include "EditorCamera.h"
 #include "Method.h"
 #include <filesystem>
@@ -548,6 +549,42 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
     selectedObject_.reset();
   }
 
+  // 右クリックメニュー（新規作成）
+  if (ImGui::BeginPopupContextWindow("HierarchyContextWindow", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
+      if (ImGui::Selectable("Create Empty")) {
+          auto newObj = std::make_shared<GameObject>("GameObject");
+          if (commandManager_) {
+              commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
+          } else {
+              rootObjects.push_back(newObj);
+          }
+          selectedObject_ = newObj;
+      }
+      if (ImGui::BeginMenu("Create Light")) {
+          if (ImGui::Selectable("Directional Light")) {
+              auto newObj = std::make_shared<GameObject>("Directional Light");
+              newObj->GetLight().type = LightComponent::Type::Directional;
+              newObj->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
+              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); }
+              selectedObject_ = newObj;
+          }
+          if (ImGui::Selectable("Point Light")) {
+              auto newObj = std::make_shared<GameObject>("Point Light");
+              newObj->GetLight().type = LightComponent::Type::Point;
+              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); }
+              selectedObject_ = newObj;
+          }
+          if (ImGui::Selectable("Spot Light")) {
+              auto newObj = std::make_shared<GameObject>("Spot Light");
+              newObj->GetLight().type = LightComponent::Type::Spot;
+              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); }
+              selectedObject_ = newObj;
+          }
+          ImGui::EndMenu();
+      }
+      ImGui::EndPopup();
+  }
+
   ImGui::End();
 }
 
@@ -665,6 +702,63 @@ void EditorUIManager::DrawInspector() {
       }
     }
 
+    // --- LightComponent ---
+    if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+      LightComponent& l = obj->GetLight();
+      int currentType = static_cast<int>(l.type);
+      const char* lightTypes[] = { "None", "Directional", "Point", "Spot" };
+
+      bool activated = false;
+      bool deactivatedAfterEdit = false;
+
+      if (ImGui::Combo("Type", &currentType, lightTypes, IM_ARRAYSIZE(lightTypes))) {
+        l.type = static_cast<LightComponent::Type>(currentType);
+      }
+      activated |= ImGui::IsItemActivated();
+      deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+      if (l.type != LightComponent::Type::None) {
+        float color[3] = { l.color.x, l.color.y, l.color.z };
+        if (ImGui::ColorEdit3("Color", color)) {
+          l.color = { color[0], color[1], color[2] };
+        }
+        activated |= ImGui::IsItemActivated();
+        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+        ImGui::DragFloat("Intensity", &l.intensity, 0.05f, 0.0f, 100.0f);
+        activated |= ImGui::IsItemActivated();
+        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+        
+        if (l.type == LightComponent::Type::Point || l.type == LightComponent::Type::Spot) {
+          ImGui::DragFloat("Radius", &l.radius, 0.1f, 0.0f, 1000.0f);
+          activated |= ImGui::IsItemActivated();
+          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+          ImGui::DragFloat("Decay", &l.decay, 0.05f, 0.0f, 10.0f);
+          activated |= ImGui::IsItemActivated();
+          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+        }
+        if (l.type == LightComponent::Type::Spot) {
+          ImGui::DragFloat("Distance", &l.distance, 0.1f, 0.0f, 1000.0f);
+          activated |= ImGui::IsItemActivated();
+          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+          ImGui::DragFloat("ConeAngle (deg)", &l.coneAngleDeg, 0.5f, 0.0f, 180.0f);
+          activated |= ImGui::IsItemActivated();
+          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+        }
+      }
+
+      if (activated) {
+          lightBeforeInspector_ = obj->GetLight();
+      }
+      if (deactivatedAfterEdit) {
+          if (commandManager_) {
+              commandManager_->AddCommand(std::make_shared<LightCommand>(obj, lightBeforeInspector_, l));
+          }
+      }
+    }
+
     // Colliderの編集
     if (ImGui::CollapsingHeader("Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
       ColliderInfo& collider = obj->GetCollider();
@@ -704,6 +798,51 @@ void EditorUIManager::DrawInspector() {
         if (SceneSerializer::SavePrefab(filepath, obj)) {
             obj->SetPrefabPath(filepath);
         }
+      }
+    }
+
+    ImGui::Separator();
+
+    // コンポーネント管理
+    if (ImGui::CollapsingHeader("Components", ImGuiTreeNodeFlags_DefaultOpen)) {
+      IComponent* componentToRemove = nullptr;
+      
+      for (const auto& comp : obj->GetComponents()) {
+        ImGui::Text("- %s", comp->GetTypeName().c_str());
+        ImGui::SameLine();
+        
+        // ボタンIDを一意にするためにポインタアドレスを使用
+        std::string btnLabel = "Remove##" + std::to_string(reinterpret_cast<uintptr_t>(comp.get()));
+        if (ImGui::Button(btnLabel.c_str())) {
+            componentToRemove = comp.get();
+        }
+        // 今後はここで comp->DrawInspector() などを呼んでパラメータ編集できるようにする
+      }
+
+      if (componentToRemove) {
+          obj->RemoveComponent(componentToRemove);
+      }
+
+      ImGui::Spacing();
+      if (ImGui::Button("Add Component", ImVec2(-FLT_MIN, 30))) {
+        ImGui::OpenPopup("AddComponentPopup");
+      }
+
+      if (ImGui::BeginPopup("AddComponentPopup")) {
+        auto names = ComponentFactory::GetInstance().GetRegisteredComponentNames();
+        if (names.empty()) {
+          ImGui::TextDisabled("No components registered.");
+        } else {
+          for (const auto& name : names) {
+            if (ImGui::Selectable(name.c_str())) {
+              auto comp = ComponentFactory::GetInstance().Create(name);
+              if (comp) {
+                obj->AddComponent(std::move(comp));
+              }
+            }
+          }
+        }
+        ImGui::EndPopup();
       }
     }
 
