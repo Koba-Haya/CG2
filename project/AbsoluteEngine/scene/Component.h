@@ -1,0 +1,26 @@
+#pragma once
+#include <memory>
+#include <string>
+
+namespace AbsoluteEngine {
+
+class GameObject;
+
+class IComponent {
+public:
+    virtual ~IComponent() = default;
+
+    virtual void Update(float deltaTime) {}
+    virtual void Draw() {}
+    
+    // コンポーネントの種類名（ファクトリやシリアライズ用）
+    virtual std::string GetTypeName() const = 0;
+
+    void SetOwner(GameObject* owner) { owner_ = owner; }
+    GameObject* GetOwner() const { return owner_; }
+
+protected:
+    GameObject* owner_ = nullptr;
+};
+
+} // namespace AbsoluteEngine

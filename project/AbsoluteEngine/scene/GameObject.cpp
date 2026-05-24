@@ -16,17 +16,34 @@ void GameObject::AddChild(std::shared_ptr<GameObject> child) {
 }
 
 void GameObject::RemoveChild(std::shared_ptr<GameObject> child) {
-  if (child) {
-    auto it = std::find(children_.begin(), children_.end(), child);
-    if (it != children_.end()) {
-      (*it)->parent_.reset();
-      children_.erase(it);
-    }
+  auto it = std::find(children_.begin(), children_.end(), child);
+  if (it != children_.end()) {
+    (*it)->parent_.reset();
+    children_.erase(it);
+  }
+}
+
+void GameObject::AddComponent(std::unique_ptr<IComponent> component) {
+  if (component) {
+    component->SetOwner(this);
+    components_.push_back(std::move(component));
+  }
+}
+
+void GameObject::RemoveComponent(IComponent* component) {
+  auto it = std::remove_if(components_.begin(), components_.end(),
+      [component](const std::unique_ptr<IComponent>& ptr) {
+          return ptr.get() == component;
+      });
+  if (it != components_.end()) {
+      components_.erase(it, components_.end());
   }
 }
 
 void GameObject::Update(float deltaTime) {
-  // 子のUpdateを呼ぶ
+  for (auto& comp : components_) {
+    comp->Update(deltaTime);
+  }
   for (auto& child : children_) {
     child->Update(deltaTime);
   }

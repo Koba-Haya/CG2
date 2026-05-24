@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include "../../externals/nlohmann/json.hpp"
+#include "ComponentFactory.h"
 
 using json = nlohmann::json;
 
@@ -52,6 +53,27 @@ static json SerializeGameObject(const std::shared_ptr<GameObject>& obj, bool for
     {"radius", c.radius},
     {"size", Vector3ToJson(c.size)}
   };
+
+  const LightComponent& l = obj->GetLight();
+  if (l.type != LightComponent::Type::None) {
+    j["light"] = {
+      {"type", static_cast<int>(l.type)},
+      {"color", Vector3ToJson(l.color)},
+      {"intensity", l.intensity},
+      {"radius", l.radius},
+      {"decay", l.decay},
+      {"distance", l.distance},
+      {"coneAngleDeg", l.coneAngleDeg}
+    };
+  }
+
+  json componentsJson = json::array();
+  for (const auto& comp : obj->GetComponents()) {
+    json cJson;
+    cJson["type"] = comp->GetTypeName();
+    componentsJson.push_back(cJson);
+  }
+  j["components"] = componentsJson;
 
   json childrenJson = json::array();
   for (const auto& child : obj->GetChildren()) {
@@ -106,10 +128,32 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
   if (j.contains("collider")) {
     const auto& cJson = j["collider"];
     ColliderInfo& c = obj->GetCollider();
-    c.type = static_cast<ColliderInfo::Type>(cJson.value("type", 0));
-    c.centerOffset = JsonToVector3(cJson["centerOffset"]);
+    c.type = static_cast<ColliderInfo::Type>(cJson.value("type", 1));
+    if (cJson.contains("centerOffset")) c.centerOffset = JsonToVector3(cJson["centerOffset"]);
     c.radius = cJson.value("radius", 1.0f);
-    c.size = JsonToVector3(cJson["size"]);
+    if (cJson.contains("size")) c.size = JsonToVector3(cJson["size"]);
+  }
+
+  if (j.contains("light")) {
+    const auto& lJson = j["light"];
+    LightComponent& l = obj->GetLight();
+    l.type = static_cast<LightComponent::Type>(lJson.value("type", 0));
+    if (lJson.contains("color")) l.color = JsonToVector3(lJson["color"]);
+    l.intensity = lJson.value("intensity", 1.0f);
+    l.radius = lJson.value("radius", 10.0f);
+    l.decay = lJson.value("decay", 2.0f);
+    l.distance = lJson.value("distance", 10.0f);
+    l.coneAngleDeg = lJson.value("coneAngleDeg", 30.0f);
+  }
+
+  if (j.contains("components") && j["components"].is_array()) {
+    for (const auto& cJson : j["components"]) {
+      std::string typeName = cJson.value("type", "");
+      auto comp = ComponentFactory::GetInstance().Create(typeName);
+      if (comp) {
+        obj->AddComponent(std::move(comp));
+      }
+    }
   }
 
   if (j.contains("children") && j["children"].is_array()) {
@@ -138,6 +182,14 @@ bool SceneSerializer::Serialize(const std::string& filepath, const std::vector<s
     return true;
   }
   return false;
+}
+
+std::string SceneSerializer::SerializeToString(const std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+  json j = json::array();
+  for (const auto& obj : rootObjects) {
+    j.push_back(SerializeGameObject(obj));
+  }
+  return j.dump(4);
 }
 
 bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects) {
@@ -169,6 +221,25 @@ std::shared_ptr<GameObject> SceneSerializer::CopyGameObject(std::shared_ptr<Game
   if (!src) return nullptr;
   json j = SerializeGameObject(src, true); // コピー時はフルシリアライズ
   return DeserializeGameObject(j);
+}
+
+bool SceneSerializer::DeserializeFromString(const std::string& jsonString, std::vector<std::shared_ptr<GameObject>>& outRootObjects) {
+  if (jsonString.empty()) return false;
+  try {
+    json j = json::parse(jsonString);
+    if (j.is_array()) {
+      for (const auto& objJson : j) {
+        auto obj = DeserializeGameObject(objJson);
+        if (obj) {
+          outRootObjects.push_back(obj);
+        }
+      }
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "Failed to parse json string: " << e.what() << std::endl;
+    return false;
+  }
+  return true;
 }
 
 bool SceneSerializer::SavePrefab(const std::string& filepath, std::shared_ptr<GameObject> obj) {

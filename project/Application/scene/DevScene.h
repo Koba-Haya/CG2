@@ -27,6 +27,12 @@
 #include "GameObject.h"
 #include "AbsoluteEngine/editor/EditorUIManager.h"
 
+enum class PlayMode {
+  Edit,
+  Play,
+  Pause
+};
+
 class DevScene final : public BaseScene {
 public:
   DevScene();
@@ -137,4 +143,8 @@ private:
   // エディタ機能
   std::unique_ptr<AbsoluteEngine::EditorUIManager> editorUIManager_;
   std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> rootObjects_;
+
+  // プレイモード
+  PlayMode playMode_ = PlayMode::Edit;
+  std::string backupSceneJson_ = "";
 };

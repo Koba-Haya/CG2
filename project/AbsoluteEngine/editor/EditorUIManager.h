@@ -59,6 +59,7 @@ private:
   Transform transformBeforeGizmo_;
 
   Transform transformBeforeInspector_;
+  LightComponent lightBeforeInspector_;
 #endif
 };
 
