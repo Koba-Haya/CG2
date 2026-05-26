@@ -66,8 +66,7 @@ void DevScene::Initialize(const SceneServices &services) {
   InitLogging_();
   InitResources_();
 
-  camera_ = std::make_unique<AbsoluteEngine::EditorCamera>();
-  camera_->Initialize();
+
 
   InitCamera_();
 
@@ -78,7 +77,7 @@ void DevScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
 
   // --- エディタUIの初期化とテストオブジェクト追加 ---
-  editorUIManager_ = std::make_unique<AbsoluteEngine::EditorUIManager>();
+
   
   auto obj1 = std::make_shared<AbsoluteEngine::GameObject>("Player");
   obj1->GetTransform().translate = { 0.0f, 0.0f, 0.0f };
@@ -104,9 +103,8 @@ void DevScene::Finalize() {
 void DevScene::Update() {
   const float deltaTime = 1.0f / 60.0f;
   
-  if (camera_) {
-    camera_->Update(*services_.input);
-  }
+  // BaseSceneのエディタ機能（カメラ、オブジェクトの更新）
+  UpdateEditor();
 
 #ifdef USE_IMGUI
   // --- ゲームビューポートウィンドウ ---
@@ -123,24 +121,7 @@ void DevScene::Update() {
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = renderTexture_->GetSrvGpuHandle();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
 
-    // ビューポートへのドロップ（モデル生成）
-    if (ImGui::BeginDragDropTarget()) {
-      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
-        const char* payloadPath = (const char*)payload->Data;
-        auto newObj = std::make_shared<AbsoluteEngine::GameObject>("Model");
-        newObj->LoadModel(payloadPath);
-        
-        // カメラの前方などに配置するのが理想ですが、今回は原点配置
-        newObj->GetTransform().translate = {0, 0, 0};
-        
-        rootObjects_.push_back(newObj);
-        
-        if (editorUIManager_) {
-          editorUIManager_->SetSelectedObject(newObj);
-        }
-      }
-      ImGui::EndDragDropTarget();
-    }
+
   }
   ImGui::End();
 
@@ -208,7 +189,7 @@ void DevScene::Update() {
   ImGui::SeparatorText("Transform");
   ImGui::DragFloat3("Sphere Pos", &transform_.translate.x, 0.1f);
   ImGui::DragFloat3("Human Pos", &transformHuman_.translate.x, 0.1f);
-  auto* editorCamera = dynamic_cast<AbsoluteEngine::EditorCamera*>(camera_.get());
+  auto* editorCamera = dynamic_cast<AbsoluteEngine::EditorCamera*>(editorCamera_.get());
   if (editorCamera) {
       Vector3 camPos = editorCamera->GetTranslate();
       if (ImGui::DragFloat3("Camera Pos", &camPos.x, 0.1f)) {
@@ -223,43 +204,8 @@ void DevScene::Update() {
   }
   ImGui::End();
 
-  // --- ツールバー（プレイモード切り替え） ---
-  ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize);
-  
-  if (playMode_ == PlayMode::Edit) {
-      if (ImGui::Button("Play")) {
-          backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_);
-          playMode_ = PlayMode::Play;
-      }
-  } else if (playMode_ == PlayMode::Play) {
-      if (ImGui::Button("Pause")) {
-          playMode_ = PlayMode::Pause;
-      }
-      ImGui::SameLine();
-      if (ImGui::Button("Stop")) {
-          rootObjects_.clear();
-          AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
-          if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
-          playMode_ = PlayMode::Edit;
-      }
-  } else if (playMode_ == PlayMode::Pause) {
-      if (ImGui::Button("▶ Resume")) {
-          playMode_ = PlayMode::Play;
-      }
-      ImGui::SameLine();
-      if (ImGui::Button("■ Stop")) {
-          rootObjects_.clear();
-          AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
-          if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
-          playMode_ = PlayMode::Edit;
-      }
-  }
-  ImGui::End();
-
-  // --- エディタUIの描画（Hierarchy, Inspector, Gizmo） ---
-  if (editorUIManager_ && camera_) {
-    editorUIManager_->DrawUI(rootObjects_, camera_->GetViewMatrix(), camera_->GetProjectionMatrix(), dynamic_cast<AbsoluteEngine::EditorCamera*>(camera_.get()));
-  }
+  // --- ツールバー・エディタUIの描画（BaseScene側で行う） ---
+  DrawEditorUI();
 
 #endif
 
@@ -268,12 +214,7 @@ void DevScene::Update() {
 
   // ゲームロジックは PlayMode の時のみ更新する
   if (playMode_ == PlayMode::Play) {
-      // 各オブジェクト（とコンポーネント）の更新
-      for (auto& obj : rootObjects_) {
-          if (obj) {
-              obj->Update(deltaTime);
-          }
-      }
+
 
       particleEmitter_.Update(deltaTime);
       ParticleManager::GetInstance()->SetEnableAccelerationField(enableAccelerationField_);
@@ -308,71 +249,12 @@ void DevScene::Draw() {
   auto* cmdList = dx->GetCommandList();
 
   // --- カメラ・ライト設定（オフスクリーンパス前に確定させる） ---
-  if (camera_) {
-    renderer->SetCamera(*camera_);
+  if (editorCamera_) {
+    renderer->SetCamera(*editorCamera_);
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
-  // --- ライトの集約 ---
-  dirLights_.clear();
-  pointLights_.clear();
-  spotLights_.clear();
-
-  auto collectLights = [&](auto& self, const std::shared_ptr<AbsoluteEngine::GameObject>& obj) -> void {
-      if (!obj) return;
-      const auto& light = obj->GetLight();
-      const auto& t = obj->GetTransform();
-
-      // Transformの回転から方向ベクトルを計算
-      Matrix4x4 rotX = MakeRotateXMatrix(t.rotate.x);
-      Matrix4x4 rotY = MakeRotateYMatrix(t.rotate.y);
-      Matrix4x4 rotZ = MakeRotateZMatrix(t.rotate.z);
-      Matrix4x4 rotMatrix = Multiply(Multiply(rotZ, rotX), rotY);
-      
-      Vector3 defaultDir = {0.0f, -1.0f, 0.0f};
-      Vector3 dir = TransformNormal(defaultDir, rotMatrix);
-      dir = Normalize(dir);
-
-      if (light.type == AbsoluteEngine::LightComponent::Type::Directional) {
-          DirLight dl;
-          dl.color = light.color;
-          dl.intensity = light.intensity;
-          dl.direction = dir;
-          dl.enabled = true;
-          dirLights_.push_back(dl);
-      } else if (light.type == AbsoluteEngine::LightComponent::Type::Point) {
-          PointLight pl;
-          pl.color = light.color;
-          pl.intensity = light.intensity;
-          pl.radius = light.radius;
-          pl.decay = light.decay;
-          pl.position = t.translate; // FIXME: 親のTransformが考慮されていないローカル座標
-          pl.enabled = true;
-          pointLights_.push_back(pl);
-      } else if (light.type == AbsoluteEngine::LightComponent::Type::Spot) {
-          SpotLight sl;
-          sl.color = light.color;
-          sl.intensity = light.intensity;
-          sl.distance = light.distance;
-          sl.decay = light.decay;
-          sl.coneAngleDeg = light.coneAngleDeg;
-          sl.position = t.translate;
-          sl.direction = dir;
-          sl.enabled = true;
-          spotLights_.push_back(sl);
-      }
-
-      for (const auto& child : obj->GetChildren()) {
-          self(self, child);
-      }
-  };
-
-  for (const auto& obj : rootObjects_) {
-      collectLights(collectLights, obj);
-  }
-
-  renderer->SetDirectionalLights(dirLights_, true);
-  renderer->SetPointLights(pointLights_, true);
-  renderer->SetSpotLights(spotLights_, true);
+  // --- ライトの適用 ---
+  ApplyEditorLightsToRenderer(renderer);
 
   // --- オフスクリーン描画パス（RenderTexture → ImGui::Image で表示） ---
   if (renderTexture_) {
@@ -417,14 +299,14 @@ void DevScene::Draw() {
     {
       ring_.SetTransform(
           MakeAffineMatrix(ringTransform_.scale, ringTransform_.rotate, ringTransform_.translate),
-          camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
+          editorCamera_->GetViewMatrix(), editorCamera_->GetProjectionMatrix());
       ring_.SetMaterial({1.0f, 1.0f, 1.0f, 1.0f},
           MakeScaleMatrix({ringUVScale_.x, ringUVScale_.y, 1.0f}));
       if (texRing_) renderer->DrawRing(&ring_, texRing_->GetSrvGpu());
 
       cylinder_.SetTransform(
           MakeAffineMatrix(cylinderTransform_.scale, cylinderTransform_.rotate, cylinderTransform_.translate),
-          camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
+          editorCamera_->GetViewMatrix(), editorCamera_->GetProjectionMatrix());
       cylinder_.SetMaterial({1.0f, 1.0f, 1.0f, 1.0f},
           MakeScaleMatrix({cylinderUVScale_.x, cylinderUVScale_.y, 1.0f}));
       if (texCylinder_) renderer->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
@@ -529,7 +411,7 @@ void DevScene::InitCamera_() {
   transformSimpleSkin_.translate = {3, 0, 0};
   transformHuman_.translate = {6, 0, 0};
   transformAnimCube_.translate = {-3, 0, 0};
-  if (camera_) camera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
+  if (editorCamera_) editorCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
 }
 
 void DevScene::SpawnHitEffect(const Vector3 &pos) {

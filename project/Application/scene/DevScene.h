@@ -27,11 +27,6 @@
 #include "GameObject.h"
 #include "AbsoluteEngine/editor/EditorUIManager.h"
 
-enum class PlayMode {
-  Edit,
-  Play,
-  Pause
-};
 
 class DevScene final : public BaseScene {
 public:
@@ -109,7 +104,7 @@ private:
   Transform transformSprite_;
   Transform uvTransformSprite_;
 
-  std::unique_ptr<Camera> camera_;
+
 
   // エフェクト管理
   struct HitEffect {
@@ -140,11 +135,5 @@ private:
   std::unique_ptr<RenderTexture> renderTexture_;
   Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
 
-  // エディタ機能
-  std::unique_ptr<AbsoluteEngine::EditorUIManager> editorUIManager_;
-  std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> rootObjects_;
 
-  // プレイモード
-  PlayMode playMode_ = PlayMode::Edit;
-  std::string backupSceneJson_ = "";
 };
