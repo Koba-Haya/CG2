@@ -1,4 +1,4 @@
-#define NOMINMAX
+﻿#define NOMINMAX
 #include "Renderer.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
@@ -174,6 +174,11 @@ void Renderer::Initialize(DirectXCommon *dx) {
     vignettePipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(vignettePipeline_->Initialize(device, utils, compiler,
                                              includeHandler, vignetteDesc));
+
+    PipelineDesc boxFilterDesc = UnifiedPipeline::MakeBoxFilterDesc();
+    boxFilterPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(boxFilterPipeline_->Initialize(device, utils, compiler,
+                                              includeHandler, boxFilterDesc));
   }
 
   // Primitive Drawer
@@ -207,6 +212,12 @@ void Renderer::Initialize(DirectXCommon *dx) {
   if (vignetteParamMapped_) {
     vignetteParamMapped_->scale = 16.0f;
     vignetteParamMapped_->powValue = 0.8f;
+  }
+
+  boxFilterParamCB_ = CreateUploadBuffer(align256(sizeof(BoxFilterParam)));
+  boxFilterParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&boxFilterParamMapped_));
+  if (boxFilterParamMapped_) {
+    boxFilterParamMapped_->k = 1;
   }
 
   InitSkinningPipeline_();
@@ -838,6 +849,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   case PostProcessMode::Vignette:
     pipeline = vignettePipeline_.get();
     break;
+  case PostProcessMode::BoxFilter:
+    pipeline = boxFilterPipeline_.get();
+    break;
   }
 
   if (!pipeline)
@@ -850,6 +864,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
 
   if (mode == PostProcessMode::Vignette) {
     cmdList->SetGraphicsRootConstantBufferView(0, vignetteParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+  } else if (mode == PostProcessMode::BoxFilter) {
+    cmdList->SetGraphicsRootConstantBufferView(0, boxFilterParamCB_->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
   } else {
     // テクスチャをセット (t0)
@@ -866,4 +883,10 @@ void Renderer::SetVignetteParam(float scale, float powValue) {
     vignetteParamMapped_->scale = scale;
     vignetteParamMapped_->powValue = powValue;
   }
-}
+}
+
+void Renderer::SetBoxFilterParam(int32_t k) {
+  if (boxFilterParamMapped_) {
+    boxFilterParamMapped_->k = k;
+  }
+}

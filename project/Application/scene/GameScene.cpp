@@ -1,4 +1,4 @@
-#define NOMINMAX
+﻿#define NOMINMAX
 #include "GameScene.h"
 #include "Renderer.h"
 #include "DirectXCommon.h"
@@ -285,10 +285,14 @@ void GameScene::Update() {
   if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
   ImGui::SameLine();
   if (ImGui::RadioButton("Vignette", &mode, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = Renderer::PostProcessMode::Vignette;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("BoxFilter", &mode, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = Renderer::PostProcessMode::BoxFilter;
 
   if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
       ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
       ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
+      ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
   }
 
   ImGui::End();
@@ -317,6 +321,7 @@ void GameScene::Draw() {
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
   renderer->SetVignetteParam(vignetteScale_, vignettePow_);
+  renderer->SetBoxFilterParam(boxFilterK_);
 
   // --- ライトの適用 ---
   ApplyEditorLightsToRenderer(renderer);

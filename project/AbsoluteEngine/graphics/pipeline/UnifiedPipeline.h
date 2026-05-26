@@ -1,4 +1,4 @@
-// UnifiedPipeline.h (省略なし)
+﻿// UnifiedPipeline.h (省略なし)
 
 #pragma once
 #include "BlendMode.h"
@@ -98,6 +98,7 @@ public:
   static PipelineDesc MakeGrayscaleDesc();
   static PipelineDesc MakeSepiaDesc();
   static PipelineDesc MakeVignetteDesc();
+  static PipelineDesc MakeBoxFilterDesc();
 
 private:
   ComPtr<ID3D12RootSignature> rootSignature_;
