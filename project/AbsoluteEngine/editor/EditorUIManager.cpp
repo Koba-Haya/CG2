@@ -239,6 +239,19 @@ void EditorUIManager::DrawGizmo(std::vector<std::shared_ptr<GameObject>>& rootOb
         selectedObject_ = prefabInstance; // ドロップされたものを選択状態に
       }
     }
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
+      const char* payloadPath = (const char*)payload->Data;
+      auto newObj = std::make_shared<AbsoluteEngine::GameObject>("Model");
+      newObj->LoadModel(payloadPath);
+      newObj->GetTransform().translate = {0, 0, 0};
+      
+      if (commandManager_) {
+        commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
+      } else {
+        rootObjects.push_back(newObj);
+      }
+      selectedObject_ = newObj;
+    }
     ImGui::EndDragDropTarget();
   }
   ImGui::SetCursorPos(cursorPosBefore); // カーソルを戻して描画への影響をなくす

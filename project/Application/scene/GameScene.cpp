@@ -9,12 +9,40 @@
 #include "../camera/RailCameraController.h"
 #include "Spline.h"
 #include "Method.h"
+#include "GameObject.h"
 #include <algorithm>
 #include <cmath>
 
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
+#include "AbsoluteEngine/scene/ComponentFactory.h"
+
+// テスト用コンポーネント
+class SpinComponent : public AbsoluteEngine::IComponent {
+public:
+    void Update(float deltaTime) override {
+        if (owner_) {
+            auto& t = owner_->GetTransform();
+            t.rotate.y += 2.0f * deltaTime;
+        }
+    }
+    std::string GetTypeName() const override { return "SpinComponent"; }
+};
+
+class MoveComponent : public AbsoluteEngine::IComponent {
+public:
+    void Update(float deltaTime) override {
+        if (owner_) {
+            auto& t = owner_->GetTransform();
+            t.translate.x += std::sin(frame_ * 0.05f) * 0.05f;
+            frame_ += 1.0f;
+        }
+    }
+    std::string GetTypeName() const override { return "MoveComponent"; }
+private:
+    float frame_ = 0.0f;
+};
 
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
@@ -76,6 +104,18 @@ void GameScene::Initialize(const SceneServices &services) {
   auto* dx = Renderer::GetInstance()->GetDX();
   renderTexture_ = std::make_unique<RenderTexture>();
   renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
+
+  // サンプルコンポーネントの登録
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
+
+  // デフォルトのライトを一つ配置しておく
+  auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
+  initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
+  initialDirLight->GetLight().type = AbsoluteEngine::LightComponent::Type::Directional;
+  initialDirLight->GetLight().color = { 1.0f, 1.0f, 1.0f };
+  initialDirLight->GetLight().intensity = 1.0f;
+  rootObjects_.push_back(initialDirLight);
 }
 
 void GameScene::Finalize() {
@@ -100,7 +140,10 @@ void GameScene::SpawnHitEffect(const Vector3 &pos) {
 void GameScene::Update() {
   const float deltaTime = 1.0f / 60.0f;
 
-  if (isDebugCamera_) {
+  UpdateEditor();
+
+  if (playMode_ == PlayMode::Play) {
+      if (isDebugCamera_) {
       debugCamera_->Update(*services_.input);
   } else {
       // ゲーム（レール）カメラ進行 (GameCamera 内にセットしたコントローラーを正しく動作させる)
@@ -176,8 +219,11 @@ void GameScene::Update() {
       if (ef.frame >= ef.maxFrame) ef.isActive = false;
   }
   hitEffects_.erase(std::remove_if(hitEffects_.begin(), hitEffects_.end(), [](const HitEffect& e) { return !e.isActive; }), hitEffects_.end());
+  } // end of if (playMode_ == PlayMode::Play)
 
 #ifdef USE_IMGUI
+  DrawEditorUI();
+
   // --- ゲームビューポートウィンドウ ---
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::Begin("Viewport##GameView");
@@ -252,15 +298,25 @@ void GameScene::Draw() {
     dx->GetCommandList()->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
   }
 
-  if (isDebugCamera_) {
+  if (playMode_ == PlayMode::Edit) {
+      if (editorCamera_) renderer->SetCamera(*editorCamera_);
+  } else if (isDebugCamera_) {
       renderer->SetCamera(*debugCamera_);
   } else {
       renderer->SetCamera(*gameCamera_);
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
 
+  // --- ライトの適用 ---
+  ApplyEditorLightsToRenderer(renderer);
+
   // オブジェクトの描画
   skybox_.Draw();
+
+  // エディタ上で配置したオブジェクト群の描画
+  for (auto& obj : rootObjects_) {
+      if (obj) obj->Draw();
+  }
 
   for (auto& enemy : enemies_) {
       enemy.Draw();
