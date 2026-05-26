@@ -105,6 +105,9 @@ void GameScene::Initialize(const SceneServices &services) {
   renderTexture_ = std::make_unique<RenderTexture>();
   renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
 
+  postProcessTexture_ = std::make_unique<RenderTexture>();
+  postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
+
   // サンプルコンポーネントの登録
   AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
@@ -228,11 +231,11 @@ void GameScene::Update() {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::Begin("Viewport##GameView");
   ImGui::PopStyleVar();
-  if (renderTexture_) {
+  if (postProcessTexture_) {
     ImVec2 viewportSize = ImGui::GetContentRegionAvail();
     if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
     if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = renderTexture_->GetSrvGpuHandle();
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = postProcessTexture_->GetSrvGpuHandle();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
   }
   ImGui::End();
@@ -280,6 +283,13 @@ void GameScene::Update() {
   if (ImGui::RadioButton("Grayscale", &mode, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = Renderer::PostProcessMode::Grayscale;
   ImGui::SameLine();
   if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Vignette", &mode, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = Renderer::PostProcessMode::Vignette;
+
+  if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
+      ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
+      ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
+  }
 
   ImGui::End();
 #endif
@@ -306,6 +316,7 @@ void GameScene::Draw() {
       renderer->SetCamera(*gameCamera_);
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
+  renderer->SetVignetteParam(vignetteScale_, vignettePow_);
 
   // --- ライトの適用 ---
   ApplyEditorLightsToRenderer(renderer);
@@ -376,6 +387,11 @@ void GameScene::Draw() {
 
   if (renderTexture_) {
     dx->FinishRendering(renderTexture_.get());
-    // renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+  }
+
+  if (renderTexture_ && postProcessTexture_) {
+    dx->SetRenderTarget(postProcessTexture_.get());
+    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+    dx->FinishRendering(postProcessTexture_.get());
   }
 }

@@ -97,6 +97,7 @@ public:
   static PipelineDesc MakeCopyImageDesc();
   static PipelineDesc MakeGrayscaleDesc();
   static PipelineDesc MakeSepiaDesc();
+  static PipelineDesc MakeVignetteDesc();
 
 private:
   ComPtr<ID3D12RootSignature> rootSignature_;

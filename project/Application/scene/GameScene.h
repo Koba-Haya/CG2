@@ -30,7 +30,10 @@ private:
   std::unique_ptr<GameCamera> gameCamera_;
   std::unique_ptr<DebugCamera> debugCamera_;
   std::unique_ptr<RenderTexture> renderTexture_;
+  std::unique_ptr<RenderTexture> postProcessTexture_;
   Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
+  float vignetteScale_ = 16.0f;
+  float vignettePow_ = 0.8f;
   class RailCameraController* railController_ = nullptr; // 所有権は gameCamera_ が持つ
 
 
