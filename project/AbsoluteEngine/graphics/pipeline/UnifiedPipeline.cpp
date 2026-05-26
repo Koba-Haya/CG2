@@ -529,25 +529,6 @@ PipelineDesc UnifiedPipeline::MakeRingDesc() {
   return d;
 }
 
-PipelineDesc UnifiedPipeline::MakeGrayscaleDesc() {
-  PipelineDesc d = MakeCopyImageDesc();
-  d.psPath = L"resources/engine/shaders/Grayscale.PS.hlsl";
-  return d;
-}
-
-PipelineDesc UnifiedPipeline::MakeSepiaDesc() {
-  PipelineDesc d = MakeCopyImageDesc();
-  d.psPath = L"resources/engine/shaders/Sepia.PS.hlsl";
-  return d;
-}
-
-PipelineDesc UnifiedPipeline::MakeVignetteDesc() {
-  PipelineDesc d = MakeCopyImageDesc();
-  d.psPath = L"resources/engine/shaders/Vignette.PS.hlsl";
-  d.usePSMaterial_b0 = true;
-  return d;
-}
-
 PipelineDesc UnifiedPipeline::MakeCopyImageDesc() {
   PipelineDesc d{};
   d.inputElements = {}; // 頂点バッファなし
@@ -587,3 +568,31 @@ PipelineDesc UnifiedPipeline::MakeCylinderDesc() {
   d.cullMode = D3D12_CULL_MODE_NONE;
   return d;
 }
+
+PipelineDesc UnifiedPipeline::MakeGrayscaleDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/Grayscale.PS.hlsl";
+  d.usePSMaterial_b0 = false;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeSepiaDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/Sepia.PS.hlsl";
+  d.usePSMaterial_b0 = false;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeVignetteDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/Vignette.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeBoxFilterDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/BoxFilter.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  return d;
+}

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <memory>
 #include <vector>
@@ -139,10 +139,12 @@ public:
     Normal,
     Grayscale,
     Sepia,
-    Vignette
+    Vignette,
+    BoxFilter
   };
   void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal);
   void SetVignetteParam(float scale, float powValue);
+  void SetBoxFilterParam(int32_t k);
 
   void DispatchSkinning(ModelInstance* instance);
 
@@ -219,6 +221,7 @@ private:
   std::unique_ptr<UnifiedPipeline> grayscalePipeline_;
   std::unique_ptr<UnifiedPipeline> sepiaPipeline_;
   std::unique_ptr<UnifiedPipeline> vignettePipeline_;
+  std::unique_ptr<UnifiedPipeline> boxFilterPipeline_;
 
   struct alignas(16) VignetteParam {
     float scale;
@@ -227,4 +230,11 @@ private:
   };
   ComPtr<ID3D12Resource> vignetteParamCB_;
   VignetteParam* vignetteParamMapped_ = nullptr;
+
+  struct alignas(16) BoxFilterParam {
+    int32_t k;
+    float pad[3];
+  };
+  ComPtr<ID3D12Resource> boxFilterParamCB_;
+  BoxFilterParam* boxFilterParamMapped_ = nullptr;
 };

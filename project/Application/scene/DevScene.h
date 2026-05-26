@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "AnimationManager.h"
 #include "BaseScene.h"
 #include "Camera.h"
@@ -138,4 +138,5 @@ private:
 
   float vignetteScale_ = 16.0f;
   float vignettePow_ = 0.8f;
+  int32_t boxFilterK_ = 1;
 };

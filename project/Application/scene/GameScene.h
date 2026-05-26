@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "BaseScene.h"
 #include "GameCamera.h"
 #include "Skybox.h"
@@ -34,6 +34,7 @@ private:
   Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
   float vignetteScale_ = 16.0f;
   float vignettePow_ = 0.8f;
+  int32_t boxFilterK_ = 1;
   class RailCameraController* railController_ = nullptr; // 所有権は gameCamera_ が持つ
 
 
