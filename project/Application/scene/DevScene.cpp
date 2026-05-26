@@ -168,6 +168,8 @@ void DevScene::Update() {
 
   // --- 下パネル：オブジェクト・エフェクト設定 ---
   ImGui::Begin("Objects##BottomPanel");
+  ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+  ImGui::Separator();
   ImGui::Checkbox("Show Skeleton", &showSkeleton_);
   ImGui::Checkbox("Enable Reflection", &enableReflection_);
   if (enableReflection_) {
@@ -201,7 +203,7 @@ void DevScene::Update() {
   // レンダラーにポストエフェクトのパラメータを渡す
   Renderer::GetInstance()->SetVignetteParam(vignetteScale_, vignettePow_);
   Renderer::GetInstance()->SetBoxFilterParam(boxFilterK_);
-  Renderer::GetInstance()->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_);
+  Renderer::GetInstance()->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
 
   const char *blendModeItems[] = {"Alpha", "Add", "Subtract", "Multiply", "Screen"};
   ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems, IM_ARRAYSIZE(blendModeItems));
@@ -344,15 +346,23 @@ void DevScene::Draw() {
 
   // --- ポストプロセスの適用 ---
   if (renderTexture_ && postProcessTexture_) {
-    dx->SetRenderTarget(postProcessTexture_.get());
-    
-    // クリアは不要（フルスクリーン描画で完全に上書きするため）
-    
-    // ポストプロセス描画
-    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-    
-    // postProcessTexture_ を SRV 状態に戻す
-    dx->FinishRendering(postProcessTexture_.get());
+    if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter && gaussianTempTexture_) {
+      // パス1: 横方向
+      dx->SetRenderTarget(gaussianTempTexture_.get());
+      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(gaussianTempTexture_.get());
+
+      // パス2: 縦方向
+      dx->SetRenderTarget(postProcessTexture_.get());
+      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {0.0f, 1.0f});
+      renderer->DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(postProcessTexture_.get());
+    } else {
+      dx->SetRenderTarget(postProcessTexture_.get());
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(postProcessTexture_.get());
+    }
   }
 
   // --- バックバッファへの追加描画（必要なら UI 等をここに） ---
@@ -440,6 +450,9 @@ void DevScene::InitResources_() {
   
   postProcessTexture_ = std::make_unique<RenderTexture>();
   postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
+
+  gaussianTempTexture_ = std::make_unique<RenderTexture>();
+  gaussianTempTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
 }
 
 void DevScene::InitCamera_() {

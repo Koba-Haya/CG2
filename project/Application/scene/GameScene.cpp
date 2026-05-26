@@ -108,6 +108,9 @@ void GameScene::Initialize(const SceneServices &services) {
   postProcessTexture_ = std::make_unique<RenderTexture>();
   postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
 
+  gaussianTempTexture_ = std::make_unique<RenderTexture>();
+  gaussianTempTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
+
   // サンプルコンポーネントの登録
   AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
@@ -241,6 +244,8 @@ void GameScene::Update() {
   ImGui::End();
 
   ImGui::Begin("GameScene Controls##LeftPanel");
+  ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+  ImGui::Separator();
   ImGui::Text("Enemies Remaining: %d", (int)enemies_.size());
   
   ImGui::SeparatorText("Bullet Controls & Info");
@@ -327,7 +332,7 @@ void GameScene::Draw() {
   renderer->SetEnvironmentMap(skybox_.GetTexture());
   renderer->SetVignetteParam(vignetteScale_, vignettePow_);
   renderer->SetBoxFilterParam(boxFilterK_);
-  renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_);
+  renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
 
   // --- ライトの適用 ---
   ApplyEditorLightsToRenderer(renderer);
@@ -401,8 +406,22 @@ void GameScene::Draw() {
   }
 
   if (renderTexture_ && postProcessTexture_) {
-    dx->SetRenderTarget(postProcessTexture_.get());
-    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-    dx->FinishRendering(postProcessTexture_.get());
+    if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter && gaussianTempTexture_) {
+      // パス1: 横方向
+      dx->SetRenderTarget(gaussianTempTexture_.get());
+      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(gaussianTempTexture_.get());
+
+      // パス2: 縦方向
+      dx->SetRenderTarget(postProcessTexture_.get());
+      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {0.0f, 1.0f});
+      renderer->DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(postProcessTexture_.get());
+    } else {
+      dx->SetRenderTarget(postProcessTexture_.get());
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(postProcessTexture_.get());
+    }
   }
 }

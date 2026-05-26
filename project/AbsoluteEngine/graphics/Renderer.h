@@ -146,7 +146,7 @@ public:
   void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal);
   void SetVignetteParam(float scale, float powValue);
   void SetBoxFilterParam(int32_t k);
-  void SetGaussianFilterParam(int32_t k, float sigma);
+  void SetGaussianFilterParam(int32_t k, float sigma, const Vector2& direction);
 
   void DispatchSkinning(ModelInstance* instance);
 
@@ -244,7 +244,7 @@ private:
   struct alignas(16) GaussianFilterParam {
     int32_t k;
     float sigma;
-    float pad[2];
+    float direction[2];
   };
   ComPtr<ID3D12Resource> gaussianFilterParamCB_;
   GaussianFilterParam* gaussianFilterParamMapped_ = nullptr;

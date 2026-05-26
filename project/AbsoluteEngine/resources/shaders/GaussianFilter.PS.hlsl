@@ -3,17 +3,15 @@
 cbuffer GaussianFilterParam : register(b0) {
     int32_t gKernelRadius;
     float32_t gSigma;
+    float32_t2 gDirection;
 };
 
 Texture2D<float32_t4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
-static const float32_t PI = 3.14159265f;
-
-float gauss(float x, float y, float sigma) {
-    float exponent = -(x * x + y * y) * rcp(2.0f * sigma * sigma);
-    float denominator = 2.0f * PI * sigma * sigma;
-    return exp(exponent) * rcp(denominator);
+float gauss1D(float x, float sigma) {
+    float exponent = -(x * x) / (2.0f * sigma * sigma);
+    return exp(exponent); // 重みの合計で割るため、定数項は省略可能
 }
 
 struct PixelShaderOutput {
@@ -37,15 +35,14 @@ PixelShaderOutput main(VertexShaderOutput input) {
     float32_t3 color = float32_t3(0.0f, 0.0f, 0.0f);
     float32_t weight = 0.0f;
 
-    for (int32_t x = -k; x <= k; ++x) {
-        for (int32_t y = -k; y <= k; ++y) {
-            float32_t2 texcoord = input.texcoord + float32_t2(x, y) * uvStepSize;
-            float32_t3 fetchColor = gTexture.Sample(gSampler, texcoord).rgb;
-            
-            float32_t w = gauss((float32_t)x, (float32_t)y, sigma);
-            color += fetchColor * w;
-            weight += w;
-        }
+    for (int32_t i = -k; i <= k; ++i) {
+        float32_t2 offset = gDirection * (float32_t)i * uvStepSize;
+        float32_t2 texcoord = input.texcoord + offset;
+        float32_t3 fetchColor = gTexture.Sample(gSampler, texcoord).rgb;
+        
+        float32_t w = gauss1D((float32_t)i, sigma);
+        color += fetchColor * w;
+        weight += w;
     }
 
     output.color.rgb = color * rcp(weight);

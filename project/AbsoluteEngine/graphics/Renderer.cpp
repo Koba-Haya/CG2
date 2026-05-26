@@ -230,6 +230,8 @@ void Renderer::Initialize(DirectXCommon *dx) {
   if (gaussianFilterParamMapped_) {
     gaussianFilterParamMapped_->k = 1;
     gaussianFilterParamMapped_->sigma = 1.0f;
+    gaussianFilterParamMapped_->direction[0] = 1.0f;
+    gaussianFilterParamMapped_->direction[1] = 0.0f;
   }
 
   InitSkinningPipeline_();
@@ -909,9 +911,11 @@ void Renderer::SetBoxFilterParam(int32_t k) {
   }
 }
 
-void Renderer::SetGaussianFilterParam(int32_t k, float sigma) {
+void Renderer::SetGaussianFilterParam(int32_t k, float sigma, const Vector2& direction) {
   if (gaussianFilterParamMapped_) {
     gaussianFilterParamMapped_->k = k;
     gaussianFilterParamMapped_->sigma = sigma;
+    gaussianFilterParamMapped_->direction[0] = direction.x;
+    gaussianFilterParamMapped_->direction[1] = direction.y;
   }
 }
