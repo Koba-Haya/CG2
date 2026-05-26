@@ -169,6 +169,11 @@ void Renderer::Initialize(DirectXCommon *dx) {
     sepiaPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(sepiaPipeline_->Initialize(device, utils, compiler,
                                              includeHandler, sepiaDesc));
+
+    PipelineDesc vignetteDesc = UnifiedPipeline::MakeVignetteDesc();
+    vignettePipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(vignettePipeline_->Initialize(device, utils, compiler,
+                                             includeHandler, vignetteDesc));
   }
 
   // Primitive Drawer
@@ -193,10 +198,16 @@ void Renderer::Initialize(DirectXCommon *dx) {
 
   GPUParticleManager::GetInstance()->Initialize(dx_);
 
-  // Primitive用定数バッファ
   primitiveTransformCB_ = CreateUploadBuffer(sizeof(TransformCB));
   primitiveTransformCB_->Map(
       0, nullptr, reinterpret_cast<void **>(&primitiveTransformMapped_));
+
+  vignetteParamCB_ = CreateUploadBuffer(align256(sizeof(VignetteParam)));
+  vignetteParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&vignetteParamMapped_));
+  if (vignetteParamMapped_) {
+    vignetteParamMapped_->scale = 16.0f;
+    vignetteParamMapped_->powValue = 0.8f;
+  }
 
   InitSkinningPipeline_();
 }
@@ -824,6 +835,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   case PostProcessMode::Sepia:
     pipeline = sepiaPipeline_.get();
     break;
+  case PostProcessMode::Vignette:
+    pipeline = vignettePipeline_.get();
+    break;
   }
 
   if (!pipeline)
@@ -834,10 +848,22 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   // パイプライン設定
   pipeline->SetPipelineState(cmdList);
 
-  // テクスチャをセット (t0)
-  cmdList->SetGraphicsRootDescriptorTable(0, textureHandle);
+  if (mode == PostProcessMode::Vignette) {
+    cmdList->SetGraphicsRootConstantBufferView(0, vignetteParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+  } else {
+    // テクスチャをセット (t0)
+    cmdList->SetGraphicsRootDescriptorTable(0, textureHandle);
+  }
 
   // 頂点バッファなしで3頂点描画（大きな三角形1つで全画面を覆う）
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   cmdList->DrawInstanced(3, 1, 0, 0);
 }
+
+void Renderer::SetVignetteParam(float scale, float powValue) {
+  if (vignetteParamMapped_) {
+    vignetteParamMapped_->scale = scale;
+    vignetteParamMapped_->powValue = powValue;
+  }
+}

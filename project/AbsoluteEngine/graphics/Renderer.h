@@ -138,9 +138,11 @@ public:
   enum class PostProcessMode {
     Normal,
     Grayscale,
-    Sepia
+    Sepia,
+    Vignette
   };
   void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal);
+  void SetVignetteParam(float scale, float powValue);
 
   void DispatchSkinning(ModelInstance* instance);
 
@@ -216,4 +218,13 @@ private:
   std::unique_ptr<UnifiedPipeline> copyImagePipeline_;
   std::unique_ptr<UnifiedPipeline> grayscalePipeline_;
   std::unique_ptr<UnifiedPipeline> sepiaPipeline_;
+  std::unique_ptr<UnifiedPipeline> vignettePipeline_;
+
+  struct alignas(16) VignetteParam {
+    float scale;
+    float powValue;
+    float pad[2];
+  };
+  ComPtr<ID3D12Resource> vignetteParamCB_;
+  VignetteParam* vignetteParamMapped_ = nullptr;
 };

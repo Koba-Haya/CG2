@@ -113,16 +113,15 @@ void DevScene::Update() {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::Begin("Viewport##GameView");
   ImGui::PopStyleVar();
-  if (renderTexture_) {
+  if (postProcessTexture_) {
     // ウィンドウのコンテンツ領域サイズに合わせてゲーム画面をリサイズ表示
     ImVec2 viewportSize = ImGui::GetContentRegionAvail();
     if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
     if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = renderTexture_->GetSrvGpuHandle();
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = postProcessTexture_->GetSrvGpuHandle();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
-
-
   }
+
   ImGui::End();
 
   // --- 左パネル：ライト設定（UIから削除し、インスペクター側で管理） ---
@@ -182,6 +181,13 @@ void DevScene::Update() {
   if (ImGui::RadioButton("Grayscale", &mode, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = Renderer::PostProcessMode::Grayscale;
   ImGui::SameLine();
   if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Vignette", &mode, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = Renderer::PostProcessMode::Vignette;
+
+  if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
+      ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
+      ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
+  }
 
   const char *blendModeItems[] = {"Alpha", "Add", "Subtract", "Multiply", "Screen"};
   ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems, IM_ARRAYSIZE(blendModeItems));
@@ -253,6 +259,7 @@ void DevScene::Draw() {
     renderer->SetCamera(*editorCamera_);
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
+  renderer->SetVignetteParam(vignetteScale_, vignettePow_);
   // --- ライトの適用 ---
   ApplyEditorLightsToRenderer(renderer);
 
@@ -317,8 +324,21 @@ void DevScene::Draw() {
     // GPUパーティクル描画
     renderer->DrawGPUParticles(static_cast<BlendMode>(particleBlendMode_ + 1));
 
-    // RenderTexture を SRV 状態に戻し、バックバッファに切り替え
+    // RenderTexture を SRV 状態に戻す
     dx->FinishRendering(renderTexture_.get());
+  }
+
+  // --- ポストプロセスの適用 ---
+  if (renderTexture_ && postProcessTexture_) {
+    dx->SetRenderTarget(postProcessTexture_.get());
+    
+    // クリアは不要（フルスクリーン描画で完全に上書きするため）
+    
+    // ポストプロセス描画
+    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+    
+    // postProcessTexture_ を SRV 状態に戻す
+    dx->FinishRendering(postProcessTexture_.get());
   }
 
   // --- バックバッファへの追加描画（必要なら UI 等をここに） ---
@@ -403,6 +423,9 @@ void DevScene::InitResources_() {
   // オフスクリーンテスト初期化
   renderTexture_ = std::make_unique<RenderTexture>();
   renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
+  
+  postProcessTexture_ = std::make_unique<RenderTexture>();
+  postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
 }
 
 void DevScene::InitCamera_() {

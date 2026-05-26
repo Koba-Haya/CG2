@@ -541,6 +541,13 @@ PipelineDesc UnifiedPipeline::MakeSepiaDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeVignetteDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/Vignette.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeCopyImageDesc() {
   PipelineDesc d{};
   d.inputElements = {}; // 頂点バッファなし
