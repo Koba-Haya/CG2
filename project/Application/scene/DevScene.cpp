@@ -1,4 +1,4 @@
-﻿#define NOMINMAX
+#define NOMINMAX
 #include "DevScene.h"
 #include "SceneIds.h"
 #include "SceneManager.h"
@@ -185,17 +185,23 @@ void DevScene::Update() {
   if (ImGui::RadioButton("Vignette", &mode, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = Renderer::PostProcessMode::Vignette;
   ImGui::SameLine();
   if (ImGui::RadioButton("BoxFilter", &mode, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = Renderer::PostProcessMode::BoxFilter;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("GaussianFilter", &mode, static_cast<int>(Renderer::PostProcessMode::GaussianFilter))) postProcessMode_ = Renderer::PostProcessMode::GaussianFilter;
 
   if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
       ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
       ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
   } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
       ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter) {
+      ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
+      ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
   }
 
   // レンダラーにポストエフェクトのパラメータを渡す
   Renderer::GetInstance()->SetVignetteParam(vignetteScale_, vignettePow_);
   Renderer::GetInstance()->SetBoxFilterParam(boxFilterK_);
+  Renderer::GetInstance()->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_);
 
   const char *blendModeItems[] = {"Alpha", "Add", "Subtract", "Multiply", "Screen"};
   ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems, IM_ARRAYSIZE(blendModeItems));

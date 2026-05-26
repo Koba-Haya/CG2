@@ -595,4 +595,11 @@ PipelineDesc UnifiedPipeline::MakeBoxFilterDesc() {
   d.psPath = L"resources/engine/shaders/BoxFilter.PS.hlsl";
   d.usePSMaterial_b0 = true;
   return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeGaussianFilterDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/GaussianFilter.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  return d;
 }

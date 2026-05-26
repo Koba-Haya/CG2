@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "BaseScene.h"
 #include "GameCamera.h"
 #include "Skybox.h"
@@ -35,6 +35,8 @@ private:
   float vignetteScale_ = 16.0f;
   float vignettePow_ = 0.8f;
   int32_t boxFilterK_ = 1;
+  int32_t gaussianFilterK_ = 1;
+  float gaussianFilterSigma_ = 1.0f;
   class RailCameraController* railController_ = nullptr; // 所有権は gameCamera_ が持つ
 
 

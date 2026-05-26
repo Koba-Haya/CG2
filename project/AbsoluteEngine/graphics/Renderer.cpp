@@ -1,4 +1,4 @@
-﻿#define NOMINMAX
+#define NOMINMAX
 #include "Renderer.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
@@ -179,6 +179,11 @@ void Renderer::Initialize(DirectXCommon *dx) {
     boxFilterPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(boxFilterPipeline_->Initialize(device, utils, compiler,
                                               includeHandler, boxFilterDesc));
+
+    PipelineDesc gaussianFilterDesc = UnifiedPipeline::MakeGaussianFilterDesc();
+    gaussianFilterPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(gaussianFilterPipeline_->Initialize(device, utils, compiler,
+                                                   includeHandler, gaussianFilterDesc));
   }
 
   // Primitive Drawer
@@ -218,6 +223,13 @@ void Renderer::Initialize(DirectXCommon *dx) {
   boxFilterParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&boxFilterParamMapped_));
   if (boxFilterParamMapped_) {
     boxFilterParamMapped_->k = 1;
+  }
+
+  gaussianFilterParamCB_ = CreateUploadBuffer(align256(sizeof(GaussianFilterParam)));
+  gaussianFilterParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&gaussianFilterParamMapped_));
+  if (gaussianFilterParamMapped_) {
+    gaussianFilterParamMapped_->k = 1;
+    gaussianFilterParamMapped_->sigma = 1.0f;
   }
 
   InitSkinningPipeline_();
@@ -852,6 +864,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   case PostProcessMode::BoxFilter:
     pipeline = boxFilterPipeline_.get();
     break;
+  case PostProcessMode::GaussianFilter:
+    pipeline = gaussianFilterPipeline_.get();
+    break;
   }
 
   if (!pipeline)
@@ -867,6 +882,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
     cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
   } else if (mode == PostProcessMode::BoxFilter) {
     cmdList->SetGraphicsRootConstantBufferView(0, boxFilterParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+  } else if (mode == PostProcessMode::GaussianFilter) {
+    cmdList->SetGraphicsRootConstantBufferView(0, gaussianFilterParamCB_->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
   } else {
     // テクスチャをセット (t0)
@@ -888,5 +906,12 @@ void Renderer::SetVignetteParam(float scale, float powValue) {
 void Renderer::SetBoxFilterParam(int32_t k) {
   if (boxFilterParamMapped_) {
     boxFilterParamMapped_->k = k;
+  }
+}
+
+void Renderer::SetGaussianFilterParam(int32_t k, float sigma) {
+  if (gaussianFilterParamMapped_) {
+    gaussianFilterParamMapped_->k = k;
+    gaussianFilterParamMapped_->sigma = sigma;
   }
 }
