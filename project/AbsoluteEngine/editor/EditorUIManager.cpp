@@ -222,41 +222,7 @@ void EditorUIManager::DrawGizmo(std::vector<std::shared_ptr<GameObject>>& rootOb
   // "Viewport##GameView" ウィンドウ
   ImGui::Begin("Viewport##GameView");
 
-  // Viewport全体をドロップ可能にするためのダミー
-  ImVec2 cursorPosBefore = ImGui::GetCursorPos();
-  ImGui::Dummy(ImGui::GetContentRegionAvail());
-  if (ImGui::BeginDragDropTarget()) {
-    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
-      const char* payloadPath = (const char*)payload->Data;
-      std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
-      auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
-      if (prefabInstance) {
-        if (commandManager_) {
-          commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
-        } else {
-          rootObjects.push_back(prefabInstance);
-        }
-        selectedObject_ = prefabInstance; // ドロップされたものを選択状態に
-      }
-    }
-    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
-      const char* payloadPath = (const char*)payload->Data;
-      auto newObj = std::make_shared<AbsoluteEngine::GameObject>("Model");
-      newObj->LoadModel(payloadPath);
-      newObj->GetTransform().translate = {0, 0, 0};
-      
-      if (commandManager_) {
-        commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
-      } else {
-        rootObjects.push_back(newObj);
-      }
-      selectedObject_ = newObj;
-    }
-    ImGui::EndDragDropTarget();
-  }
-  ImGui::SetCursorPos(cursorPosBefore); // カーソルを戻して描画への影響をなくす
-
-  // ウィンドウ内でのマウスピッキング処理（BeginとEndの間で行うことでHoveredが正しくとれる）
+  // Viewportウィンドウ内でのマウスピッキング処理（BeginとEndの間で行うことでHoveredが正しくとれる）
   HandleMousePicking(rootObjects, viewMatrix, projectionMatrix);
 
   // タイトルバー等を除いた実際の描画領域を取得する
@@ -554,6 +520,23 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
         selectedObject_ = prefabInstance;
       }
     }
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
+      const char* payloadPath = (const char*)payload->Data;
+      std::filesystem::path p(payloadPath);
+      std::string objName = p.stem().string();
+      if (objName.empty()) objName = "Model";
+
+      auto newObj = std::make_shared<AbsoluteEngine::GameObject>(objName);
+      newObj->LoadModel(payloadPath);
+      newObj->GetTransform().translate = {0, 0, 0};
+      
+      if (commandManager_) {
+        commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
+      } else {
+        rootObjects.push_back(newObj);
+      }
+      selectedObject_ = newObj;
+    }
     ImGui::EndDragDropTarget();
   }
 
@@ -772,6 +755,24 @@ void EditorUIManager::DrawInspector() {
       }
     }
 
+    // --- Dissolve ---
+    if (ImGui::CollapsingHeader("Dissolve", ImGuiTreeNodeFlags_DefaultOpen)) {
+      auto& dissolve = obj->GetDissolve();
+      ImGui::Checkbox("Enable Dissolve", &dissolve.enable);
+      if (dissolve.enable) {
+        ImGui::SliderFloat("Threshold", &dissolve.threshold, 0.0f, 1.0f);
+        ImGui::SliderFloat("Edge Range", &dissolve.edgeRange, 0.0f, 0.1f);
+        float edgeCol[3] = { dissolve.edgeColor.x, dissolve.edgeColor.y, dissolve.edgeColor.z };
+        if (ImGui::ColorEdit3("Edge Color", edgeCol)) {
+          dissolve.edgeColor = { edgeCol[0], edgeCol[1], edgeCol[2] };
+        }
+        float maskCol[3] = { dissolve.maskColor.x, dissolve.maskColor.y, dissolve.maskColor.z };
+        if (ImGui::ColorEdit3("Mask Color", maskCol)) {
+          dissolve.maskColor = { maskCol[0], maskCol[1], maskCol[2] };
+        }
+      }
+    }
+
     // Colliderの編集
     if (ImGui::CollapsingHeader("Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
       ColliderInfo& collider = obj->GetCollider();
@@ -866,5 +867,43 @@ void EditorUIManager::DrawInspector() {
   ImGui::End();
 }
 #endif
+
+void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+#ifdef USE_IMGUI
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
+      const char* payloadPath = (const char*)payload->Data;
+      std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
+      auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
+      if (prefabInstance) {
+        if (commandManager_) {
+          commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
+        } else {
+          rootObjects.push_back(prefabInstance);
+        }
+        selectedObject_ = prefabInstance;
+      }
+    }
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
+      const char* payloadPath = (const char*)payload->Data;
+      std::filesystem::path p(payloadPath);
+      std::string objName = p.stem().string();
+      if (objName.empty()) objName = "Model";
+
+      auto newObj = std::make_shared<AbsoluteEngine::GameObject>(objName);
+      newObj->LoadModel(payloadPath);
+      newObj->GetTransform().translate = {0, 0, 0};
+      
+      if (commandManager_) {
+        commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
+      } else {
+        rootObjects.push_back(newObj);
+      }
+      selectedObject_ = newObj;
+    }
+    ImGui::EndDragDropTarget();
+  }
+#endif
+}
 
 } // namespace AbsoluteEngine

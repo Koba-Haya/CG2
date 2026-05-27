@@ -144,14 +144,17 @@ public:
     GaussianFilter,
     LuminanceBasedOutline,
     DepthBasedOutline,
-    RadialBlur
+    RadialBlur,
+    Dissolve
   };
-  void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal, D3D12_GPU_DESCRIPTOR_HANDLE depthTextureHandle = {});
+  void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal, D3D12_GPU_DESCRIPTOR_HANDLE depthOrMaskTextureHandle = {});
   void SetVignetteParam(float scale, float powValue);
   void SetBoxFilterParam(int32_t k);
   void SetGaussianFilterParam(int32_t k, float sigma, const Vector2& direction);
   void SetDepthBasedOutlineParam(const Matrix4x4& projectionInverse);
   void SetRadialBlurParam(const Vector2& center, float blurWidth);
+  void SetDissolveParam(float threshold, float edgeRange, const Vector3& edgeColor, const Vector3& maskColor);
+  void SetDissolveMaskTexture(std::shared_ptr<TextureResource> tex) { dissolveMaskTexture_ = tex; }
 
   void DispatchSkinning(ModelInstance* instance);
 
@@ -269,5 +272,19 @@ private:
     float padding;
   };
   ComPtr<ID3D12Resource> radialBlurParamCB_;
-  RadialBlurParam* radialBlurParamMapped_ = nullptr;
+  RadialBlurParam* radialBlurParamCBMap_ = nullptr;
+
+  std::unique_ptr<UnifiedPipeline> dissolvePipeline_;
+  struct alignas(16) DissolveParam {
+    float threshold;
+    float edgeRange;
+    float padding[2];
+    Vector3 edgeColor;
+    float padding2;
+    Vector3 maskColor;
+    float padding3;
+  };
+  ComPtr<ID3D12Resource> dissolveParamCB_;
+  DissolveParam* dissolveParamMapped_ = nullptr;
+  std::shared_ptr<TextureResource> dissolveMaskTexture_;
 };

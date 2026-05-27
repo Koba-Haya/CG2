@@ -147,5 +147,11 @@ private:
   Vector2 radialBlurCenter_ = {0.5f, 0.5f};
   float radialBlurWidth_ = 0.01f;
 
+  float dissolveThreshold_ = 0.5f;
+  float dissolveEdgeRange_ = 0.03f;
+  Vector3 dissolveEdgeColor_ = {1.0f, 0.4f, 0.3f};
+  Vector3 dissolveMaskColor_ = {1.0f, 1.0f, 1.0f};
+  std::shared_ptr<TextureResource> texNoise0_;
+
   std::string debugStr_;
 };

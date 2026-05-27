@@ -7,6 +7,7 @@
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "graphics/Renderer.h"
 #include "AbsoluteEngine/editor/EditorCamera.h"
+#include "AbsoluteEngine/editor/EditorUIManager.h"
 #include "DirectXCommon.h"
 #include "Renderer.h"
 #include "TextureResource.h"
@@ -120,6 +121,11 @@ void DevScene::Update() {
     if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = postProcessTexture_->GetSrvGpuHandle();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
+    
+    // Viewportへのドラッグ＆ドロップ受付（画像へのドロップ）
+    if (editorUIManager_) {
+        editorUIManager_->HandleViewportDragDrop(rootObjects_);
+    }
   }
 
   ImGui::End();
@@ -204,7 +210,7 @@ void DevScene::Update() {
   int ppMode = static_cast<int>(postProcessMode_);
   const char* postProcessItems[] = {
       "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter", 
-      "GaussianFilter", "LuminanceOutline", "DepthOutline", "RadialBlur"
+      "GaussianFilter", "LuminanceOutline", "DepthOutline", "RadialBlur", "Dissolve"
   };
   
   if (ImGui::Combo("Effect Mode", &ppMode, postProcessItems, IM_ARRAYSIZE(postProcessItems))) {
@@ -226,6 +232,11 @@ void DevScene::Update() {
   } else if (postProcessMode_ == Renderer::PostProcessMode::RadialBlur) {
       ImGui::SliderFloat2("Center", &radialBlurCenter_.x, 0.0f, 1.0f);
       ImGui::SliderFloat("Blur Width", &radialBlurWidth_, 0.0f, 0.1f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::Dissolve) {
+      ImGui::SliderFloat("Threshold", &dissolveThreshold_, 0.0f, 1.0f);
+      ImGui::SliderFloat("Edge Range", &dissolveEdgeRange_, 0.0f, 0.1f);
+      ImGui::ColorEdit3("Edge Color", &dissolveEdgeColor_.x);
+      ImGui::ColorEdit3("Mask Color", &dissolveMaskColor_.x);
   }
 
   // レンダラーにポストエフェクトのパラメータを渡す
@@ -233,6 +244,7 @@ void DevScene::Update() {
   Renderer::GetInstance()->SetBoxFilterParam(boxFilterK_);
   Renderer::GetInstance()->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
   Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, radialBlurWidth_);
+  Renderer::GetInstance()->SetDissolveParam(dissolveThreshold_, dissolveEdgeRange_, dissolveEdgeColor_, dissolveMaskColor_);
   
   ImGui::End();
 
@@ -373,6 +385,10 @@ void DevScene::Draw() {
       }
       renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, depthTexture_->GetSrvGpuHandle());
       dx->FinishRendering(postProcessTexture_.get());
+    } else if (postProcessMode_ == Renderer::PostProcessMode::Dissolve && texNoise0_) {
+      dx->SetRenderTarget(postProcessTexture_.get());
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, texNoise0_->GetSrvGpu());
+      dx->FinishRendering(postProcessTexture_.get());
     } else {
       dx->SetRenderTarget(postProcessTexture_.get());
       renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
@@ -426,6 +442,9 @@ void DevScene::InitResources_() {
   texRing_ = tm->Load("resources/app/textures/gradationLine.png");
   ringTransform_.translate = {0.0f, 2.0f, 0.0f};
   ringUVScale_ = {10.0f, 1.0f};
+
+  texNoise0_ = tm->Load("resources/noise/noise0.png");
+  Renderer::GetInstance()->SetDissolveMaskTexture(texNoise0_);
 
   cylinderParams_.divide = 32;
   cylinderParams_.topRadiusX = 0.5f;

@@ -17,6 +17,7 @@
 #include <imgui.h>
 #endif
 #include "AbsoluteEngine/scene/ComponentFactory.h"
+#include "AbsoluteEngine/editor/EditorUIManager.h"
 
 // テスト用コンポーネント
 class SpinComponent : public AbsoluteEngine::IComponent {
@@ -243,6 +244,10 @@ void GameScene::Update() {
     if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = postProcessTexture_->GetSrvGpuHandle();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
+    
+    if (editorUIManager_) {
+        editorUIManager_->HandleViewportDragDrop(rootObjects_);
+    }
   }
   ImGui::End();
 

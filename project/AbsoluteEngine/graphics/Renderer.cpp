@@ -199,6 +199,11 @@ void Renderer::Initialize(DirectXCommon *dx) {
     radialBlurPipeline_->Initialize(
         device, utils, compiler, includeHandler,
         UnifiedPipeline::MakeRadialBlurDesc());
+
+    dissolvePipeline_ = std::make_unique<UnifiedPipeline>();
+    dissolvePipeline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeDissolveDesc());
   }
 
   // Primitive Drawer
@@ -253,10 +258,19 @@ void Renderer::Initialize(DirectXCommon *dx) {
   depthBasedOutlineParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&depthBasedOutlineParamMapped_));
 
   radialBlurParamCB_ = CreateUploadBuffer(align256(sizeof(RadialBlurParam)));
-  radialBlurParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&radialBlurParamMapped_));
-  if (radialBlurParamMapped_) {
-      radialBlurParamMapped_->center = {0.5f, 0.5f};
-      radialBlurParamMapped_->blurWidth = 0.01f;
+  radialBlurParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&radialBlurParamCBMap_));
+  if (radialBlurParamCBMap_) {
+    radialBlurParamCBMap_->center = {0.5f, 0.5f};
+    radialBlurParamCBMap_->blurWidth = 0.01f;
+  }
+
+  dissolveParamCB_ = CreateUploadBuffer(align256(sizeof(DissolveParam)));
+  dissolveParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&dissolveParamMapped_));
+  if (dissolveParamMapped_) {
+    dissolveParamMapped_->threshold = 0.0f;
+    dissolveParamMapped_->edgeRange = 0.03f;
+    dissolveParamMapped_->edgeColor = {1.0f, 0.4f, 0.3f};
+    dissolveParamMapped_->maskColor = {1.0f, 1.0f, 1.0f};
   }
 
   InitSkinningPipeline_();
@@ -551,6 +565,11 @@ void Renderer::DrawModel(ModelInstance *instance) {
   // t1: 環境マップ 
   if (environmentMap_) {
     cmdList->SetGraphicsRootDescriptorTable(7, environmentMap_->GetSrvGpu());
+  }
+  
+  // t2: マスクテクスチャ (Dissolve用)
+  if (dissolveMaskTexture_) {
+    cmdList->SetGraphicsRootDescriptorTable(8, dissolveMaskTexture_->GetSrvGpu());
   }
 
   // 5. ライト・カメラ設定
@@ -880,13 +899,22 @@ void Renderer::SetDepthBasedOutlineParam(const Matrix4x4& projectionInverse) {
 }
 
 void Renderer::SetRadialBlurParam(const Vector2& center, float blurWidth) {
-  if (radialBlurParamMapped_) {
-    radialBlurParamMapped_->center = center;
-    radialBlurParamMapped_->blurWidth = blurWidth;
+  if (radialBlurParamCBMap_) {
+    radialBlurParamCBMap_->center = center;
+    radialBlurParamCBMap_->blurWidth = blurWidth;
   }
 }
 
-void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode, D3D12_GPU_DESCRIPTOR_HANDLE depthTextureHandle) {
+void Renderer::SetDissolveParam(float threshold, float edgeRange, const Vector3& edgeColor, const Vector3& maskColor) {
+  if (dissolveParamMapped_) {
+    dissolveParamMapped_->threshold = threshold;
+    dissolveParamMapped_->edgeRange = edgeRange;
+    dissolveParamMapped_->edgeColor = edgeColor;
+    dissolveParamMapped_->maskColor = maskColor;
+  }
+}
+
+void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode, D3D12_GPU_DESCRIPTOR_HANDLE depthOrMaskTextureHandle) {
   UnifiedPipeline *pipeline = nullptr;
   switch (mode) {
   case PostProcessMode::Normal:
@@ -916,6 +944,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   case PostProcessMode::RadialBlur:
     pipeline = radialBlurPipeline_.get();
     break;
+  case PostProcessMode::Dissolve:
+    pipeline = dissolvePipeline_.get();
+    break;
   }
 
   if (!pipeline)
@@ -938,12 +969,18 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   } else if (mode == PostProcessMode::DepthBasedOutline) {
     cmdList->SetGraphicsRootConstantBufferView(0, depthBasedOutlineParamCB_->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
-    if (depthTextureHandle.ptr != 0) {
-      cmdList->SetGraphicsRootDescriptorTable(2, depthTextureHandle);
+    if (depthOrMaskTextureHandle.ptr != 0) {
+      cmdList->SetGraphicsRootDescriptorTable(2, depthOrMaskTextureHandle);
     }
   } else if (mode == PostProcessMode::RadialBlur) {
     cmdList->SetGraphicsRootConstantBufferView(0, radialBlurParamCB_->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+  } else if (mode == PostProcessMode::Dissolve) {
+    cmdList->SetGraphicsRootConstantBufferView(0, dissolveParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle); // t0
+    if (depthOrMaskTextureHandle.ptr != 0) {
+      cmdList->SetGraphicsRootDescriptorTable(2, depthOrMaskTextureHandle); // t1: mask
+    }
   } else {
     // テクスチャをセット (t0)
     cmdList->SetGraphicsRootDescriptorTable(0, textureHandle);
