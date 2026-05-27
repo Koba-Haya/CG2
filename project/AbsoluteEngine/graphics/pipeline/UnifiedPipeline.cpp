@@ -589,6 +589,21 @@ PipelineDesc UnifiedPipeline::MakeDissolveDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeRandomDesc() {
+  PipelineDesc d{};
+  d.inputElements = {};
+  d.vsPath = L"resources/engine/shaders/Fullscreen.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Random.PS.hlsl";
+  d.usePSMaterial_b0 = true; // RandomParam
+  d.useVSTransform_b0 = false;
+  d.usePSTextureTable_t0 = true;
+  d.enableDepth = false;
+  d.depthWrite = false;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.blendMode = BlendMode::Opaque;
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeCylinderDesc() {
   PipelineDesc d{};
   d.inputElements = {

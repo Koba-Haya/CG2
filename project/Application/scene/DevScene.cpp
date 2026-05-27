@@ -103,6 +103,7 @@ void DevScene::Finalize() {
 
 void DevScene::Update() {
   const float deltaTime = 1.0f / 60.0f;
+  time_ += deltaTime;
   
   // BaseSceneのエディタ機能（カメラ、オブジェクトの更新）
   UpdateEditor();
@@ -210,7 +211,7 @@ void DevScene::Update() {
   int ppMode = static_cast<int>(postProcessMode_);
   const char* postProcessItems[] = {
       "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter", 
-      "GaussianFilter", "LuminanceOutline", "DepthOutline", "RadialBlur", "Dissolve"
+      "GaussianFilter", "LuminanceOutline", "DepthOutline", "RadialBlur", "Dissolve", "Random"
   };
   
   if (ImGui::Combo("Effect Mode", &ppMode, postProcessItems, IM_ARRAYSIZE(postProcessItems))) {
@@ -245,6 +246,7 @@ void DevScene::Update() {
   Renderer::GetInstance()->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
   Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, radialBlurWidth_);
   Renderer::GetInstance()->SetDissolveParam(dissolveThreshold_, dissolveEdgeRange_, dissolveEdgeColor_, dissolveMaskColor_);
+  Renderer::GetInstance()->SetRandomParam(time_);
   
   ImGui::End();
 

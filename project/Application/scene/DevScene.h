@@ -152,6 +152,7 @@ private:
   Vector3 dissolveEdgeColor_ = {1.0f, 0.4f, 0.3f};
   Vector3 dissolveMaskColor_ = {1.0f, 1.0f, 1.0f};
   std::shared_ptr<TextureResource> texNoise0_;
+  float time_ = 0.0f;
 
   std::string debugStr_;
 };

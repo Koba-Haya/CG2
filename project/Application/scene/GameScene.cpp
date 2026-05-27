@@ -149,6 +149,7 @@ void GameScene::SpawnHitEffect(const Vector3 &pos) {
 
 void GameScene::Update() {
   const float deltaTime = 1.0f / 60.0f;
+  time_ += deltaTime;
 
   UpdateEditor();
 
@@ -306,6 +307,8 @@ void GameScene::Update() {
   if (ImGui::RadioButton("LuminanceOutline", &mode, static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::LuminanceBasedOutline;
   ImGui::SameLine();
   if (ImGui::RadioButton("DepthOutline", &mode, static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::DepthBasedOutline;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Random", &mode, static_cast<int>(Renderer::PostProcessMode::Random))) postProcessMode_ = Renderer::PostProcessMode::Random;
 
   if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
       ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
@@ -344,6 +347,7 @@ void GameScene::Draw() {
   renderer->SetVignetteParam(vignetteScale_, vignettePow_);
   renderer->SetBoxFilterParam(boxFilterK_);
   renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
+  renderer->SetRandomParam(time_);
 
   // --- ライトの適用 ---
   ApplyEditorLightsToRenderer(renderer);

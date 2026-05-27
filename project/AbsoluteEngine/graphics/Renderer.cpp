@@ -204,6 +204,11 @@ void Renderer::Initialize(DirectXCommon *dx) {
     dissolvePipeline_->Initialize(
         device, utils, compiler, includeHandler,
         UnifiedPipeline::MakeDissolveDesc());
+
+    randomPipeline_ = std::make_unique<UnifiedPipeline>();
+    randomPipeline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeRandomDesc());
   }
 
   // Primitive Drawer
@@ -267,10 +272,16 @@ void Renderer::Initialize(DirectXCommon *dx) {
   dissolveParamCB_ = CreateUploadBuffer(align256(sizeof(DissolveParam)));
   dissolveParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&dissolveParamMapped_));
   if (dissolveParamMapped_) {
-    dissolveParamMapped_->threshold = 0.0f;
-    dissolveParamMapped_->edgeRange = 0.03f;
+    dissolveParamMapped_->threshold = 0.5f;
+    dissolveParamMapped_->edgeRange = 0.05f;
     dissolveParamMapped_->edgeColor = {1.0f, 0.4f, 0.3f};
-    dissolveParamMapped_->maskColor = {1.0f, 1.0f, 1.0f};
+    dissolveParamMapped_->maskColor = {0.0f, 0.0f, 0.0f};
+  }
+
+  randomParamCB_ = CreateUploadBuffer(align256(sizeof(RandomParam)));
+  randomParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&randomParamMapped_));
+  if (randomParamMapped_) {
+      randomParamMapped_->time = 0.0f;
   }
 
   InitSkinningPipeline_();
@@ -914,6 +925,12 @@ void Renderer::SetDissolveParam(float threshold, float edgeRange, const Vector3&
   }
 }
 
+void Renderer::SetRandomParam(float time) {
+  if (randomParamMapped_) {
+    randomParamMapped_->time = time;
+  }
+}
+
 void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode, D3D12_GPU_DESCRIPTOR_HANDLE depthOrMaskTextureHandle) {
   UnifiedPipeline *pipeline = nullptr;
   switch (mode) {
@@ -946,6 +963,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
     break;
   case PostProcessMode::Dissolve:
     pipeline = dissolvePipeline_.get();
+    break;
+  case PostProcessMode::Random:
+    pipeline = randomPipeline_.get();
     break;
   }
 
@@ -981,6 +1001,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
     if (depthOrMaskTextureHandle.ptr != 0) {
       cmdList->SetGraphicsRootDescriptorTable(2, depthOrMaskTextureHandle); // t1: mask
     }
+  } else if (mode == PostProcessMode::Random) {
+    cmdList->SetGraphicsRootConstantBufferView(0, randomParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
   } else {
     // テクスチャをセット (t0)
     cmdList->SetGraphicsRootDescriptorTable(0, textureHandle);

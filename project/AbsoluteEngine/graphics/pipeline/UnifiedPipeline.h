@@ -103,7 +103,8 @@ public:
   static PipelineDesc MakeLuminanceBasedOutlineDesc();
   static PipelineDesc MakeDepthBasedOutlineDesc();
   static PipelineDesc MakeRadialBlurDesc();
-  static PipelineDesc MakeDissolveDesc(); // 追加
+  static PipelineDesc MakeDissolveDesc();
+  static PipelineDesc MakeRandomDesc(); // 追加
 
   // Compute
   static PipelineDesc MakeParticleInitializeDesc();

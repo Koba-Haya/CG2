@@ -75,4 +75,5 @@ private:
   std::vector<HitEffect> hitEffects_;
 
   float shootCooldown_ = 0.0f;
+  float time_ = 0.0f;
 };
