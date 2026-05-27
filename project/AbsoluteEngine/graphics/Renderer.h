@@ -141,12 +141,15 @@ public:
     Sepia,
     Vignette,
     BoxFilter,
-    GaussianFilter
+    GaussianFilter,
+    LuminanceBasedOutline,
+    DepthBasedOutline
   };
-  void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal);
+  void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal, D3D12_GPU_DESCRIPTOR_HANDLE depthTextureHandle = {});
   void SetVignetteParam(float scale, float powValue);
   void SetBoxFilterParam(int32_t k);
   void SetGaussianFilterParam(int32_t k, float sigma, const Vector2& direction);
+  void SetDepthBasedOutlineParam(const Matrix4x4& projectionInverse);
 
   void DispatchSkinning(ModelInstance* instance);
 
@@ -225,6 +228,8 @@ private:
   std::unique_ptr<UnifiedPipeline> vignettePipeline_;
   std::unique_ptr<UnifiedPipeline> boxFilterPipeline_;
   std::unique_ptr<UnifiedPipeline> gaussianFilterPipeline_;
+  std::unique_ptr<UnifiedPipeline> luminanceBasedOutlinePipeline_;
+  std::unique_ptr<UnifiedPipeline> pipelineDepthBasedOutline_;
 
   struct alignas(16) VignetteParam {
     float scale;
@@ -248,4 +253,10 @@ private:
   };
   ComPtr<ID3D12Resource> gaussianFilterParamCB_;
   GaussianFilterParam* gaussianFilterParamMapped_ = nullptr;
+
+  struct DepthBasedOutlineParam {
+      Matrix4x4 projectionInverse;
+  };
+  ComPtr<ID3D12Resource> depthBasedOutlineParamCB_;
+  DepthBasedOutlineParam* depthBasedOutlineParamMapped_ = nullptr;
 };

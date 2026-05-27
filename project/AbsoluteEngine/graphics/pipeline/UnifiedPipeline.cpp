@@ -583,6 +583,21 @@ PipelineDesc UnifiedPipeline::MakeSepiaDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeLuminanceBasedOutlineDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/LuminanceBasedOutline.PS.hlsl";
+  d.usePSMaterial_b0 = false;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeDepthBasedOutlineDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/DepthBasedOutline.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  d.usePSEnvironmentMap_t1 = true;
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeVignetteDesc() {
   PipelineDesc d = MakeCopyImageDesc();
   d.psPath = L"resources/engine/shaders/Vignette.PS.hlsl";

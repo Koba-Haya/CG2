@@ -1,6 +1,7 @@
 #include "DirectXCommon.h"
 #include "DirectXResourceUtils.h"
 #include "graphics/texture/RenderTexture.h"
+#include "graphics/texture/DepthTexture.h"
 #include <cassert>
 #include <dxcapi.h>
 
@@ -218,7 +219,7 @@ void DirectXCommon::CreateSwapChain_() {
 void DirectXCommon::CreateDescriptorHeaps_() {
   rtvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 16, false);
   srvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
-  dsvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, false);
+  dsvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 16, false);
 
   descriptorSizeRTV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
   descriptorSizeSRV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -252,6 +253,8 @@ void DirectXCommon::CreateDepthStencil_() {
   device_->CreateDepthStencilView(
       depthStencilResource_.Get(), &dsvDesc,
       dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart());
+
+  nextDsvIndex_ = 1; // バックバッファ用で1つ消費
 }
 
 void DirectXCommon::CreateFenceAndEvent_() {
@@ -313,6 +316,13 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::AllocateRtv() {
   return handle;
 }
 
+D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::AllocateDsv() {
+  assert(nextDsvIndex_ < 16);
+  D3D12_CPU_DESCRIPTOR_HANDLE handle = GetCPUDescriptorHandle(dsvDescriptorHeap_, descriptorSizeDSV_, nextDsvIndex_);
+  nextDsvIndex_++;
+  return handle;
+}
+
 void DirectXCommon::SetRenderTarget(RenderTexture* target) {
     assert(target);
     
@@ -330,6 +340,35 @@ void DirectXCommon::SetRenderTarget(RenderTexture* target) {
     commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 }
 
+void DirectXCommon::SetRenderTargetWithDepth(RenderTexture* target, DepthTexture* depthTarget) {
+    assert(target);
+    assert(depthTarget);
+    
+    // 1. リソースバリア (SRV -> RT)
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Transition.pResource = target->GetResource();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    // DepthTexture の状態遷移
+    if (depthTarget->GetCurrentState() != D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+        barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barriers[1].Transition.pResource = depthTarget->GetResource();
+        barriers[1].Transition.StateBefore = depthTarget->GetCurrentState();
+        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        depthTarget->SetCurrentState(D3D12_RESOURCE_STATE_DEPTH_WRITE);
+        commandList_->ResourceBarrier(2, barriers);
+    } else {
+        commandList_->ResourceBarrier(1, barriers); // targetのみ
+    }
+
+    // 2. レンダーターゲット設定
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = target->GetRtvHandle();
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = depthTarget->GetDsvHandle();
+    commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+}
+
 void DirectXCommon::FinishRendering(RenderTexture* target) {
     assert(target);
 
@@ -340,6 +379,32 @@ void DirectXCommon::FinishRendering(RenderTexture* target) {
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     commandList_->ResourceBarrier(1, &barrier);
+
+    // 2. バックバッファに戻す
+    ResetRenderTarget();
+}
+
+void DirectXCommon::FinishRenderingWithDepth(RenderTexture* target, DepthTexture* depthTarget) {
+    assert(target);
+    assert(depthTarget);
+
+    // 1. リソースバリア (RT/DSV -> SRV)
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Transition.pResource = target->GetResource();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+    if (depthTarget->GetCurrentState() != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+        barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barriers[1].Transition.pResource = depthTarget->GetResource();
+        barriers[1].Transition.StateBefore = depthTarget->GetCurrentState();
+        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        depthTarget->SetCurrentState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        commandList_->ResourceBarrier(2, barriers);
+    } else {
+        commandList_->ResourceBarrier(1, barriers); // targetのみ
+    }
 
     // 2. バックバッファに戻す
     ResetRenderTarget();

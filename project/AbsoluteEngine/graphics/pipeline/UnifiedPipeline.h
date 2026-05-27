@@ -100,6 +100,11 @@ public:
   static PipelineDesc MakeVignetteDesc();
   static PipelineDesc MakeBoxFilterDesc();
   static PipelineDesc MakeGaussianFilterDesc();
+  static PipelineDesc MakeLuminanceBasedOutlineDesc();
+  static PipelineDesc MakeDepthBasedOutlineDesc();
+
+  // Compute
+  static PipelineDesc MakeParticleInitializeDesc();
 
 private:
   ComPtr<ID3D12RootSignature> rootSignature_;

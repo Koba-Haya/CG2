@@ -189,6 +189,10 @@ void DevScene::Update() {
   if (ImGui::RadioButton("BoxFilter", &mode, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = Renderer::PostProcessMode::BoxFilter;
   ImGui::SameLine();
   if (ImGui::RadioButton("GaussianFilter", &mode, static_cast<int>(Renderer::PostProcessMode::GaussianFilter))) postProcessMode_ = Renderer::PostProcessMode::GaussianFilter;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("LuminanceOutline", &mode, static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::LuminanceBasedOutline;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("DepthOutline", &mode, static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::DepthBasedOutline;
 
   if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
       ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
@@ -280,18 +284,16 @@ void DevScene::Draw() {
   ApplyEditorLightsToRenderer(renderer);
 
   // --- オフスクリーン描画パス（RenderTexture → ImGui::Image で表示） ---
-  if (renderTexture_) {
+  if (renderTexture_ && depthTexture_) {
     // RenderTexture に切り替え（SRV → RT バリア + OMSetRenderTargets）
-    dx->SetRenderTarget(renderTexture_.get());
+    dx->SetRenderTargetWithDepth(renderTexture_.get(), depthTexture_.get());
 
     // RenderTexture をクリア（暗いグレー）
     float clearColor[] = { 0.1f, 0.1f, 0.15f, 1.0f };
     cmdList->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
 
     // 深度バッファをクリア
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle =
-        GetCPUDescriptorHandle(dx->GetDSVHeap(), dx->GetDSVDescriptorSize(), 0);
-    cmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    cmdList->ClearDepthStencilView(depthTexture_->GetDsvHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     // --- シーンを RenderTexture に描画 ---
     modelSphere_.SetWorld(MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate));
@@ -341,7 +343,7 @@ void DevScene::Draw() {
     renderer->DrawGPUParticles(static_cast<BlendMode>(particleBlendMode_ + 1));
 
     // RenderTexture を SRV 状態に戻す
-    dx->FinishRendering(renderTexture_.get());
+    dx->FinishRenderingWithDepth(renderTexture_.get(), depthTexture_.get());
   }
 
   // --- ポストプロセスの適用 ---
@@ -357,6 +359,13 @@ void DevScene::Draw() {
       dx->SetRenderTarget(postProcessTexture_.get());
       renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {0.0f, 1.0f});
       renderer->DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(postProcessTexture_.get());
+    } else if (postProcessMode_ == Renderer::PostProcessMode::DepthBasedOutline) {
+      dx->SetRenderTarget(postProcessTexture_.get());
+      if (editorCamera_) {
+        renderer->SetDepthBasedOutlineParam(Inverse(editorCamera_->GetProjectionMatrix()));
+      }
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, depthTexture_->GetSrvGpuHandle());
       dx->FinishRendering(postProcessTexture_.get());
     } else {
       dx->SetRenderTarget(postProcessTexture_.get());
@@ -446,8 +455,11 @@ void DevScene::InitResources_() {
 
   // オフスクリーンテスト初期化
   renderTexture_ = std::make_unique<RenderTexture>();
-  renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
-  
+  renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
+
+  depthTexture_ = std::make_unique<DepthTexture>();
+  depthTexture_->Initialize(dx, 1280, 720);
+
   postProcessTexture_ = std::make_unique<RenderTexture>();
   postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
 

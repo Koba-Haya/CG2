@@ -184,6 +184,16 @@ void Renderer::Initialize(DirectXCommon *dx) {
     gaussianFilterPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(gaussianFilterPipeline_->Initialize(device, utils, compiler,
                                                    includeHandler, gaussianFilterDesc));
+
+    luminanceBasedOutlinePipeline_ = std::make_unique<UnifiedPipeline>();
+    luminanceBasedOutlinePipeline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeLuminanceBasedOutlineDesc());
+
+    pipelineDepthBasedOutline_ = std::make_unique<UnifiedPipeline>();
+    pipelineDepthBasedOutline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeDepthBasedOutlineDesc());
   }
 
   // Primitive Drawer
@@ -233,6 +243,9 @@ void Renderer::Initialize(DirectXCommon *dx) {
     gaussianFilterParamMapped_->direction[0] = 1.0f;
     gaussianFilterParamMapped_->direction[1] = 0.0f;
   }
+
+  depthBasedOutlineParamCB_ = CreateUploadBuffer(align256(sizeof(DepthBasedOutlineParam)));
+  depthBasedOutlineParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&depthBasedOutlineParamMapped_));
 
   InitSkinningPipeline_();
 }
@@ -848,7 +861,13 @@ void Renderer::DrawGrid(float size, int divisions, const Vector4 &color) {
   primitiveDrawer_->AddGrid(size, divisions, color);
 }
 
-void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode) {
+void Renderer::SetDepthBasedOutlineParam(const Matrix4x4& projectionInverse) {
+  if (depthBasedOutlineParamMapped_) {
+    depthBasedOutlineParamMapped_->projectionInverse = projectionInverse;
+  }
+}
+
+void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode, D3D12_GPU_DESCRIPTOR_HANDLE depthTextureHandle) {
   UnifiedPipeline *pipeline = nullptr;
   switch (mode) {
   case PostProcessMode::Normal:
@@ -869,6 +888,12 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   case PostProcessMode::GaussianFilter:
     pipeline = gaussianFilterPipeline_.get();
     break;
+  case PostProcessMode::LuminanceBasedOutline:
+    pipeline = luminanceBasedOutlinePipeline_.get();
+    break;
+  case PostProcessMode::DepthBasedOutline:
+    pipeline = pipelineDepthBasedOutline_.get();
+    break;
   }
 
   if (!pipeline)
@@ -888,6 +913,12 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   } else if (mode == PostProcessMode::GaussianFilter) {
     cmdList->SetGraphicsRootConstantBufferView(0, gaussianFilterParamCB_->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+  } else if (mode == PostProcessMode::DepthBasedOutline) {
+    cmdList->SetGraphicsRootConstantBufferView(0, depthBasedOutlineParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+    if (depthTextureHandle.ptr != 0) {
+      cmdList->SetGraphicsRootDescriptorTable(2, depthTextureHandle);
+    }
   } else {
     // テクスチャをセット (t0)
     cmdList->SetGraphicsRootDescriptorTable(0, textureHandle);

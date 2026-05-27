@@ -15,8 +15,8 @@
 #include "Sprite.h"
 #include "Transform.h"
 #include "Vector.h"
-#include "graphics/texture/TextureResource.h"
 #include "graphics/texture/RenderTexture.h"
+#include "graphics/texture/DepthTexture.h"
 #include "graphics/Renderer.h"
 #include <cstdint>
 #include <fstream>
@@ -84,7 +84,7 @@ private:
   uint32_t initialParticleCount_ = 30;
   bool showEmitterGizmo_ = false;
   bool enableAccelerationField_ = false;
-  AccelerationField accelerationField_;
+  AccelerationField accelerationField_{};
   ParticleEmitter particleEmitter_;
 
   std::vector<DirLight> dirLights_;
@@ -133,6 +133,7 @@ private:
 
   // オフスクリーンテスト用
   std::unique_ptr<RenderTexture> renderTexture_;
+  std::unique_ptr<DepthTexture> depthTexture_;
   std::unique_ptr<RenderTexture> postProcessTexture_;
   std::unique_ptr<RenderTexture> gaussianTempTexture_;
   Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;

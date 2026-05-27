@@ -105,6 +105,9 @@ void GameScene::Initialize(const SceneServices &services) {
   renderTexture_ = std::make_unique<RenderTexture>();
   renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
 
+  depthTexture_ = std::make_unique<DepthTexture>();
+  depthTexture_->Initialize(dx, 1280, 720);
+
   postProcessTexture_ = std::make_unique<RenderTexture>();
   postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
 
@@ -294,6 +297,10 @@ void GameScene::Update() {
   if (ImGui::RadioButton("BoxFilter", &mode, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = Renderer::PostProcessMode::BoxFilter;
   ImGui::SameLine();
   if (ImGui::RadioButton("GaussianFilter", &mode, static_cast<int>(Renderer::PostProcessMode::GaussianFilter))) postProcessMode_ = Renderer::PostProcessMode::GaussianFilter;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("LuminanceOutline", &mode, static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::LuminanceBasedOutline;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("DepthOutline", &mode, static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::DepthBasedOutline;
 
   if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
       ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
@@ -313,13 +320,12 @@ void GameScene::Draw() {
   auto* renderer = Renderer::GetInstance();
   auto* dx = renderer->GetDX();
 
-  if (renderTexture_) {
-    dx->SetRenderTarget(renderTexture_.get());
+  if (renderTexture_ && depthTexture_) {
+    dx->SetRenderTargetWithDepth(renderTexture_.get(), depthTexture_.get());
     float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
     dx->GetCommandList()->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
 
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetCPUDescriptorHandle(dx->GetDSVHeap(), dx->GetDSVDescriptorSize(), 0);
-    dx->GetCommandList()->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    dx->GetCommandList()->ClearDepthStencilView(depthTexture_->GetDsvHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
   }
 
   if (playMode_ == PlayMode::Edit) {
@@ -399,10 +405,10 @@ void GameScene::Draw() {
   renderer->DrawGrid(500.0f, 50, Vector4{0.2f, 0.4f, 0.8f, 0.5f});
 
   renderer->RenderPrimitives();
-  //renderer->DrawGPUParticles();
+  renderer->DrawGPUParticles();
 
-  if (renderTexture_) {
-    dx->FinishRendering(renderTexture_.get());
+  if (renderTexture_ && depthTexture_) {
+      dx->FinishRenderingWithDepth(renderTexture_.get(), depthTexture_.get());
   }
 
   if (renderTexture_ && postProcessTexture_) {
@@ -417,6 +423,15 @@ void GameScene::Draw() {
       dx->SetRenderTarget(postProcessTexture_.get());
       renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {0.0f, 1.0f});
       renderer->DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(postProcessTexture_.get());
+    } else if (postProcessMode_ == Renderer::PostProcessMode::DepthBasedOutline) {
+      dx->SetRenderTarget(postProcessTexture_.get());
+      Matrix4x4 projInverse;
+      if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
+      else if (isDebugCamera_) projInverse = Inverse(debugCamera_->GetProjectionMatrix());
+      else projInverse = Inverse(gameCamera_->GetProjectionMatrix());
+      renderer->SetDepthBasedOutlineParam(projInverse);
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, depthTexture_->GetSrvGpuHandle());
       dx->FinishRendering(postProcessTexture_.get());
     } else {
       dx->SetRenderTarget(postProcessTexture_.get());
