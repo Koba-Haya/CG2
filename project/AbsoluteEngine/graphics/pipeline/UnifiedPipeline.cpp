@@ -544,6 +544,21 @@ PipelineDesc UnifiedPipeline::MakeCopyImageDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeRadialBlurDesc() {
+  PipelineDesc d{};
+  d.inputElements = {};
+  d.vsPath = L"resources/engine/shaders/Fullscreen.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/RadialBlur.PS.hlsl";
+  d.usePSMaterial_b0 = true; // RadialBlurParam
+  d.useVSTransform_b0 = false;
+  d.usePSTextureTable_t0 = true;
+  d.enableDepth = false;
+  d.depthWrite = false;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.blendMode = BlendMode::Opaque;
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeCylinderDesc() {
   PipelineDesc d{};
   d.inputElements = {

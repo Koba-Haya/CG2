@@ -194,6 +194,11 @@ void Renderer::Initialize(DirectXCommon *dx) {
     pipelineDepthBasedOutline_->Initialize(
         device, utils, compiler, includeHandler,
         UnifiedPipeline::MakeDepthBasedOutlineDesc());
+
+    radialBlurPipeline_ = std::make_unique<UnifiedPipeline>();
+    radialBlurPipeline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeRadialBlurDesc());
   }
 
   // Primitive Drawer
@@ -246,6 +251,13 @@ void Renderer::Initialize(DirectXCommon *dx) {
 
   depthBasedOutlineParamCB_ = CreateUploadBuffer(align256(sizeof(DepthBasedOutlineParam)));
   depthBasedOutlineParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&depthBasedOutlineParamMapped_));
+
+  radialBlurParamCB_ = CreateUploadBuffer(align256(sizeof(RadialBlurParam)));
+  radialBlurParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&radialBlurParamMapped_));
+  if (radialBlurParamMapped_) {
+      radialBlurParamMapped_->center = {0.5f, 0.5f};
+      radialBlurParamMapped_->blurWidth = 0.01f;
+  }
 
   InitSkinningPipeline_();
 }
@@ -867,6 +879,13 @@ void Renderer::SetDepthBasedOutlineParam(const Matrix4x4& projectionInverse) {
   }
 }
 
+void Renderer::SetRadialBlurParam(const Vector2& center, float blurWidth) {
+  if (radialBlurParamMapped_) {
+    radialBlurParamMapped_->center = center;
+    radialBlurParamMapped_->blurWidth = blurWidth;
+  }
+}
+
 void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode, D3D12_GPU_DESCRIPTOR_HANDLE depthTextureHandle) {
   UnifiedPipeline *pipeline = nullptr;
   switch (mode) {
@@ -894,6 +913,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   case PostProcessMode::DepthBasedOutline:
     pipeline = pipelineDepthBasedOutline_.get();
     break;
+  case PostProcessMode::RadialBlur:
+    pipeline = radialBlurPipeline_.get();
+    break;
   }
 
   if (!pipeline)
@@ -919,6 +941,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
     if (depthTextureHandle.ptr != 0) {
       cmdList->SetGraphicsRootDescriptorTable(2, depthTextureHandle);
     }
+  } else if (mode == PostProcessMode::RadialBlur) {
+    cmdList->SetGraphicsRootConstantBufferView(0, radialBlurParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
   } else {
     // テクスチャをセット (t0)
     cmdList->SetGraphicsRootDescriptorTable(0, textureHandle);

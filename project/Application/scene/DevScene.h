@@ -141,6 +141,11 @@ private:
   float vignetteScale_ = 16.0f;
   float vignettePow_ = 0.8f;
   int32_t boxFilterK_ = 1;
-  int32_t gaussianFilterK_ = 1;
+  int32_t gaussianFilterK_ = 3;
   float gaussianFilterSigma_ = 1.0f;
+  
+  Vector2 radialBlurCenter_ = {0.5f, 0.5f};
+  float radialBlurWidth_ = 0.01f;
+
+  std::string debugStr_;
 };

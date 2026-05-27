@@ -176,39 +176,6 @@ void DevScene::Update() {
     ImGui::SliderFloat("Reflection Weight", &reflectionWeight_, 0.0f, 1.0f);
   }
 
-  ImGui::SeparatorText("PostProcess");
-  int mode = static_cast<int>(postProcessMode_);
-  if (ImGui::RadioButton("Normal", &mode, static_cast<int>(Renderer::PostProcessMode::Normal))) postProcessMode_ = Renderer::PostProcessMode::Normal;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Grayscale", &mode, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = Renderer::PostProcessMode::Grayscale;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Vignette", &mode, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = Renderer::PostProcessMode::Vignette;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("BoxFilter", &mode, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = Renderer::PostProcessMode::BoxFilter;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("GaussianFilter", &mode, static_cast<int>(Renderer::PostProcessMode::GaussianFilter))) postProcessMode_ = Renderer::PostProcessMode::GaussianFilter;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("LuminanceOutline", &mode, static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::LuminanceBasedOutline;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("DepthOutline", &mode, static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::DepthBasedOutline;
-
-  if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
-      ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
-      ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
-      ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter) {
-      ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
-      ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
-  }
-
-  // レンダラーにポストエフェクトのパラメータを渡す
-  Renderer::GetInstance()->SetVignetteParam(vignetteScale_, vignettePow_);
-  Renderer::GetInstance()->SetBoxFilterParam(boxFilterK_);
-  Renderer::GetInstance()->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
-
   const char *blendModeItems[] = {"Alpha", "Add", "Subtract", "Multiply", "Screen"};
   ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems, IM_ARRAYSIZE(blendModeItems));
 
@@ -228,6 +195,45 @@ void DevScene::Update() {
   } else {
       ImGui::DragFloat3("Camera Pos (Not Linked)", &cameraTransform_.translate.x, 0.1f);
   }
+  ImGui::End();
+
+  // --- ポストプロセスタブ ---
+  ImGui::Begin("PostProcess##Panel");
+  ImGui::SeparatorText("PostProcess Settings");
+  
+  int ppMode = static_cast<int>(postProcessMode_);
+  const char* postProcessItems[] = {
+      "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter", 
+      "GaussianFilter", "LuminanceOutline", "DepthOutline", "RadialBlur"
+  };
+  
+  if (ImGui::Combo("Effect Mode", &ppMode, postProcessItems, IM_ARRAYSIZE(postProcessItems))) {
+      postProcessMode_ = static_cast<Renderer::PostProcessMode>(ppMode);
+  }
+
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+
+  if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
+      ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
+      ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
+      ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter) {
+      ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
+      ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::RadialBlur) {
+      ImGui::SliderFloat2("Center", &radialBlurCenter_.x, 0.0f, 1.0f);
+      ImGui::SliderFloat("Blur Width", &radialBlurWidth_, 0.0f, 0.1f);
+  }
+
+  // レンダラーにポストエフェクトのパラメータを渡す
+  Renderer::GetInstance()->SetVignetteParam(vignetteScale_, vignettePow_);
+  Renderer::GetInstance()->SetBoxFilterParam(boxFilterK_);
+  Renderer::GetInstance()->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
+  Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, radialBlurWidth_);
+  
   ImGui::End();
 
   // --- ツールバー・エディタUIの描画（BaseScene側で行う） ---

@@ -143,13 +143,15 @@ public:
     BoxFilter,
     GaussianFilter,
     LuminanceBasedOutline,
-    DepthBasedOutline
+    DepthBasedOutline,
+    RadialBlur
   };
   void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal, D3D12_GPU_DESCRIPTOR_HANDLE depthTextureHandle = {});
   void SetVignetteParam(float scale, float powValue);
   void SetBoxFilterParam(int32_t k);
   void SetGaussianFilterParam(int32_t k, float sigma, const Vector2& direction);
   void SetDepthBasedOutlineParam(const Matrix4x4& projectionInverse);
+  void SetRadialBlurParam(const Vector2& center, float blurWidth);
 
   void DispatchSkinning(ModelInstance* instance);
 
@@ -230,6 +232,7 @@ private:
   std::unique_ptr<UnifiedPipeline> gaussianFilterPipeline_;
   std::unique_ptr<UnifiedPipeline> luminanceBasedOutlinePipeline_;
   std::unique_ptr<UnifiedPipeline> pipelineDepthBasedOutline_;
+  std::unique_ptr<UnifiedPipeline> radialBlurPipeline_;
 
   struct alignas(16) VignetteParam {
     float scale;
@@ -259,4 +262,12 @@ private:
   };
   ComPtr<ID3D12Resource> depthBasedOutlineParamCB_;
   DepthBasedOutlineParam* depthBasedOutlineParamMapped_ = nullptr;
+
+  struct alignas(16) RadialBlurParam {
+    Vector2 center;
+    float blurWidth;
+    float padding;
+  };
+  ComPtr<ID3D12Resource> radialBlurParamCB_;
+  RadialBlurParam* radialBlurParamMapped_ = nullptr;
 };

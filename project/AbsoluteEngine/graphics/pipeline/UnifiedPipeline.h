@@ -102,6 +102,7 @@ public:
   static PipelineDesc MakeGaussianFilterDesc();
   static PipelineDesc MakeLuminanceBasedOutlineDesc();
   static PipelineDesc MakeDepthBasedOutlineDesc();
+  static PipelineDesc MakeRadialBlurDesc();
 
   // Compute
   static PipelineDesc MakeParticleInitializeDesc();
