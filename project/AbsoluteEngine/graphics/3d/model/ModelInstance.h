@@ -31,6 +31,16 @@ public:
     float shininess = 32.0f;
     float environmentCoefficient = 0.0f;
     float pad[2] = {0, 0};
+    
+    // --- Dissolve ---
+    int32_t enableDissolve = 0;
+    float dissolveThreshold = 0.0f;
+    float dissolveEdgeRange = 0.03f;
+    float pad2 = 0.0f;
+    Vector3 dissolveEdgeColor = {1.0f, 0.4f, 0.3f};
+    float pad3 = 0.0f;
+    Vector3 dissolveMaskColor = {1.0f, 1.0f, 1.0f};
+    float pad4 = 0.0f;
   };
 
   struct TransformCB {
@@ -59,6 +69,8 @@ public:
   void SetSpecularColor(const Vector3 &c);
   void SetShininess(float s);
   void SetEnvironmentCoefficient(float c);
+  void SetDissolveParam(bool enable, float threshold = 0.0f, float edgeRange = 0.03f, 
+                        const Vector3& edgeColor = {1.0f, 0.4f, 0.3f}, const Vector3& maskColor = {1.0f, 1.0f, 1.0f});
 
   void SetWireframe(bool wireframe) { isWireframe_ = wireframe; }
   bool IsWireframe() const { return isWireframe_; }

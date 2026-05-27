@@ -11,7 +11,17 @@ struct Material
     float4x4 uvTransform;
     float shininess;
     float environmentCoefficient;
-    float3 pad;
+    float2 pad;
+    
+    // --- Dissolve ---
+    int enableDissolve;
+    float dissolveThreshold;
+    float dissolveEdgeRange;
+    float pad2;
+    float3 dissolveEdgeColor;
+    float pad3;
+    float3 dissolveMaskColor;
+    float pad4;
 };
 
 struct Camera
@@ -82,6 +92,7 @@ struct SpotLightGroup
 ConstantBuffer<Material> gMaterial : register(b0); // マテリアル定数バッファ
 Texture2D<float4> gTexture : register(t0);
 TextureCube<float4> gEnvironmentTexture : register(t1); // 環境マップ（キューブマップ）
+Texture2D<float> gMaskTexture : register(t2); // Dissolve用
 SamplerState gSampler : register(s0); // テクスチャサンプラー
 ConstantBuffer<DirectionalLightGroup> gDirectionalLights : register(b1); // 複数の平行光をまとめた定数バッファ
 ConstantBuffer<Camera> gCamera : register(b2); // カメラの定数バッファ
@@ -260,16 +271,30 @@ PixelShaderOutput main(VertexShaderOutput input)
     if (gMaterial.enableLighting != 0 && gMaterial.environmentCoefficient > 0.0f)
     {
         float3 N = normalize(input.normal);
-        // カメラから頂点へのベクトル (入射ベクトル)
         float3 incident = normalize(input.worldPosition - gCamera.worldPosition);
-        // 反射ベクトルを算出
         float3 reflectedVector = reflect(incident, N);
-        
-        // CubeMapをサンプリング
         float3 environmentColor = gEnvironmentTexture.Sample(gSampler, reflectedVector).rgb;
-        
-        // 反射色を最終色に加算 (マテリアルの係数を掛ける)
         finalRGB += environmentColor * gMaterial.environmentCoefficient;
+    }
+
+    // ===== Dissolve =====
+    if (gMaterial.enableDissolve != 0)
+    {
+        float mask = gMaskTexture.Sample(gSampler, transformedUV.xy).r;
+        
+        if (mask <= gMaterial.dissolveThreshold)
+        {
+            // オブジェクトのディゾルブの場合、通常は discard で透明にするが
+            // maskColor を使う設定の場合は discard せずに色を上書きする運用も可能。
+            // 今回の要件に合わせて、完全に溶けた部分を maskColor で塗る
+            finalRGB = gMaterial.dissolveMaskColor;
+        }
+        else if (mask <= gMaterial.dissolveThreshold + gMaterial.dissolveEdgeRange)
+        {
+            float edgeWeight = (mask - gMaterial.dissolveThreshold) / gMaterial.dissolveEdgeRange;
+            float mixFactor = 1.0f - edgeWeight;
+            finalRGB = lerp(finalRGB, gMaterial.dissolveEdgeColor, mixFactor);
+        }
     }
 
     output.color = float4(finalRGB, alpha);

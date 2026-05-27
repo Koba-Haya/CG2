@@ -1,4 +1,4 @@
-﻿#define NOMINMAX
+#define NOMINMAX
 #include "GameScene.h"
 #include "Renderer.h"
 #include "DirectXCommon.h"
@@ -17,6 +17,7 @@
 #include <imgui.h>
 #endif
 #include "AbsoluteEngine/scene/ComponentFactory.h"
+#include "AbsoluteEngine/editor/EditorUIManager.h"
 
 // テスト用コンポーネント
 class SpinComponent : public AbsoluteEngine::IComponent {
@@ -105,8 +106,14 @@ void GameScene::Initialize(const SceneServices &services) {
   renderTexture_ = std::make_unique<RenderTexture>();
   renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
 
+  depthTexture_ = std::make_unique<DepthTexture>();
+  depthTexture_->Initialize(dx, 1280, 720);
+
   postProcessTexture_ = std::make_unique<RenderTexture>();
   postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
+
+  gaussianTempTexture_ = std::make_unique<RenderTexture>();
+  gaussianTempTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
 
   // サンプルコンポーネントの登録
   AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
@@ -142,6 +149,7 @@ void GameScene::SpawnHitEffect(const Vector3 &pos) {
 
 void GameScene::Update() {
   const float deltaTime = 1.0f / 60.0f;
+  time_ += deltaTime;
 
   UpdateEditor();
 
@@ -237,10 +245,16 @@ void GameScene::Update() {
     if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = postProcessTexture_->GetSrvGpuHandle();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
+    
+    if (editorUIManager_) {
+        editorUIManager_->HandleViewportDragDrop(rootObjects_);
+    }
   }
   ImGui::End();
 
   ImGui::Begin("GameScene Controls##LeftPanel");
+  ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+  ImGui::Separator();
   ImGui::Text("Enemies Remaining: %d", (int)enemies_.size());
   
   ImGui::SeparatorText("Bullet Controls & Info");
@@ -287,12 +301,23 @@ void GameScene::Update() {
   if (ImGui::RadioButton("Vignette", &mode, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = Renderer::PostProcessMode::Vignette;
   ImGui::SameLine();
   if (ImGui::RadioButton("BoxFilter", &mode, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = Renderer::PostProcessMode::BoxFilter;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("GaussianFilter", &mode, static_cast<int>(Renderer::PostProcessMode::GaussianFilter))) postProcessMode_ = Renderer::PostProcessMode::GaussianFilter;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("LuminanceOutline", &mode, static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::LuminanceBasedOutline;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("DepthOutline", &mode, static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::DepthBasedOutline;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Random", &mode, static_cast<int>(Renderer::PostProcessMode::Random))) postProcessMode_ = Renderer::PostProcessMode::Random;
 
   if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
       ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
       ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
   } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
       ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter) {
+      ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
+      ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
   }
 
   ImGui::End();
@@ -303,13 +328,12 @@ void GameScene::Draw() {
   auto* renderer = Renderer::GetInstance();
   auto* dx = renderer->GetDX();
 
-  if (renderTexture_) {
-    dx->SetRenderTarget(renderTexture_.get());
+  if (renderTexture_ && depthTexture_) {
+    dx->SetRenderTargetWithDepth(renderTexture_.get(), depthTexture_.get());
     float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
     dx->GetCommandList()->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
 
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetCPUDescriptorHandle(dx->GetDSVHeap(), dx->GetDSVDescriptorSize(), 0);
-    dx->GetCommandList()->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    dx->GetCommandList()->ClearDepthStencilView(depthTexture_->GetDsvHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
   }
 
   if (playMode_ == PlayMode::Edit) {
@@ -322,6 +346,8 @@ void GameScene::Draw() {
   renderer->SetEnvironmentMap(skybox_.GetTexture());
   renderer->SetVignetteParam(vignetteScale_, vignettePow_);
   renderer->SetBoxFilterParam(boxFilterK_);
+  renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
+  renderer->SetRandomParam(time_);
 
   // --- ライトの適用 ---
   ApplyEditorLightsToRenderer(renderer);
@@ -388,15 +414,38 @@ void GameScene::Draw() {
   renderer->DrawGrid(500.0f, 50, Vector4{0.2f, 0.4f, 0.8f, 0.5f});
 
   renderer->RenderPrimitives();
-  //renderer->DrawGPUParticles();
+  renderer->DrawGPUParticles();
 
-  if (renderTexture_) {
-    dx->FinishRendering(renderTexture_.get());
+  if (renderTexture_ && depthTexture_) {
+      dx->FinishRenderingWithDepth(renderTexture_.get(), depthTexture_.get());
   }
 
   if (renderTexture_ && postProcessTexture_) {
-    dx->SetRenderTarget(postProcessTexture_.get());
-    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-    dx->FinishRendering(postProcessTexture_.get());
+    if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter && gaussianTempTexture_) {
+      // パス1: 横方向
+      dx->SetRenderTarget(gaussianTempTexture_.get());
+      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(gaussianTempTexture_.get());
+
+      // パス2: 縦方向
+      dx->SetRenderTarget(postProcessTexture_.get());
+      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {0.0f, 1.0f});
+      renderer->DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(postProcessTexture_.get());
+    } else if (postProcessMode_ == Renderer::PostProcessMode::DepthBasedOutline) {
+      dx->SetRenderTarget(postProcessTexture_.get());
+      Matrix4x4 projInverse;
+      if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
+      else if (isDebugCamera_) projInverse = Inverse(debugCamera_->GetProjectionMatrix());
+      else projInverse = Inverse(gameCamera_->GetProjectionMatrix());
+      renderer->SetDepthBasedOutlineParam(projInverse);
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, depthTexture_->GetSrvGpuHandle());
+      dx->FinishRendering(postProcessTexture_.get());
+    } else {
+      dx->SetRenderTarget(postProcessTexture_.get());
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(postProcessTexture_.get());
+    }
   }
 }

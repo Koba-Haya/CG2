@@ -131,11 +131,17 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   srvRangeSkin.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
   srvRangeSkin.BaseShaderRegister = 2; // t2
   srvRangeSkin.NumDescriptors = 1;
-  srvRangeSkin.OffsetInDescriptorsFromTableStart =
-      D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+  srvRangeSkin.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+  // t2: Mask Texture (PS)
+  D3D12_DESCRIPTOR_RANGE srvRangeMask{};
+  srvRangeMask.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  srvRangeMask.BaseShaderRegister = 2; // t2 (PS用)
+  srvRangeMask.NumDescriptors = 1;
+  srvRangeMask.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
   // --- Root Parameters（フラグに応じて詰める） ---
-  D3D12_ROOT_PARAMETER params[9]{};
+  D3D12_ROOT_PARAMETER params[16]{};
   UINT numParams = 0;
 
   if (desc.usePSMaterial_b0) { // Index 0
@@ -195,7 +201,14 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
     p.DescriptorTable.pDescriptorRanges = &srvRangeEnv;
     p.DescriptorTable.NumDescriptorRanges = 1;
   }
-  if (desc.useVSSkinning_t2) { // Index 8
+  if (desc.usePSMaskTexture_t2) { // Index 8
+    auto &p = params[numParams++];
+    p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    p.DescriptorTable.pDescriptorRanges = &srvRangeMask;
+    p.DescriptorTable.NumDescriptorRanges = 1;
+  }
+  if (desc.useVSSkinning_t2) { // Index 9 (Skinningの場合)
     auto &p = params[numParams++];
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
@@ -343,6 +356,7 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
   d.usePSPointLight_b3 = true;
   d.usePSSpotLight_b4 = true;
   d.usePSEnvironmentMap_t1 = true; // 環境マッピングを有効化
+  d.usePSMaskTexture_t2 = true; // Dissolve用マスクテクスチャ
 
   d.enableDepth = true;
   d.alphaBlend = false;
@@ -544,6 +558,52 @@ PipelineDesc UnifiedPipeline::MakeCopyImageDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeRadialBlurDesc() {
+  PipelineDesc d{};
+  d.inputElements = {};
+  d.vsPath = L"resources/engine/shaders/Fullscreen.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/RadialBlur.PS.hlsl";
+  d.usePSMaterial_b0 = true; // RadialBlurParam
+  d.useVSTransform_b0 = false;
+  d.usePSTextureTable_t0 = true;
+  d.enableDepth = false;
+  d.depthWrite = false;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.blendMode = BlendMode::Opaque;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeDissolveDesc() {
+  PipelineDesc d{};
+  d.inputElements = {};
+  d.vsPath = L"resources/engine/shaders/Fullscreen.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Dissolve.PS.hlsl";
+  d.usePSMaterial_b0 = true;      // DissolveParam
+  d.useVSTransform_b0 = false;
+  d.usePSTextureTable_t0 = true;  // メインテクスチャ
+  d.usePSEnvironmentMap_t1 = true;// マスクテクスチャ(t1)を使用
+  d.enableDepth = false;
+  d.depthWrite = false;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.blendMode = BlendMode::Opaque;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeRandomDesc() {
+  PipelineDesc d{};
+  d.inputElements = {};
+  d.vsPath = L"resources/engine/shaders/Fullscreen.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Random.PS.hlsl";
+  d.usePSMaterial_b0 = true; // RandomParam
+  d.useVSTransform_b0 = false;
+  d.usePSTextureTable_t0 = true;
+  d.enableDepth = false;
+  d.depthWrite = false;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.blendMode = BlendMode::Opaque;
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeCylinderDesc() {
   PipelineDesc d{};
   d.inputElements = {
@@ -583,6 +643,21 @@ PipelineDesc UnifiedPipeline::MakeSepiaDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeLuminanceBasedOutlineDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/LuminanceBasedOutline.PS.hlsl";
+  d.usePSMaterial_b0 = false;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeDepthBasedOutlineDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/DepthBasedOutline.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  d.usePSEnvironmentMap_t1 = true;
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeVignetteDesc() {
   PipelineDesc d = MakeCopyImageDesc();
   d.psPath = L"resources/engine/shaders/Vignette.PS.hlsl";
@@ -593,6 +668,13 @@ PipelineDesc UnifiedPipeline::MakeVignetteDesc() {
 PipelineDesc UnifiedPipeline::MakeBoxFilterDesc() {
   PipelineDesc d = MakeCopyImageDesc();
   d.psPath = L"resources/engine/shaders/BoxFilter.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeGaussianFilterDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/GaussianFilter.PS.hlsl";
   d.usePSMaterial_b0 = true;
   return d;
 }

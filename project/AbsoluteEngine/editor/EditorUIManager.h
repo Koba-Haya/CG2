@@ -25,6 +25,9 @@ public:
   // 毎フレームのUI描画
   void DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, EditorCamera* camera = nullptr);
 
+  // Viewportへのドラッグ＆ドロップ受付（画像描画後に手動で呼ぶ）
+  void HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects);
+
   // 現在選択されているオブジェクトを取得
   std::shared_ptr<GameObject> GetSelectedObject() const { return selectedObject_.lock(); }
   void SetSelectedObject(std::shared_ptr<GameObject> obj) { selectedObject_ = obj; }

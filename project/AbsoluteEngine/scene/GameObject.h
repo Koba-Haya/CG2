@@ -31,6 +31,14 @@ struct LightComponent {
   float coneAngleDeg = 30.0f; // Spot用
 };
 
+struct DissolveInfo {
+  bool enable = false;
+  float threshold = 0.5f;
+  float edgeRange = 0.03f;
+  Vector3 edgeColor = {1.0f, 0.4f, 0.3f};
+  Vector3 maskColor = {1.0f, 1.0f, 1.0f};
+};
+
 class GameObject : public std::enable_shared_from_this<GameObject> {
 public:
   GameObject(const std::string& name = "GameObject");
@@ -83,6 +91,9 @@ public:
   LightComponent& GetLight() { return light_; }
   const LightComponent& GetLight() const { return light_; }
 
+  DissolveInfo& GetDissolve() { return dissolve_; }
+  const DissolveInfo& GetDissolve() const { return dissolve_; }
+
 private:
   std::string name_;
   std::string tag_ = "Untagged";
@@ -90,6 +101,7 @@ private:
   Transform transform_;
   ColliderInfo collider_;
   LightComponent light_;
+  DissolveInfo dissolve_;
 
   std::string modelPath_;
   std::string texturePath_;

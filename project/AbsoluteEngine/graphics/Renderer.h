@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <memory>
 #include <vector>
@@ -140,11 +140,23 @@ public:
     Grayscale,
     Sepia,
     Vignette,
-    BoxFilter
+    BoxFilter,
+    GaussianFilter,
+    LuminanceBasedOutline,
+    DepthBasedOutline,
+    RadialBlur,
+    Dissolve,
+    Random
   };
-  void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal);
+  void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal, D3D12_GPU_DESCRIPTOR_HANDLE depthOrMaskTextureHandle = {});
   void SetVignetteParam(float scale, float powValue);
   void SetBoxFilterParam(int32_t k);
+  void SetGaussianFilterParam(int32_t k, float sigma, const Vector2& direction);
+  void SetDepthBasedOutlineParam(const Matrix4x4& projectionInverse);
+  void SetRadialBlurParam(const Vector2& center, float blurWidth);
+  void SetDissolveParam(float threshold, float edgeRange, const Vector3& edgeColor, const Vector3& maskColor);
+  void SetDissolveMaskTexture(std::shared_ptr<TextureResource> tex) { dissolveMaskTexture_ = tex; }
+  void SetRandomParam(float time);
 
   void DispatchSkinning(ModelInstance* instance);
 
@@ -222,6 +234,11 @@ private:
   std::unique_ptr<UnifiedPipeline> sepiaPipeline_;
   std::unique_ptr<UnifiedPipeline> vignettePipeline_;
   std::unique_ptr<UnifiedPipeline> boxFilterPipeline_;
+  std::unique_ptr<UnifiedPipeline> gaussianFilterPipeline_;
+  std::unique_ptr<UnifiedPipeline> luminanceBasedOutlinePipeline_;
+  std::unique_ptr<UnifiedPipeline> pipelineDepthBasedOutline_;
+  std::unique_ptr<UnifiedPipeline> radialBlurPipeline_;
+  std::unique_ptr<UnifiedPipeline> randomPipeline_;
 
   struct alignas(16) VignetteParam {
     float scale;
@@ -231,10 +248,53 @@ private:
   ComPtr<ID3D12Resource> vignetteParamCB_;
   VignetteParam* vignetteParamMapped_ = nullptr;
 
+  struct alignas(16) RandomParam {
+    float time;
+    float pad[3];
+  };
+  ComPtr<ID3D12Resource> randomParamCB_;
+  RandomParam* randomParamMapped_ = nullptr;
+
   struct alignas(16) BoxFilterParam {
     int32_t k;
     float pad[3];
   };
   ComPtr<ID3D12Resource> boxFilterParamCB_;
   BoxFilterParam* boxFilterParamMapped_ = nullptr;
+
+  struct alignas(16) GaussianFilterParam {
+    int32_t k;
+    float sigma;
+    float direction[2];
+  };
+  ComPtr<ID3D12Resource> gaussianFilterParamCB_;
+  GaussianFilterParam* gaussianFilterParamMapped_ = nullptr;
+
+  struct DepthBasedOutlineParam {
+      Matrix4x4 projectionInverse;
+  };
+  ComPtr<ID3D12Resource> depthBasedOutlineParamCB_;
+  DepthBasedOutlineParam* depthBasedOutlineParamMapped_ = nullptr;
+
+  struct alignas(16) RadialBlurParam {
+    Vector2 center;
+    float blurWidth;
+    float padding;
+  };
+  ComPtr<ID3D12Resource> radialBlurParamCB_;
+  RadialBlurParam* radialBlurParamCBMap_ = nullptr;
+
+  std::unique_ptr<UnifiedPipeline> dissolvePipeline_;
+  struct alignas(16) DissolveParam {
+    float threshold;
+    float edgeRange;
+    float padding[2];
+    Vector3 edgeColor;
+    float padding2;
+    Vector3 maskColor;
+    float padding3;
+  };
+  ComPtr<ID3D12Resource> dissolveParamCB_;
+  DissolveParam* dissolveParamMapped_ = nullptr;
+  std::shared_ptr<TextureResource> dissolveMaskTexture_;
 };

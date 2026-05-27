@@ -57,8 +57,13 @@ bool ModelInstance::Initialize(const CreateInfo &ci) {
   pImpl_->cbMatMapped->specularColor = ci.specularColor;
   pImpl_->cbMatMapped->uvTransform = MakeIdentity4x4();
   pImpl_->cbMatMapped->shininess = ci.shininess;
-  pImpl_->cbMatMapped->environmentCoefficient =
-      ci.environmentCoefficient; // 追加
+  pImpl_->cbMatMapped->environmentCoefficient = ci.environmentCoefficient;
+
+  pImpl_->cbMatMapped->enableDissolve = 0;
+  pImpl_->cbMatMapped->dissolveThreshold = 0.0f;
+  pImpl_->cbMatMapped->dissolveEdgeRange = 0.03f;
+  pImpl_->cbMatMapped->dissolveEdgeColor = {1.0f, 0.4f, 0.3f};
+  pImpl_->cbMatMapped->dissolveMaskColor = {1.0f, 1.0f, 1.0f};
 
   SetWorld(MakeIdentity4x4());
 
@@ -99,9 +104,20 @@ void ModelInstance::SetShininess(float s) {
   if (pImpl_->cbMatMapped)
     pImpl_->cbMatMapped->shininess = s;
 }
-void ModelInstance::SetEnvironmentCoefficient(float c) { // 追加
+void ModelInstance::SetEnvironmentCoefficient(float c) {
   if (pImpl_->cbMatMapped)
     pImpl_->cbMatMapped->environmentCoefficient = c;
+}
+
+void ModelInstance::SetDissolveParam(bool enable, float threshold, float edgeRange, 
+                                     const Vector3& edgeColor, const Vector3& maskColor) {
+  if (pImpl_->cbMatMapped) {
+    pImpl_->cbMatMapped->enableDissolve = enable ? 1 : 0;
+    pImpl_->cbMatMapped->dissolveThreshold = threshold;
+    pImpl_->cbMatMapped->dissolveEdgeRange = edgeRange;
+    pImpl_->cbMatMapped->dissolveEdgeColor = edgeColor;
+    pImpl_->cbMatMapped->dissolveMaskColor = maskColor;
+  }
 }
 
 void ModelInstance::SetOverrideTexture(std::shared_ptr<TextureResource> tex) {

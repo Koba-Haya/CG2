@@ -1,4 +1,4 @@
-﻿#define NOMINMAX
+#define NOMINMAX
 #include "DevScene.h"
 #include "SceneIds.h"
 #include "SceneManager.h"
@@ -7,6 +7,7 @@
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "graphics/Renderer.h"
 #include "AbsoluteEngine/editor/EditorCamera.h"
+#include "AbsoluteEngine/editor/EditorUIManager.h"
 #include "DirectXCommon.h"
 #include "Renderer.h"
 #include "TextureResource.h"
@@ -102,6 +103,7 @@ void DevScene::Finalize() {
 
 void DevScene::Update() {
   const float deltaTime = 1.0f / 60.0f;
+  time_ += deltaTime;
   
   // BaseSceneのエディタ機能（カメラ、オブジェクトの更新）
   UpdateEditor();
@@ -120,6 +122,11 @@ void DevScene::Update() {
     if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = postProcessTexture_->GetSrvGpuHandle();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
+    
+    // Viewportへのドラッグ＆ドロップ受付（画像へのドロップ）
+    if (editorUIManager_) {
+        editorUIManager_->HandleViewportDragDrop(rootObjects_);
+    }
   }
 
   ImGui::End();
@@ -168,34 +175,13 @@ void DevScene::Update() {
 
   // --- 下パネル：オブジェクト・エフェクト設定 ---
   ImGui::Begin("Objects##BottomPanel");
+  ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+  ImGui::Separator();
   ImGui::Checkbox("Show Skeleton", &showSkeleton_);
   ImGui::Checkbox("Enable Reflection", &enableReflection_);
   if (enableReflection_) {
     ImGui::SliderFloat("Reflection Weight", &reflectionWeight_, 0.0f, 1.0f);
   }
-
-  ImGui::SeparatorText("PostProcess");
-  int mode = static_cast<int>(postProcessMode_);
-  if (ImGui::RadioButton("Normal", &mode, static_cast<int>(Renderer::PostProcessMode::Normal))) postProcessMode_ = Renderer::PostProcessMode::Normal;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Grayscale", &mode, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = Renderer::PostProcessMode::Grayscale;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Vignette", &mode, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = Renderer::PostProcessMode::Vignette;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("BoxFilter", &mode, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = Renderer::PostProcessMode::BoxFilter;
-
-  if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
-      ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
-      ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
-      ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
-  }
-
-  // レンダラーにポストエフェクトのパラメータを渡す
-  Renderer::GetInstance()->SetVignetteParam(vignetteScale_, vignettePow_);
-  Renderer::GetInstance()->SetBoxFilterParam(boxFilterK_);
 
   const char *blendModeItems[] = {"Alpha", "Add", "Subtract", "Multiply", "Screen"};
   ImGui::Combo("Particle Blend", &particleBlendMode_, blendModeItems, IM_ARRAYSIZE(blendModeItems));
@@ -216,6 +202,52 @@ void DevScene::Update() {
   } else {
       ImGui::DragFloat3("Camera Pos (Not Linked)", &cameraTransform_.translate.x, 0.1f);
   }
+  ImGui::End();
+
+  // --- ポストプロセスタブ ---
+  ImGui::Begin("PostProcess##Panel");
+  ImGui::SeparatorText("PostProcess Settings");
+  
+  int ppMode = static_cast<int>(postProcessMode_);
+  const char* postProcessItems[] = {
+      "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter", 
+      "GaussianFilter", "LuminanceOutline", "DepthOutline", "RadialBlur", "Dissolve", "Random"
+  };
+  
+  if (ImGui::Combo("Effect Mode", &ppMode, postProcessItems, IM_ARRAYSIZE(postProcessItems))) {
+      postProcessMode_ = static_cast<Renderer::PostProcessMode>(ppMode);
+  }
+
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+
+  if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
+      ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
+      ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
+      ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter) {
+      ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
+      ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::RadialBlur) {
+      ImGui::SliderFloat2("Center", &radialBlurCenter_.x, 0.0f, 1.0f);
+      ImGui::SliderFloat("Blur Width", &radialBlurWidth_, 0.0f, 0.1f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::Dissolve) {
+      ImGui::SliderFloat("Threshold", &dissolveThreshold_, 0.0f, 1.0f);
+      ImGui::SliderFloat("Edge Range", &dissolveEdgeRange_, 0.0f, 0.1f);
+      ImGui::ColorEdit3("Edge Color", &dissolveEdgeColor_.x);
+      ImGui::ColorEdit3("Mask Color", &dissolveMaskColor_.x);
+  }
+
+  // レンダラーにポストエフェクトのパラメータを渡す
+  Renderer::GetInstance()->SetVignetteParam(vignetteScale_, vignettePow_);
+  Renderer::GetInstance()->SetBoxFilterParam(boxFilterK_);
+  Renderer::GetInstance()->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
+  Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, radialBlurWidth_);
+  Renderer::GetInstance()->SetDissolveParam(dissolveThreshold_, dissolveEdgeRange_, dissolveEdgeColor_, dissolveMaskColor_);
+  Renderer::GetInstance()->SetRandomParam(time_);
+  
   ImGui::End();
 
   // --- ツールバー・エディタUIの描画（BaseScene側で行う） ---
@@ -272,18 +304,16 @@ void DevScene::Draw() {
   ApplyEditorLightsToRenderer(renderer);
 
   // --- オフスクリーン描画パス（RenderTexture → ImGui::Image で表示） ---
-  if (renderTexture_) {
+  if (renderTexture_ && depthTexture_) {
     // RenderTexture に切り替え（SRV → RT バリア + OMSetRenderTargets）
-    dx->SetRenderTarget(renderTexture_.get());
+    dx->SetRenderTargetWithDepth(renderTexture_.get(), depthTexture_.get());
 
     // RenderTexture をクリア（暗いグレー）
     float clearColor[] = { 0.1f, 0.1f, 0.15f, 1.0f };
     cmdList->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
 
     // 深度バッファをクリア
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle =
-        GetCPUDescriptorHandle(dx->GetDSVHeap(), dx->GetDSVDescriptorSize(), 0);
-    cmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    cmdList->ClearDepthStencilView(depthTexture_->GetDsvHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     // --- シーンを RenderTexture に描画 ---
     modelSphere_.SetWorld(MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate));
@@ -333,20 +363,39 @@ void DevScene::Draw() {
     renderer->DrawGPUParticles(static_cast<BlendMode>(particleBlendMode_ + 1));
 
     // RenderTexture を SRV 状態に戻す
-    dx->FinishRendering(renderTexture_.get());
+    dx->FinishRenderingWithDepth(renderTexture_.get(), depthTexture_.get());
   }
 
   // --- ポストプロセスの適用 ---
   if (renderTexture_ && postProcessTexture_) {
-    dx->SetRenderTarget(postProcessTexture_.get());
-    
-    // クリアは不要（フルスクリーン描画で完全に上書きするため）
-    
-    // ポストプロセス描画
-    renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-    
-    // postProcessTexture_ を SRV 状態に戻す
-    dx->FinishRendering(postProcessTexture_.get());
+    if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter && gaussianTempTexture_) {
+      // パス1: 横方向
+      dx->SetRenderTarget(gaussianTempTexture_.get());
+      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(gaussianTempTexture_.get());
+
+      // パス2: 縦方向
+      dx->SetRenderTarget(postProcessTexture_.get());
+      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {0.0f, 1.0f});
+      renderer->DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(postProcessTexture_.get());
+    } else if (postProcessMode_ == Renderer::PostProcessMode::DepthBasedOutline) {
+      dx->SetRenderTarget(postProcessTexture_.get());
+      if (editorCamera_) {
+        renderer->SetDepthBasedOutlineParam(Inverse(editorCamera_->GetProjectionMatrix()));
+      }
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, depthTexture_->GetSrvGpuHandle());
+      dx->FinishRendering(postProcessTexture_.get());
+    } else if (postProcessMode_ == Renderer::PostProcessMode::Dissolve && texNoise0_) {
+      dx->SetRenderTarget(postProcessTexture_.get());
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, texNoise0_->GetSrvGpu());
+      dx->FinishRendering(postProcessTexture_.get());
+    } else {
+      dx->SetRenderTarget(postProcessTexture_.get());
+      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
+      dx->FinishRendering(postProcessTexture_.get());
+    }
   }
 
   // --- バックバッファへの追加描画（必要なら UI 等をここに） ---
@@ -396,6 +445,9 @@ void DevScene::InitResources_() {
   ringTransform_.translate = {0.0f, 2.0f, 0.0f};
   ringUVScale_ = {10.0f, 1.0f};
 
+  texNoise0_ = tm->Load("resources/noise/noise0.png");
+  Renderer::GetInstance()->SetDissolveMaskTexture(texNoise0_);
+
   cylinderParams_.divide = 32;
   cylinderParams_.topRadiusX = 0.5f;
   cylinderParams_.bottomRadiusX = 0.5f;
@@ -430,10 +482,16 @@ void DevScene::InitResources_() {
 
   // オフスクリーンテスト初期化
   renderTexture_ = std::make_unique<RenderTexture>();
-  renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
-  
+  renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
+
+  depthTexture_ = std::make_unique<DepthTexture>();
+  depthTexture_->Initialize(dx, 1280, 720);
+
   postProcessTexture_ = std::make_unique<RenderTexture>();
   postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
+
+  gaussianTempTexture_ = std::make_unique<RenderTexture>();
+  gaussianTempTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
 }
 
 void DevScene::InitCamera_() {

@@ -63,6 +63,7 @@ void GameObject::Draw() {
     }
 
     modelInstance_->SetWorld(world);
+    modelInstance_->SetDissolveParam(dissolve_.enable, dissolve_.threshold, dissolve_.edgeRange, dissolve_.edgeColor, dissolve_.maskColor);
     modelInstance_->Draw();
   }
 

@@ -1,4 +1,4 @@
-﻿// UnifiedPipeline.h (省略なし)
+// UnifiedPipeline.h (省略なし)
 
 #pragma once
 #include "BlendMode.h"
@@ -29,8 +29,8 @@ struct PipelineDesc {
   bool usePSTextureTable_t0 = true;      // PS: t0 (SRVテーブル)
   bool usePSDirectionalLight_b1 = false; // PS: b1
   bool useVSInstancingTable_t1 = false;  // VS: t1
-  bool usePSEnvironmentMap_t1 =
-      false; // ★追加: PS: t1 (環境マップ用SRVテーブル)
+  bool usePSEnvironmentMap_t1 = false; // PS: t1 (環境マップ用SRVテーブル)
+  bool usePSMaskTexture_t2 = false; // 追加: PS: t2 (Dissolve用マスクなど)
   bool depthWrite = true;
 
   // カメラCB b2
@@ -99,6 +99,15 @@ public:
   static PipelineDesc MakeSepiaDesc();
   static PipelineDesc MakeVignetteDesc();
   static PipelineDesc MakeBoxFilterDesc();
+  static PipelineDesc MakeGaussianFilterDesc();
+  static PipelineDesc MakeLuminanceBasedOutlineDesc();
+  static PipelineDesc MakeDepthBasedOutlineDesc();
+  static PipelineDesc MakeRadialBlurDesc();
+  static PipelineDesc MakeDissolveDesc();
+  static PipelineDesc MakeRandomDesc(); // 追加
+
+  // Compute
+  static PipelineDesc MakeParticleInitializeDesc();
 
 private:
   ComPtr<ID3D12RootSignature> rootSignature_;

@@ -1,4 +1,4 @@
-﻿#define NOMINMAX
+#define NOMINMAX
 #include "Renderer.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
@@ -179,6 +179,36 @@ void Renderer::Initialize(DirectXCommon *dx) {
     boxFilterPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(boxFilterPipeline_->Initialize(device, utils, compiler,
                                               includeHandler, boxFilterDesc));
+
+    PipelineDesc gaussianFilterDesc = UnifiedPipeline::MakeGaussianFilterDesc();
+    gaussianFilterPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(gaussianFilterPipeline_->Initialize(device, utils, compiler,
+                                                   includeHandler, gaussianFilterDesc));
+
+    luminanceBasedOutlinePipeline_ = std::make_unique<UnifiedPipeline>();
+    luminanceBasedOutlinePipeline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeLuminanceBasedOutlineDesc());
+
+    pipelineDepthBasedOutline_ = std::make_unique<UnifiedPipeline>();
+    pipelineDepthBasedOutline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeDepthBasedOutlineDesc());
+
+    radialBlurPipeline_ = std::make_unique<UnifiedPipeline>();
+    radialBlurPipeline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeRadialBlurDesc());
+
+    dissolvePipeline_ = std::make_unique<UnifiedPipeline>();
+    dissolvePipeline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeDissolveDesc());
+
+    randomPipeline_ = std::make_unique<UnifiedPipeline>();
+    randomPipeline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeRandomDesc());
   }
 
   // Primitive Drawer
@@ -218,6 +248,40 @@ void Renderer::Initialize(DirectXCommon *dx) {
   boxFilterParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&boxFilterParamMapped_));
   if (boxFilterParamMapped_) {
     boxFilterParamMapped_->k = 1;
+  }
+
+  gaussianFilterParamCB_ = CreateUploadBuffer(align256(sizeof(GaussianFilterParam)));
+  gaussianFilterParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&gaussianFilterParamMapped_));
+  if (gaussianFilterParamMapped_) {
+    gaussianFilterParamMapped_->k = 1;
+    gaussianFilterParamMapped_->sigma = 1.0f;
+    gaussianFilterParamMapped_->direction[0] = 1.0f;
+    gaussianFilterParamMapped_->direction[1] = 0.0f;
+  }
+
+  depthBasedOutlineParamCB_ = CreateUploadBuffer(align256(sizeof(DepthBasedOutlineParam)));
+  depthBasedOutlineParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&depthBasedOutlineParamMapped_));
+
+  radialBlurParamCB_ = CreateUploadBuffer(align256(sizeof(RadialBlurParam)));
+  radialBlurParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&radialBlurParamCBMap_));
+  if (radialBlurParamCBMap_) {
+    radialBlurParamCBMap_->center = {0.5f, 0.5f};
+    radialBlurParamCBMap_->blurWidth = 0.01f;
+  }
+
+  dissolveParamCB_ = CreateUploadBuffer(align256(sizeof(DissolveParam)));
+  dissolveParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&dissolveParamMapped_));
+  if (dissolveParamMapped_) {
+    dissolveParamMapped_->threshold = 0.5f;
+    dissolveParamMapped_->edgeRange = 0.05f;
+    dissolveParamMapped_->edgeColor = {1.0f, 0.4f, 0.3f};
+    dissolveParamMapped_->maskColor = {0.0f, 0.0f, 0.0f};
+  }
+
+  randomParamCB_ = CreateUploadBuffer(align256(sizeof(RandomParam)));
+  randomParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&randomParamMapped_));
+  if (randomParamMapped_) {
+      randomParamMapped_->time = 0.0f;
   }
 
   InitSkinningPipeline_();
@@ -512,6 +576,11 @@ void Renderer::DrawModel(ModelInstance *instance) {
   // t1: 環境マップ 
   if (environmentMap_) {
     cmdList->SetGraphicsRootDescriptorTable(7, environmentMap_->GetSrvGpu());
+  }
+  
+  // t2: マスクテクスチャ (Dissolve用)
+  if (dissolveMaskTexture_) {
+    cmdList->SetGraphicsRootDescriptorTable(8, dissolveMaskTexture_->GetSrvGpu());
   }
 
   // 5. ライト・カメラ設定
@@ -834,7 +903,35 @@ void Renderer::DrawGrid(float size, int divisions, const Vector4 &color) {
   primitiveDrawer_->AddGrid(size, divisions, color);
 }
 
-void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode) {
+void Renderer::SetDepthBasedOutlineParam(const Matrix4x4& projectionInverse) {
+  if (depthBasedOutlineParamMapped_) {
+    depthBasedOutlineParamMapped_->projectionInverse = projectionInverse;
+  }
+}
+
+void Renderer::SetRadialBlurParam(const Vector2& center, float blurWidth) {
+  if (radialBlurParamCBMap_) {
+    radialBlurParamCBMap_->center = center;
+    radialBlurParamCBMap_->blurWidth = blurWidth;
+  }
+}
+
+void Renderer::SetDissolveParam(float threshold, float edgeRange, const Vector3& edgeColor, const Vector3& maskColor) {
+  if (dissolveParamMapped_) {
+    dissolveParamMapped_->threshold = threshold;
+    dissolveParamMapped_->edgeRange = edgeRange;
+    dissolveParamMapped_->edgeColor = edgeColor;
+    dissolveParamMapped_->maskColor = maskColor;
+  }
+}
+
+void Renderer::SetRandomParam(float time) {
+  if (randomParamMapped_) {
+    randomParamMapped_->time = time;
+  }
+}
+
+void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode, D3D12_GPU_DESCRIPTOR_HANDLE depthOrMaskTextureHandle) {
   UnifiedPipeline *pipeline = nullptr;
   switch (mode) {
   case PostProcessMode::Normal:
@@ -852,6 +949,24 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   case PostProcessMode::BoxFilter:
     pipeline = boxFilterPipeline_.get();
     break;
+  case PostProcessMode::GaussianFilter:
+    pipeline = gaussianFilterPipeline_.get();
+    break;
+  case PostProcessMode::LuminanceBasedOutline:
+    pipeline = luminanceBasedOutlinePipeline_.get();
+    break;
+  case PostProcessMode::DepthBasedOutline:
+    pipeline = pipelineDepthBasedOutline_.get();
+    break;
+  case PostProcessMode::RadialBlur:
+    pipeline = radialBlurPipeline_.get();
+    break;
+  case PostProcessMode::Dissolve:
+    pipeline = dissolvePipeline_.get();
+    break;
+  case PostProcessMode::Random:
+    pipeline = randomPipeline_.get();
+    break;
   }
 
   if (!pipeline)
@@ -867,6 +982,27 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
     cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
   } else if (mode == PostProcessMode::BoxFilter) {
     cmdList->SetGraphicsRootConstantBufferView(0, boxFilterParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+  } else if (mode == PostProcessMode::GaussianFilter) {
+    cmdList->SetGraphicsRootConstantBufferView(0, gaussianFilterParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+  } else if (mode == PostProcessMode::DepthBasedOutline) {
+    cmdList->SetGraphicsRootConstantBufferView(0, depthBasedOutlineParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+    if (depthOrMaskTextureHandle.ptr != 0) {
+      cmdList->SetGraphicsRootDescriptorTable(2, depthOrMaskTextureHandle);
+    }
+  } else if (mode == PostProcessMode::RadialBlur) {
+    cmdList->SetGraphicsRootConstantBufferView(0, radialBlurParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+  } else if (mode == PostProcessMode::Dissolve) {
+    cmdList->SetGraphicsRootConstantBufferView(0, dissolveParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle); // t0
+    if (depthOrMaskTextureHandle.ptr != 0) {
+      cmdList->SetGraphicsRootDescriptorTable(2, depthOrMaskTextureHandle); // t1: mask
+    }
+  } else if (mode == PostProcessMode::Random) {
+    cmdList->SetGraphicsRootConstantBufferView(0, randomParamCB_->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
   } else {
     // テクスチャをセット (t0)
@@ -888,5 +1024,14 @@ void Renderer::SetVignetteParam(float scale, float powValue) {
 void Renderer::SetBoxFilterParam(int32_t k) {
   if (boxFilterParamMapped_) {
     boxFilterParamMapped_->k = k;
+  }
+}
+
+void Renderer::SetGaussianFilterParam(int32_t k, float sigma, const Vector2& direction) {
+  if (gaussianFilterParamMapped_) {
+    gaussianFilterParamMapped_->k = k;
+    gaussianFilterParamMapped_->sigma = sigma;
+    gaussianFilterParamMapped_->direction[0] = direction.x;
+    gaussianFilterParamMapped_->direction[1] = direction.y;
   }
 }

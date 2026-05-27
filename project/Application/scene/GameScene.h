@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "BaseScene.h"
 #include "GameCamera.h"
 #include "Skybox.h"
@@ -7,6 +7,7 @@
 #include "ModelResource.h"
 #include "Renderer.h"
 #include "graphics/texture/RenderTexture.h"
+#include "graphics/texture/DepthTexture.h"
 #include "../actor/Player.h"
 #include "../actor/Bullet.h"
 #include "../actor/Enemy.h"
@@ -30,11 +31,15 @@ private:
   std::unique_ptr<GameCamera> gameCamera_;
   std::unique_ptr<DebugCamera> debugCamera_;
   std::unique_ptr<RenderTexture> renderTexture_;
+  std::unique_ptr<DepthTexture> depthTexture_;
   std::unique_ptr<RenderTexture> postProcessTexture_;
+  std::unique_ptr<RenderTexture> gaussianTempTexture_;
   Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
   float vignetteScale_ = 16.0f;
   float vignettePow_ = 0.8f;
   int32_t boxFilterK_ = 1;
+  int32_t gaussianFilterK_ = 1;
+  float gaussianFilterSigma_ = 1.0f;
   class RailCameraController* railController_ = nullptr; // 所有権は gameCamera_ が持つ
 
 
@@ -70,4 +75,5 @@ private:
   std::vector<HitEffect> hitEffects_;
 
   float shootCooldown_ = 0.0f;
+  float time_ = 0.0f;
 };

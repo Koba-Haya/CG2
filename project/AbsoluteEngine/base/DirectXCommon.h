@@ -73,12 +73,15 @@ public:
 	int GetBackBufferCount() const { return swapChainDesc_.BufferCount; }
 	DXGI_FORMAT GetRTVFormat() const { return rtvDesc_.Format; }
 
-	// RTV割当
+	// RTV/DSV割当
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateRtv();
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateDsv();
 
 	// レンダーターゲット切り替え
 	void SetRenderTarget(class RenderTexture* target);
+	void SetRenderTargetWithDepth(class RenderTexture* target, class DepthTexture* depthTarget);
 	void FinishRendering(class RenderTexture* target); // リソース遷移を行ってからバックバッファへ
+	void FinishRenderingWithDepth(class RenderTexture* target, class DepthTexture* depthTarget);
 	void ResetRenderTarget(); // 強制的にバックバッファへ（遷移なし）
 
 	ID3D12Resource* GetCurrentBackBuffer() const {
@@ -128,6 +131,7 @@ private:
 	uint32_t descriptorSizeDSV_ = 0;
 
 	uint32_t nextRtvIndex_ = 0;
+	uint32_t nextDsvIndex_ = 0;
 
 	// SRV割当器
 	std::unique_ptr<SrvAllocator> srvAlloc_;
