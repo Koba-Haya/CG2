@@ -40,6 +40,9 @@ private:
   int32_t boxFilterK_ = 1;
   int32_t gaussianFilterK_ = 1;
   float gaussianFilterSigma_ = 1.0f;
+  float hsvHue_ = 0.0f;
+  float hsvSaturation_ = 0.0f;
+  float hsvValue_ = 0.0f;
   class RailCameraController* railController_ = nullptr; // 所有権は gameCamera_ が持つ
 
 

@@ -104,7 +104,8 @@ public:
   static PipelineDesc MakeDepthBasedOutlineDesc();
   static PipelineDesc MakeRadialBlurDesc();
   static PipelineDesc MakeDissolveDesc();
-  static PipelineDesc MakeRandomDesc(); // 追加
+  static PipelineDesc MakeRandomDesc(); 
+  static PipelineDesc MakeHSVDesc(); // 追加: HSVフィルタ
 
   // Compute
   static PipelineDesc MakeParticleInitializeDesc();

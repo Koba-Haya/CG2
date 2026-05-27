@@ -209,6 +209,11 @@ void Renderer::Initialize(DirectXCommon *dx) {
     randomPipeline_->Initialize(
         device, utils, compiler, includeHandler,
         UnifiedPipeline::MakeRandomDesc());
+
+    hsvPipeline_ = std::make_unique<UnifiedPipeline>();
+    hsvPipeline_->Initialize(
+        device, utils, compiler, includeHandler,
+        UnifiedPipeline::MakeHSVDesc());
   }
 
   // Primitive Drawer
@@ -282,6 +287,14 @@ void Renderer::Initialize(DirectXCommon *dx) {
   randomParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&randomParamMapped_));
   if (randomParamMapped_) {
       randomParamMapped_->time = 0.0f;
+  }
+
+  hsvParamCB_ = CreateUploadBuffer(align256(sizeof(HSVParam)));
+  hsvParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&hsvParamMapped_));
+  if (hsvParamMapped_) {
+      hsvParamMapped_->hue = 0.0f;
+      hsvParamMapped_->saturation = 0.0f;
+      hsvParamMapped_->value = 0.0f;
   }
 
   InitSkinningPipeline_();
@@ -967,6 +980,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   case PostProcessMode::Random:
     pipeline = randomPipeline_.get();
     break;
+  case PostProcessMode::HSV:
+    pipeline = hsvPipeline_.get();
+    break;
   }
 
   if (!pipeline)
@@ -1004,6 +1020,9 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
   } else if (mode == PostProcessMode::Random) {
     cmdList->SetGraphicsRootConstantBufferView(0, randomParamCB_->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
+  } else if (mode == PostProcessMode::HSV) {
+    cmdList->SetGraphicsRootConstantBufferView(0, hsvParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
   } else {
     // テクスチャをセット (t0)
     cmdList->SetGraphicsRootDescriptorTable(0, textureHandle);
@@ -1033,5 +1052,13 @@ void Renderer::SetGaussianFilterParam(int32_t k, float sigma, const Vector2& dir
     gaussianFilterParamMapped_->sigma = sigma;
     gaussianFilterParamMapped_->direction[0] = direction.x;
     gaussianFilterParamMapped_->direction[1] = direction.y;
+  }
+}
+
+void Renderer::SetHSVParam(float hue, float saturation, float value) {
+  if (hsvParamMapped_) {
+    hsvParamMapped_->hue = hue;
+    hsvParamMapped_->saturation = saturation;
+    hsvParamMapped_->value = value;
   }
 }

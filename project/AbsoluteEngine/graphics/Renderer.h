@@ -146,7 +146,8 @@ public:
     DepthBasedOutline,
     RadialBlur,
     Dissolve,
-    Random
+    Random,
+    HSV
   };
   void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal, D3D12_GPU_DESCRIPTOR_HANDLE depthOrMaskTextureHandle = {});
   void SetVignetteParam(float scale, float powValue);
@@ -157,6 +158,7 @@ public:
   void SetDissolveParam(float threshold, float edgeRange, const Vector3& edgeColor, const Vector3& maskColor);
   void SetDissolveMaskTexture(std::shared_ptr<TextureResource> tex) { dissolveMaskTexture_ = tex; }
   void SetRandomParam(float time);
+  void SetHSVParam(float hue, float saturation, float value);
 
   void DispatchSkinning(ModelInstance* instance);
 
@@ -239,6 +241,7 @@ private:
   std::unique_ptr<UnifiedPipeline> pipelineDepthBasedOutline_;
   std::unique_ptr<UnifiedPipeline> radialBlurPipeline_;
   std::unique_ptr<UnifiedPipeline> randomPipeline_;
+  std::unique_ptr<UnifiedPipeline> hsvPipeline_;
 
   struct alignas(16) VignetteParam {
     float scale;
@@ -254,6 +257,15 @@ private:
   };
   ComPtr<ID3D12Resource> randomParamCB_;
   RandomParam* randomParamMapped_ = nullptr;
+
+  struct alignas(16) HSVParam {
+    float hue;
+    float saturation;
+    float value;
+    float pad;
+  };
+  ComPtr<ID3D12Resource> hsvParamCB_;
+  HSVParam* hsvParamMapped_ = nullptr;
 
   struct alignas(16) BoxFilterParam {
     int32_t k;

@@ -677,4 +677,11 @@ PipelineDesc UnifiedPipeline::MakeGaussianFilterDesc() {
   d.psPath = L"resources/engine/shaders/GaussianFilter.PS.hlsl";
   d.usePSMaterial_b0 = true;
   return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeHSVDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/HSV.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  return d;
 }

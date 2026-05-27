@@ -309,6 +309,8 @@ void GameScene::Update() {
   if (ImGui::RadioButton("DepthOutline", &mode, static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::DepthBasedOutline;
   ImGui::SameLine();
   if (ImGui::RadioButton("Random", &mode, static_cast<int>(Renderer::PostProcessMode::Random))) postProcessMode_ = Renderer::PostProcessMode::Random;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("HSV", &mode, static_cast<int>(Renderer::PostProcessMode::HSV))) postProcessMode_ = Renderer::PostProcessMode::HSV;
 
   if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
       ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
@@ -318,6 +320,10 @@ void GameScene::Update() {
   } else if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter) {
       ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
       ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::HSV) {
+      ImGui::SliderFloat("Hue", &hsvHue_, -1.0f, 1.0f);
+      ImGui::SliderFloat("Saturation", &hsvSaturation_, -1.0f, 1.0f);
+      ImGui::SliderFloat("Value", &hsvValue_, -1.0f, 1.0f);
   }
 
   ImGui::End();
@@ -348,6 +354,7 @@ void GameScene::Draw() {
   renderer->SetBoxFilterParam(boxFilterK_);
   renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
   renderer->SetRandomParam(time_);
+  renderer->SetHSVParam(hsvHue_, hsvSaturation_, hsvValue_);
 
   // --- ライトの適用 ---
   ApplyEditorLightsToRenderer(renderer);
