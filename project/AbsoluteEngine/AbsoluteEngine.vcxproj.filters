@@ -147,6 +147,18 @@
     <ClCompile Include="graphics\particle\ParticleManager.cpp">
       <Filter>engine\graphics\particle</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\particle\EffectManager.cpp">
+      <Filter>engine\graphics\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\particle\RingEffect.cpp">
+      <Filter>engine\graphics\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\particle\CylinderEffect.cpp">
+      <Filter>engine\graphics\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\particle\PlaneHitEffect.cpp">
+      <Filter>engine\graphics\particle</Filter>
+    </ClCompile>
     <ClCompile Include="graphics\pipeline\UnifiedPipeline.cpp">
       <Filter>engine\graphics\pipeline</Filter>
     </ClCompile>
@@ -288,6 +300,21 @@
       <Filter>engine\graphics\particle</Filter>
     </ClInclude>
     <ClInclude Include="graphics\particle\ParticleManager.h">
+      <Filter>engine\graphics\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\particle\BaseEffect.h">
+      <Filter>engine\graphics\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\particle\EffectManager.h">
+      <Filter>engine\graphics\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\particle\RingEffect.h">
+      <Filter>engine\graphics\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\particle\CylinderEffect.h">
+      <Filter>engine\graphics\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\particle\PlaneHitEffect.h">
       <Filter>engine\graphics\particle</Filter>
     </ClInclude>
     <ClInclude Include="graphics\pipeline\BlendMode.h">

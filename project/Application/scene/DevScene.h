@@ -154,5 +154,9 @@ private:
   std::shared_ptr<TextureResource> texNoise0_;
   float time_ = 0.0f;
 
+  float hsvHue_ = 0.0f;
+  float hsvSaturation_ = 0.0f;
+  float hsvValue_ = 0.0f;
+
   std::string debugStr_;
 };

@@ -625,7 +625,7 @@ PipelineDesc UnifiedPipeline::MakeCylinderDesc() {
   d.depthWrite = false;
   d.alphaBlend = true;
   d.blendMode = BlendMode::Add;
-  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.cullMode = D3D12_CULL_MODE_BACK;
   return d;
 }
 

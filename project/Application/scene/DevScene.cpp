@@ -211,7 +211,7 @@ void DevScene::Update() {
   int ppMode = static_cast<int>(postProcessMode_);
   const char* postProcessItems[] = {
       "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter", 
-      "GaussianFilter", "LuminanceOutline", "DepthOutline", "RadialBlur", "Dissolve", "Random"
+      "GaussianFilter", "LuminanceOutline", "DepthOutline", "RadialBlur", "Dissolve", "Random", "HSV"
   };
   
   if (ImGui::Combo("Effect Mode", &ppMode, postProcessItems, IM_ARRAYSIZE(postProcessItems))) {
@@ -239,6 +239,11 @@ void DevScene::Update() {
       ImGui::ColorEdit3("Edge Color", &dissolveEdgeColor_.x);
       ImGui::ColorEdit3("Mask Color", &dissolveMaskColor_.x);
   }
+  // else if (postProcessMode_ == Renderer::PostProcessMode::HSV) {
+  //     ImGui::SliderFloat("Hue", &hsvHue_, -1.0f, 1.0f);
+  //     ImGui::SliderFloat("Saturation", &hsvSaturation_, -1.0f, 1.0f);
+  //     ImGui::SliderFloat("Value", &hsvValue_, -1.0f, 1.0f);
+  // }
 
   // レンダラーにポストエフェクトのパラメータを渡す
   Renderer::GetInstance()->SetVignetteParam(vignetteScale_, vignettePow_);
@@ -247,6 +252,7 @@ void DevScene::Update() {
   Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, radialBlurWidth_);
   Renderer::GetInstance()->SetDissolveParam(dissolveThreshold_, dissolveEdgeRange_, dissolveEdgeColor_, dissolveMaskColor_);
   Renderer::GetInstance()->SetRandomParam(time_);
+  // Renderer::GetInstance()->SetHSVParam(hsvHue_, hsvSaturation_, hsvValue_);
   
   ImGui::End();
 
