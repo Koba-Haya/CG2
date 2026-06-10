@@ -106,30 +106,9 @@ private:
 
 
 
-  // エフェクト管理
-  struct HitEffect {
-    ModelInstance instance;
-    float frame = 0.0f;
-    float maxFrame = 30.0f;
-    bool isActive = false;
-    Vector3 position;
-  };
-
   std::shared_ptr<ModelResource> resEffect_;
-  std::vector<HitEffect> hitEffects_;
-
-  // 常時確認用プリミティブ
-  Ring ring_;
   std::shared_ptr<TextureResource> texRing_;
-  Ring::Params ringParams_;
-  Transform ringTransform_;
-  Vector2 ringUVScale_ = {1.0f, 1.0f};
-
-  Cylinder cylinder_;
   std::shared_ptr<TextureResource> texCylinder_;
-  Cylinder::Params cylinderParams_;
-  Transform cylinderTransform_;
-  Vector2 cylinderUVScale_ = {1.0f, 1.0f};
 
   // オフスクリーンテスト用
   std::unique_ptr<RenderTexture> renderTexture_;
@@ -153,6 +132,10 @@ private:
   Vector3 dissolveMaskColor_ = {1.0f, 1.0f, 1.0f};
   std::shared_ptr<TextureResource> texNoise0_;
   float time_ = 0.0f;
+
+  float hsvHue_ = 0.0f;
+  float hsvSaturation_ = 0.0f;
+  float hsvValue_ = 0.0f;
 
   std::string debugStr_;
 };

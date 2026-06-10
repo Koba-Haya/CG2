@@ -146,7 +146,11 @@
     <ClCompile Include="graphics\descriptor\SrvHandle.cpp" />
     <ClCompile Include="graphics\particle\GPUParticleManager.cpp" />
     <ClCompile Include="graphics\particle\ParticleEmitter.cpp" />
+    <ClCompile Include="graphics\particle\EffectManager.cpp" />
     <ClCompile Include="graphics\particle\ParticleManager.cpp" />
+    <ClCompile Include="graphics\particle\RingEffect.cpp" />
+    <ClCompile Include="graphics\particle\CylinderEffect.cpp" />
+    <ClCompile Include="graphics\particle\PlaneHitEffect.cpp" />
     <ClCompile Include="graphics\pipeline\UnifiedPipeline.cpp" />
     <ClCompile Include="graphics\primitive\Cylinder.cpp" />
     <ClCompile Include="graphics\primitive\PrimitiveDrawer.cpp" />
@@ -202,6 +206,11 @@
     <ClInclude Include="graphics\particle\GPUParticleManager.h" />
     <ClInclude Include="graphics\particle\ParticleEmitter.h" />
     <ClInclude Include="graphics\particle\ParticleManager.h" />
+    <ClInclude Include="graphics\particle\BaseEffect.h" />
+    <ClInclude Include="graphics\particle\EffectManager.h" />
+    <ClInclude Include="graphics\particle\RingEffect.h" />
+    <ClInclude Include="graphics\particle\CylinderEffect.h" />
+    <ClInclude Include="graphics\particle\PlaneHitEffect.h" />
     <ClInclude Include="graphics\pipeline\BlendMode.h" />
     <ClInclude Include="graphics\pipeline\UnifiedPipeline.h" />
     <ClInclude Include="graphics\primitive\Cylinder.h" />
