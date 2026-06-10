@@ -14,6 +14,10 @@
 #include "graphics/texture/TextureManager.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
+#include "graphics/particle/EffectManager.h"
+#include "graphics/particle/RingEffect.h"
+#include "graphics/particle/CylinderEffect.h"
+#include "graphics/particle/PlaneHitEffect.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
@@ -133,43 +137,22 @@ void DevScene::Update() {
 
   // --- 左パネル：ライト設定（UIから削除し、インスペクター側で管理） ---
 
-  // --- 右パネル：プリミティブ設定 ---
-  ImGui::Begin("Primitives##RightPanel");
-  if (ImGui::CollapsingHeader("Ring Primitive")) {
-    bool changed = false;
-    int divide = static_cast<int>(ringParams_.divide);
-    if (ImGui::SliderInt("Divide##Ring", &divide, 3, 128)) {
-      ringParams_.divide = static_cast<uint32_t>(divide);
-      changed = true;
-    }
-    changed |= ImGui::SliderFloat("Outer Radius", &ringParams_.outerRadius, 0.1f, 10.0f);
-    changed |= ImGui::SliderFloat("Inner Radius", &ringParams_.innerRadius, 0.0f, 10.0f);
-    changed |= ImGui::SliderAngle("Start Angle", &ringParams_.startAngle);
-    changed |= ImGui::SliderAngle("End Angle", &ringParams_.endAngle);
-    changed |= ImGui::ColorEdit4("Color Inner", &ringParams_.colorInner.x);
-    changed |= ImGui::ColorEdit4("Color Outer", &ringParams_.colorOuter.x);
-    if (changed) {
-      ring_.Update(Renderer::GetInstance()->GetDX()->GetDevice(), ringParams_);
-    }
-    ImGui::DragFloat3("Ring Pos", &ringTransform_.translate.x, 0.1f);
-    ImGui::DragFloat3("Ring Rot", &ringTransform_.rotate.x, 0.05f);
+  // --- 右パネル：エフェクトテスト ---
+  ImGui::Begin("Effect Test##RightPanel");
+  ImGui::Text("Click to spawn effects:");
+  
+  if (ImGui::Button("Spawn Ring Effect")) {
+      auto device = Renderer::GetInstance()->GetDX()->GetDevice();
+      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_.get(), transform_.translate));
   }
-
-  if (ImGui::CollapsingHeader("Cylinder Primitive")) {
-    bool changed = false;
-    int divide = static_cast<int>(cylinderParams_.divide);
-    if (ImGui::SliderInt("Divide##Cyl", &divide, 3, 128)) {
-      cylinderParams_.divide = static_cast<uint32_t>(divide);
-      changed = true;
-    }
-    changed |= ImGui::DragFloat2("Top Radius (X,Z)", &cylinderParams_.topRadiusX, 0.1f);
-    changed |= ImGui::DragFloat2("Bottom Radius (X,Z)", &cylinderParams_.bottomRadiusX, 0.1f);
-    changed |= ImGui::SliderFloat("Height##Cyl", &cylinderParams_.height, 0.1f, 10.0f);
-    if (changed) {
-      cylinder_.Update(Renderer::GetInstance()->GetDX()->GetDevice(), cylinderParams_);
-    }
-    ImGui::DragFloat3("Cylinder Pos", &cylinderTransform_.translate.x, 0.1f);
-    ImGui::DragFloat3("Cylinder Rot", &cylinderTransform_.rotate.x, 0.05f);
+  
+  if (ImGui::Button("Spawn Cylinder Effect")) {
+      auto device = Renderer::GetInstance()->GetDX()->GetDevice();
+      EffectManager::GetInstance()->AddEffect(std::make_unique<CylinderEffect>(device, texCylinder_.get(), transform_.translate));
+  }
+  
+  if (ImGui::Button("Spawn Plane Hit Effect")) {
+      EffectManager::GetInstance()->AddEffect(std::make_unique<PlaneHitEffect>(resEffect_, transform_.translate));
   }
   ImGui::End();
 
@@ -261,8 +244,7 @@ void DevScene::Update() {
 
 #endif
 
-  ringTransform_.rotate.z += 1.5f * deltaTime;
-  cylinderTransform_.rotate.y += 1.0f * deltaTime;
+  EffectManager::GetInstance()->Update(deltaTime, editorCamera_.get());
 
   // ゲームロジックは PlayMode の時のみ更新する
   if (playMode_ == PlayMode::Play) {
@@ -279,19 +261,13 @@ void DevScene::Update() {
 
       if (services_.input->TriggerKey(DIK_SPACE)) {
         SpawnHitEffect({0.0f, 0.0f, -1.0f});
+        
+        // スペースキーでクラス化されたエフェクトを一斉に発生させる
+        auto device = Renderer::GetInstance()->GetDX()->GetDevice();
+        EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_.get(), Vector3{0.0f, 0.0f, -1.0f}));
+        EffectManager::GetInstance()->AddEffect(std::make_unique<CylinderEffect>(device, texCylinder_.get(), Vector3{0.0f, 0.0f, -1.0f}));
+        EffectManager::GetInstance()->AddEffect(std::make_unique<PlaneHitEffect>(resEffect_, Vector3{0.0f, 0.0f, -1.0f}));
       }
-
-      // エフェクト更新
-      for (auto &ef : hitEffects_) {
-        if (!ef.isActive) continue;
-        ef.frame += 1.0f;
-        float t = ef.frame / ef.maxFrame;
-        float scaleVal = t * 5.0f;
-        ef.instance.SetWorld(MakeAffineMatrix(Vector3{scaleVal, scaleVal, scaleVal}, Vector3{0, 0, 0}, ef.position));
-        ef.instance.SetColor({1.0f, 1.0f, 1.0f, 1.0f - t});
-        if (ef.frame >= ef.maxFrame) ef.isActive = false;
-      }
-      hitEffects_.erase(std::remove_if(hitEffects_.begin(), hitEffects_.end(), [](const HitEffect &e) { return !e.isActive; }), hitEffects_.end());
   }
 }
 
@@ -346,24 +322,8 @@ void DevScene::Draw() {
     renderer->RenderPrimitives();
     skybox_.Draw();
 
-    // Ring & Cylinder
-    {
-      ring_.SetTransform(
-          MakeAffineMatrix(ringTransform_.scale, ringTransform_.rotate, ringTransform_.translate),
-          editorCamera_->GetViewMatrix(), editorCamera_->GetProjectionMatrix());
-      ring_.SetMaterial({1.0f, 1.0f, 1.0f, 1.0f},
-          MakeScaleMatrix({ringUVScale_.x, ringUVScale_.y, 1.0f}));
-      if (texRing_) renderer->DrawRing(&ring_, texRing_->GetSrvGpu());
-
-      cylinder_.SetTransform(
-          MakeAffineMatrix(cylinderTransform_.scale, cylinderTransform_.rotate, cylinderTransform_.translate),
-          editorCamera_->GetViewMatrix(), editorCamera_->GetProjectionMatrix());
-      cylinder_.SetMaterial({1.0f, 1.0f, 1.0f, 1.0f},
-          MakeScaleMatrix({cylinderUVScale_.x, cylinderUVScale_.y, 1.0f}));
-      if (texCylinder_) renderer->DrawCylinder(&cylinder_, texCylinder_->GetSrvGpu());
-    }
-
-    for (auto& ef : hitEffects_) renderer->DrawEffectModel(&ef.instance);
+    // 新しいエフェクトマネージャによる描画
+    EffectManager::GetInstance()->Draw();
 
     // GPUパーティクル描画
     renderer->DrawGPUParticles(static_cast<BlendMode>(particleBlendMode_ + 1));
@@ -443,25 +403,12 @@ void DevScene::InitResources_() {
   sprite_.Initialize({"resources/app/plane/uvChecker.png", {640, 360}, {1, 1, 1, 1}});
   skybox_.Initialize("resources/app/dds/dds.dds");
 
-  ringParams_.divide = 32;
-  ringParams_.outerRadius = 2.0f;
-  ringParams_.innerRadius = 1.8f;
-  ring_.Initialize(dx->GetDevice(), ringParams_);
   texRing_ = tm->Load("resources/app/textures/gradationLine.png");
-  ringTransform_.translate = {0.0f, 2.0f, 0.0f};
-  ringUVScale_ = {10.0f, 1.0f};
 
   texNoise0_ = tm->Load("resources/noise/noise0.png");
   Renderer::GetInstance()->SetDissolveMaskTexture(texNoise0_);
 
-  cylinderParams_.divide = 32;
-  cylinderParams_.topRadiusX = 0.5f;
-  cylinderParams_.bottomRadiusX = 0.5f;
-  cylinderParams_.height = 4.0f;
-  cylinder_.Initialize(dx->GetDevice(), cylinderParams_);
   texCylinder_ = tm->Load("resources/app/textures/gradationLine.png");
-  cylinderTransform_.translate = {-4.0f, 0.0f, 0.0f};
-  cylinderUVScale_ = {5.0f, 1.0f};
 
   ParticleManager::GetInstance()->CreateParticleGroup(particleGroupName_, "resources/app/particle/circle.png", kParticleCount_);
   ParticleEmitter::Params p{};
