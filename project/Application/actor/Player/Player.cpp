@@ -1,4 +1,4 @@
-#include "Player.h"
+#include "Player/Player.h"
 #include "Input.h"
 #include "GameCamera.h"
 #include "Method.h"
@@ -51,7 +51,7 @@ void Player::Update(const Input &input, const GameCamera &camera, float deltaTim
   Matrix4x4 mat;
   mat.m[0][0] = -right.x; mat.m[0][1] = -right.y; mat.m[0][2] = -right.z; mat.m[0][3] = 0.0f;
   mat.m[1][0] = up.x;    mat.m[1][1] = up.y;    mat.m[1][2] = up.z;    mat.m[1][3] = 0.0f;
-  mat.m[2][0] = -forward.x; mat.m[2][1] = -forward.y; mat.m[2][2] = -forward.z; mat.m[2][3] = 0.0f;
+  mat.m[2][0] = forward.x; mat.m[2][1] = forward.y; mat.m[2][2] = forward.z; mat.m[2][3] = 0.0f;
   mat.m[3][0] = worldPos_.x; mat.m[3][1] = worldPos_.y; mat.m[3][2] = worldPos_.z; mat.m[3][3] = 1.0f;
 
   modelInstance_.SetWorld(mat);

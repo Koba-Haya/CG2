@@ -8,9 +8,8 @@
 #include "Renderer.h"
 #include "graphics/texture/RenderTexture.h"
 #include "graphics/texture/DepthTexture.h"
-#include "../actor/Player.h"
-#include "../actor/Bullet.h"
-#include "../actor/Enemy.h"
+#include "../actor/Player/Player.h"
+#include "../actor/Bullet/Bullet.h"
 #include <memory>
 #include <vector>
 
@@ -51,7 +50,7 @@ private:
   // アクター関連
   Player player_;
   std::vector<Bullet> bullets_;
-  std::vector<Enemy> enemies_;
+  std::vector<Bullet> enemyBullets_;
 
   // リソース
   std::shared_ptr<ModelResource> resPlayer_;

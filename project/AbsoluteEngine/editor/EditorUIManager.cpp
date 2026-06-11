@@ -868,38 +868,93 @@ void EditorUIManager::DrawInspector() {
 }
 #endif
 
-void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
 #ifdef USE_IMGUI
   if (ImGui::BeginDragDropTarget()) {
-    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
-      const char* payloadPath = (const char*)payload->Data;
-      std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
-      auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
-      if (prefabInstance) {
-        if (commandManager_) {
-          commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
-        } else {
-          rootObjects.push_back(prefabInstance);
+    
+    // 配置先のワールド座標を計算
+    Vector3 targetPos = {0, 0, 0};
+    ImVec2 mousePos = ImGui::GetMousePos();
+    ImVec2 vMin = ImGui::GetWindowContentRegionMin();
+    ImVec2 vMax = ImGui::GetWindowContentRegionMax();
+    ImVec2 wPos = ImGui::GetWindowPos();
+    vMin.x += wPos.x;
+    vMin.y += wPos.y;
+    vMax.x += wPos.x;
+    vMax.y += wPos.y;
+
+    float u = (mousePos.x - vMin.x) / (vMax.x - vMin.x);
+    float v = (mousePos.y - vMin.y) / (vMax.y - vMin.y);
+
+    if (u >= 0.0f && u <= 1.0f && v >= 0.0f && v <= 1.0f) {
+        float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f) {
+            dropDistance_ += wheel * 2.0f; // ホイール1段階につき2m移動
+            if (dropDistance_ < 1.0f) dropDistance_ = 1.0f; // 最小値
         }
-        selectedObject_ = prefabInstance;
+
+        float ndcX = u * 2.0f - 1.0f;
+        float ndcY = 1.0f - v * 2.0f;
+
+        Matrix4x4 viewProj = Multiply(viewMatrix, projectionMatrix);
+        Matrix4x4 invViewProj = Inverse(viewProj);
+
+        Vector3 nearPos = TransformPoint({ ndcX, ndcY, 0.0f }, invViewProj);
+        Vector3 farPos = TransformPoint({ ndcX, ndcY, 1.0f }, invViewProj);
+        Vector3 rayDir = Normalize({ farPos.x - nearPos.x, farPos.y - nearPos.y, farPos.z - nearPos.z });
+
+        // カメラから一定距離(dropDistance_)の座標をドロップ先とする
+        targetPos = { nearPos.x + rayDir.x * dropDistance_, nearPos.y + rayDir.y * dropDistance_, nearPos.z + rayDir.z * dropDistance_ };
+
+        // プレビュー表示: マーカーを描画
+        ImVec2 screenPos;
+        if (WorldToScreen(targetPos, viewProj, vMin, vMax, screenPos)) {
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            // 距離を表示するテキストも追加すると親切
+            char distText[32];
+            snprintf(distText, sizeof(distText), "%.1fm", dropDistance_);
+            drawList->AddText(ImVec2(screenPos.x + 10, screenPos.y + 10), IM_COL32(255, 255, 0, 255), distText);
+            
+            drawList->AddCircle(screenPos, 5.0f, IM_COL32(255, 255, 0, 255), 12, 2.0f);
+            drawList->AddLine(ImVec2(screenPos.x - 10, screenPos.y), ImVec2(screenPos.x + 10, screenPos.y), IM_COL32(255, 255, 0, 255), 2.0f);
+            drawList->AddLine(ImVec2(screenPos.x, screenPos.y - 10), ImVec2(screenPos.x, screenPos.y + 10), IM_COL32(255, 255, 0, 255), 2.0f);
+        }
+    }
+
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH", ImGuiDragDropFlags_AcceptBeforeDelivery)) {
+      if (payload->IsDelivery()) {
+        const char* payloadPath = (const char*)payload->Data;
+        std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
+        auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
+        if (prefabInstance) {
+          prefabInstance->GetTransform().translate = targetPos;
+          if (commandManager_) {
+            commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
+          } else {
+            rootObjects.push_back(prefabInstance);
+          }
+          selectedObject_ = prefabInstance;
+        }
       }
     }
-    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
-      const char* payloadPath = (const char*)payload->Data;
-      std::filesystem::path p(payloadPath);
-      std::string objName = p.stem().string();
-      if (objName.empty()) objName = "Model";
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH", ImGuiDragDropFlags_AcceptBeforeDelivery)) {
+      if (payload->IsDelivery()) {
+        const char* payloadPath = (const char*)payload->Data;
+        std::filesystem::path p(payloadPath);
+        std::string objName = p.stem().string();
+        if (objName.empty()) objName = "Model";
 
-      auto newObj = std::make_shared<AbsoluteEngine::GameObject>(objName);
-      newObj->LoadModel(payloadPath);
-      newObj->GetTransform().translate = {0, 0, 0};
-      
-      if (commandManager_) {
-        commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
-      } else {
-        rootObjects.push_back(newObj);
+        auto newObj = std::make_shared<AbsoluteEngine::GameObject>(objName);
+        newObj->LoadModel(payloadPath);
+        newObj->GetTransform().translate = targetPos;
+        
+        if (commandManager_) {
+          commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
+        } else {
+          rootObjects.push_back(newObj);
+        }
+        selectedObject_ = newObj;
       }
-      selectedObject_ = newObj;
     }
     ImGui::EndDragDropTarget();
   }

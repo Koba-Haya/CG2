@@ -36,8 +36,11 @@ void BaseScene::RequestSceneChange(const std::string &sceneId) {
 
 void BaseScene::UpdateEditor() {
 #ifdef USE_IMGUI
+    // ドラッグ＆ドロップ中はカメラの操作をブロックする
+    bool isDragging = ImGui::GetDragDropPayload() != nullptr;
+
     // エディタカメラの更新
-    if (editorCamera_ && playMode_ == PlayMode::Edit) {
+    if (editorCamera_ && playMode_ == PlayMode::Edit && !isDragging) {
         editorCamera_->Update(*services_.input);
     }
 

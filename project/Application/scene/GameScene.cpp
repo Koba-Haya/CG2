@@ -18,6 +18,9 @@
 #endif
 #include "AbsoluteEngine/scene/ComponentFactory.h"
 #include "AbsoluteEngine/editor/EditorUIManager.h"
+#include "../component/enemy/StraightMoveComponent.h"
+#include "../component/enemy/EnemyComponent.h"
+#include "../component/enemy/EnemyShootComponent.h"
 
 // テスト用コンポーネント
 class SpinComponent : public AbsoluteEngine::IComponent {
@@ -87,20 +90,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // プレイヤー初期化
   player_.Initialize(resPlayer_);
 
-  // 敵の配置 (新コースに合わせた沿線上のポイントに配置)
-  enemies_.clear();
-  std::vector<Vector3> enemyPositions = {
-      { 0.0f,  3.0f, -20.0f}, // 直進エリア
-      { 10.0f, 5.0f, -50.0f}, // 右カーブへの上り手前
-      { 20.0f, 8.0f, -80.0f}, // 右カーブの頂点付近
-      { 0.0f,  5.0f,-110.0f}, // 中央へ戻る下りエリア
-      {-15.0f, 2.0f,-150.0f}  // 左急降下エリアの底
-  };
-  for (const auto& pos : enemyPositions) {
-      Enemy enemy;
-      enemy.Initialize(pos, resEnemy_);
-      enemies_.push_back(std::move(enemy));
-  }
+  // 敵の固定配置は削除されました（エディタでの配置に移行）
 
   auto* dx = Renderer::GetInstance()->GetDX();
   renderTexture_ = std::make_unique<RenderTexture>();
@@ -118,6 +108,9 @@ void GameScene::Initialize(const SceneServices &services) {
   // サンプルコンポーネントの登録
   AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
 
   // デフォルトのライトを一つ配置しておく
   auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
@@ -154,15 +147,21 @@ void GameScene::Update() {
   UpdateEditor();
 
   if (playMode_ == PlayMode::Play) {
+#ifdef USE_IMGUI
+      bool isDragging = ImGui::GetDragDropPayload() != nullptr;
+#else
+      bool isDragging = false;
+#endif
+
       if (isDebugCamera_) {
-      debugCamera_->Update(*services_.input);
-  } else {
-      // ゲーム（レール）カメラ進行 (GameCamera 内にセットしたコントローラーを正しく動作させる)
-      CameraContext ctx{};
-      ctx.deltaTime = deltaTime;
-      gameCamera_->SetContext(ctx);
-      gameCamera_->Update(*services_.input);
-  }
+          if (!isDragging) debugCamera_->Update(*services_.input);
+      } else {
+          // ゲーム（レール）カメラ進行 (GameCamera 内にセットしたコントローラーを正しく動作させる)
+          CameraContext ctx{};
+          ctx.deltaTime = deltaTime;
+          gameCamera_->SetContext(ctx);
+          if (!isDragging) gameCamera_->Update(*services_.input);
+      }
 
   // プレイヤー更新 (常にゲームカメラを基準とする)
   player_.Update(*services_.input, *gameCamera_, deltaTime);
@@ -188,36 +187,113 @@ void GameScene::Update() {
   // 消えた弾を削除
   bullets_.erase(std::remove_if(bullets_.begin(), bullets_.end(), [](const Bullet& b) { return !b.IsActive(); }), bullets_.end());
 
-  // 敵の更新
-  for (auto& enemy : enemies_) {
-      enemy.Update(deltaTime);
-  }
-
-  // --- 当たり判定（弾 vs 敵） ---
-  for (auto& bullet : bullets_) {
-      if (!bullet.IsActive()) continue;
-      for (auto& enemy : enemies_) {
-          if (!enemy.IsActive()) continue;
-
-          Vector3 diff = {
-              bullet.GetPosition().x - enemy.GetPosition().x,
-              bullet.GetPosition().y - enemy.GetPosition().y,
-              bullet.GetPosition().z - enemy.GetPosition().z
-          };
-          float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-          float rSum = bullet.GetCollisionRadius() + enemy.GetCollisionRadius();
-
-          if (distSq <= rSum * rSum) {
-              // ヒット！
-              SpawnHitEffect(enemy.GetPosition());
-              enemy.OnHit();
-              bullet.Deactivate();
+  // --- 敵からの弾の発射処理 ---
+  for (auto& obj : rootObjects_) {
+      if (!obj) continue;
+      
+      for (const auto& comp : obj->GetComponents()) {
+          if (comp->GetTypeName() == "EnemyShootComponent") {
+              auto* shootComp = dynamic_cast<EnemyShootComponent*>(comp.get());
+              if (shootComp && shootComp->WantToShoot()) {
+                  Vector3 spawnPos = obj->GetTransform().translate;
+                  Vector3 targetPos = player_.GetWorldPosition();
+                  
+                  Vector3 diff = { targetPos.x - spawnPos.x, targetPos.y - spawnPos.y, targetPos.z - spawnPos.z };
+                  Vector3 dir = Normalize(diff);
+                  Vector3 vel = { dir.x * 20.0f, dir.y * 20.0f, dir.z * 20.0f }; // 弾速
+                  
+                  Bullet bullet;
+                  // 敵の弾も同じモデル（resBullet_）を一旦使用
+                  bullet.Initialize(spawnPos, vel, resBullet_);
+                  if (bullet.IsActive()) {
+                      enemyBullets_.push_back(std::move(bullet));
+                  }
+                  shootComp->ClearShootFlag();
+              }
               break;
           }
       }
   }
-  // 倒された敵の削除
-  enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(), [](const Enemy& e) { return !e.IsActive(); }), enemies_.end());
+
+  // 敵の弾の更新
+  for (auto& bullet : enemyBullets_) {
+      bullet.Update(deltaTime);
+  }
+  enemyBullets_.erase(std::remove_if(enemyBullets_.begin(), enemyBullets_.end(), [](const Bullet& b) { return !b.IsActive(); }), enemyBullets_.end());
+
+  // --- 当たり判定（弾 vs 敵 GameObject） ---
+  for (auto& bullet : bullets_) {
+      if (!bullet.IsActive()) continue;
+
+      for (auto& obj : rootObjects_) {
+          if (!obj) continue;
+          
+          EnemyComponent* enemyComp = nullptr;
+          for (const auto& comp : obj->GetComponents()) {
+              if (comp->GetTypeName() == "EnemyComponent") {
+                  enemyComp = dynamic_cast<EnemyComponent*>(comp.get());
+                  break;
+              }
+          }
+
+          if (enemyComp && enemyComp->IsActive()) {
+              // 敵の座標（簡易的にTransformのtranslateをワールド座標として扱う）
+              Vector3 objPos = obj->GetTransform().translate;
+              Vector3 diff = {
+                  bullet.GetPosition().x - objPos.x,
+                  bullet.GetPosition().y - objPos.y,
+                  bullet.GetPosition().z - objPos.z
+              };
+              float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+              float rSum = bullet.GetCollisionRadius() + enemyComp->GetCollisionRadius();
+
+              if (distSq <= rSum * rSum) {
+                  // ヒット！
+                  SpawnHitEffect(objPos);
+                  enemyComp->OnHit();
+                  bullet.Deactivate();
+                  break;
+              }
+          }
+      }
+  }
+
+  // 撃破された（IsActive() == false）EnemyComponentを持つGameObjectをシーンから削除
+  rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), [](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
+      if (!obj) return true;
+      for (const auto& comp : obj->GetComponents()) {
+          if (comp->GetTypeName() == "EnemyComponent") {
+              auto* enemyComp = dynamic_cast<EnemyComponent*>(comp.get());
+              if (enemyComp && !enemyComp->IsActive()) return true;
+          }
+      }
+      return false;
+  }), rootObjects_.end());
+
+  // --- 当たり判定（敵の弾 vs プレイヤー） ---
+  for (auto& bullet : enemyBullets_) {
+      if (!bullet.IsActive()) continue;
+
+      Vector3 bulletPos = bullet.GetPosition();
+      Vector3 playerPos = player_.GetWorldPosition();
+      
+      Vector3 diff = {
+          bulletPos.x - playerPos.x,
+          bulletPos.y - playerPos.y,
+          bulletPos.z - playerPos.z
+      };
+      float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+      
+      float playerRadius = 1.0f; // プレイヤーの当たり判定（仮）
+      float rSum = bullet.GetCollisionRadius() + playerRadius;
+
+      if (distSq <= rSum * rSum) {
+          // 被弾！
+          SpawnHitEffect(playerPos);
+          bullet.Deactivate();
+          // 今後、プレイヤーのダメージ処理やHP減少をここに追加します
+      }
+  }
 
   // ヒットエフェクトの更新
   for (auto& ef : hitEffects_) {
@@ -247,7 +323,21 @@ void GameScene::Update() {
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
     
     if (editorUIManager_) {
-        editorUIManager_->HandleViewportDragDrop(rootObjects_);
+        Matrix4x4 viewMat, projMat;
+        if (playMode_ == PlayMode::Edit && editorCamera_) {
+            viewMat = editorCamera_->GetViewMatrix();
+            projMat = editorCamera_->GetProjectionMatrix();
+        } else if (isDebugCamera_ && debugCamera_) {
+            viewMat = debugCamera_->GetViewMatrix();
+            projMat = debugCamera_->GetProjectionMatrix();
+        } else if (gameCamera_) {
+            viewMat = gameCamera_->GetViewMatrix();
+            projMat = gameCamera_->GetProjectionMatrix();
+        } else {
+            viewMat = Renderer::GetInstance()->GetViewMatrix();
+            projMat = Renderer::GetInstance()->GetProjectionMatrix();
+        }
+        editorUIManager_->HandleViewportDragDrop(rootObjects_, viewMat, projMat);
     }
   }
   ImGui::End();
@@ -255,7 +345,6 @@ void GameScene::Update() {
   ImGui::Begin("GameScene Controls##LeftPanel");
   ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
   ImGui::Separator();
-  ImGui::Text("Enemies Remaining: %d", (int)enemies_.size());
   
   ImGui::SeparatorText("Bullet Controls & Info");
   ImGui::Text("Active Bullets: %d", (int)bullets_.size());
@@ -360,11 +449,11 @@ void GameScene::Draw() {
       if (obj) obj->Draw();
   }
 
-  for (auto& enemy : enemies_) {
-      enemy.Draw();
+  for (auto& bullet : bullets_) {
+      bullet.Draw();
   }
 
-  for (auto& bullet : bullets_) {
+  for (auto& bullet : enemyBullets_) {
       bullet.Draw();
   }
 
