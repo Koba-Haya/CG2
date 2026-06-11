@@ -129,7 +129,15 @@ void DevScene::Update() {
     
     // Viewportへのドラッグ＆ドロップ受付（画像へのドロップ）
     if (editorUIManager_) {
-        editorUIManager_->HandleViewportDragDrop(rootObjects_);
+        Matrix4x4 viewMat, projMat;
+        if (editorCamera_) {
+            viewMat = editorCamera_->GetViewMatrix();
+            projMat = editorCamera_->GetProjectionMatrix();
+        } else {
+            viewMat = Renderer::GetInstance()->GetViewMatrix();
+            projMat = Renderer::GetInstance()->GetProjectionMatrix();
+        }
+        editorUIManager_->HandleViewportDragDrop(rootObjects_, viewMat, projMat);
     }
   }
 

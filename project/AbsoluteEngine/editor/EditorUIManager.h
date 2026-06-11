@@ -26,7 +26,7 @@ public:
   void DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, EditorCamera* camera = nullptr);
 
   // Viewportへのドラッグ＆ドロップ受付（画像描画後に手動で呼ぶ）
-  void HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects);
+  void HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
 
   // 現在選択されているオブジェクトを取得
   std::shared_ptr<GameObject> GetSelectedObject() const { return selectedObject_.lock(); }
@@ -57,6 +57,7 @@ private:
   ImGuizmo::OPERATION currentGizmoOperation_ = ImGuizmo::TRANSLATE;
   bool useSnap_ = false;
   float snapValue_ = 1.0f;
+  float dropDistance_ = 20.0f; // ドラッグ＆ドロップ時のカメラからの距離
   
   bool isGizmoUsing_ = false;
   Transform transformBeforeGizmo_;

@@ -1,4 +1,4 @@
-#include "Enemy.h"
+#include "Enemy/Enemy.h"
 #include "Method.h"
 
 void Enemy::Initialize(const Vector3 &pos, std::shared_ptr<ModelResource> modelRes) {

@@ -1,4 +1,4 @@
-#include "Bullet.h"
+#include "Bullet/Bullet.h"
 #include "Method.h"
 
 void Bullet::Initialize(const Vector3 &pos, const Vector3 &vel, std::shared_ptr<ModelResource> modelRes) {

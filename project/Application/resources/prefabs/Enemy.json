@@ -1,0 +1,46 @@
+{
+    "children": [],
+    "collider": {
+        "centerOffset": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "radius": 1.0,
+        "size": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+        },
+        "type": 1
+    },
+    "components": [
+        {
+            "type": "EnemyComponent"
+        },
+        {
+            "type": "StraightMoveComponent"
+        }
+    ],
+    "modelPath": "resources/cube/cube.obj",
+    "name": "Enemy",
+    "tag": "Untagged",
+    "texturePath": "",
+    "transform": {
+        "rotate": {
+            "x": 0.0,
+            "y": -0.0,
+            "z": 0.0
+        },
+        "scale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+        },
+        "translate": {
+            "x": 0.33868879079818726,
+            "y": 1.3985487222671509,
+            "z": 21.64900016784668
+        }
+    }
+}

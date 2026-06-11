@@ -23,6 +23,6 @@ private:
 
   // カメラ空間でのローカル座標
   Vector2 localPos_{ 0.0f, 0.0f };
-  float moveSpeed_ = 10.0f;
+  float moveSpeed_ = 3.0f;
   float cameraDistance_ = 10.0f; // カメラ前方どれくらいに配置するか
 };
