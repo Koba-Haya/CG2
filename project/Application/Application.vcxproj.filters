@@ -44,6 +44,9 @@
     <ClCompile Include="component\enemy\EnemyComponent.cpp" />
     <ClCompile Include="component\enemy\StraightMoveComponent.cpp" />
     <ClCompile Include="component\enemy\EnemyShootComponent.cpp" />
+    <ClCompile Include="component\enemy\BossComponent.cpp" />
+    <ClCompile Include="scene\ClearScene.cpp" />
+    <ClCompile Include="scene\GameOverScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GameApp.h">
@@ -63,5 +66,8 @@
     <ClInclude Include="component\enemy\EnemyComponent.h" />
     <ClInclude Include="component\enemy\StraightMoveComponent.h" />
     <ClInclude Include="component\enemy\EnemyShootComponent.h" />
+    <ClInclude Include="component\enemy\BossComponent.h" />
+    <ClInclude Include="scene\ClearScene.h" />
+    <ClInclude Include="scene\GameOverScene.h" />
   </ItemGroup>
 </Project>
