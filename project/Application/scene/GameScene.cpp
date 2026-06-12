@@ -21,6 +21,8 @@
 #include "../component/enemy/StraightMoveComponent.h"
 #include "../component/enemy/EnemyComponent.h"
 #include "../component/enemy/EnemyShootComponent.h"
+#include "../component/enemy/BossComponent.h"
+#include "SceneIds.h"
 
 // テスト用コンポーネント
 class SpinComponent : public AbsoluteEngine::IComponent {
@@ -111,6 +113,7 @@ void GameScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("BossComponent", []() { return std::make_unique<BossComponent>(); });
 
   // デフォルトのライトを一つ配置しておく
   auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
@@ -141,6 +144,7 @@ void GameScene::SpawnHitEffect(const Vector3 &pos) {
 }
 
 void GameScene::Update() {
+  bool isTransitioning = false;
   const float deltaTime = 1.0f / 60.0f;
   time_ += deltaTime;
 
@@ -160,11 +164,27 @@ void GameScene::Update() {
           CameraContext ctx{};
           ctx.deltaTime = deltaTime;
           gameCamera_->SetContext(ctx);
-          if (!isDragging) gameCamera_->Update(*services_.input);
+          if (!isDragging && phase_ == GamePhase::InProgress) gameCamera_->Update(*services_.input);
       }
 
   // プレイヤー更新 (常にゲームカメラを基準とする)
-  player_.Update(*services_.input, *gameCamera_, deltaTime);
+  if (phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss) {
+      player_.Update(*services_.input, *gameCamera_, deltaTime);
+  }
+
+  // ボスフェーズ移行
+  if (phase_ == GamePhase::InProgress && railController_->GetProgress() >= 1.0f) {
+      phase_ = GamePhase::Boss;
+      auto bossObj = std::make_shared<AbsoluteEngine::GameObject>("Boss");
+      Vector3 eye = gameCamera_->GetEye();
+      Vector3 forward = gameCamera_->GetForward();
+      bossObj->GetTransform().translate = { eye.x + forward.x * 20.0f, eye.y + forward.y * 20.0f, eye.z + forward.z * 20.0f };
+      bossObj->GetTransform().scale = {3.0f, 3.0f, 3.0f};
+      bossObj->LoadModel("resources/app/cube/cube.obj");
+      bossObj->AddComponent(std::make_unique<BossComponent>());
+      bossObj->AddComponent(std::make_unique<EnemyShootComponent>());
+      rootObjects_.push_back(bossObj);
+  }
 
   // 弾の発射（スペースキー）
   if (shootCooldown_ > 0.0f) shootCooldown_ -= deltaTime;
@@ -229,42 +249,60 @@ void GameScene::Update() {
           if (!obj) continue;
           
           EnemyComponent* enemyComp = nullptr;
+          BossComponent* bossComp = nullptr;
           for (const auto& comp : obj->GetComponents()) {
               if (comp->GetTypeName() == "EnemyComponent") {
                   enemyComp = dynamic_cast<EnemyComponent*>(comp.get());
-                  break;
+              } else if (comp->GetTypeName() == "BossComponent") {
+                  bossComp = dynamic_cast<BossComponent*>(comp.get());
               }
           }
 
+          bool isHit = false;
           if (enemyComp && enemyComp->IsActive()) {
-              // 敵の座標（簡易的にTransformのtranslateをワールド座標として扱う）
               Vector3 objPos = obj->GetTransform().translate;
-              Vector3 diff = {
-                  bullet.GetPosition().x - objPos.x,
-                  bullet.GetPosition().y - objPos.y,
-                  bullet.GetPosition().z - objPos.z
-              };
+              Vector3 diff = { bullet.GetPosition().x - objPos.x, bullet.GetPosition().y - objPos.y, bullet.GetPosition().z - objPos.z };
               float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
               float rSum = bullet.GetCollisionRadius() + enemyComp->GetCollisionRadius();
-
               if (distSq <= rSum * rSum) {
-                  // ヒット！
                   SpawnHitEffect(objPos);
                   enemyComp->OnHit();
-                  bullet.Deactivate();
-                  break;
+                  isHit = true;
               }
+          } else if (bossComp && bossComp->IsActive()) {
+              Vector3 objPos = obj->GetTransform().translate;
+              Vector3 diff = { bullet.GetPosition().x - objPos.x, bullet.GetPosition().y - objPos.y, bullet.GetPosition().z - objPos.z };
+              float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+              float rSum = bullet.GetCollisionRadius() + bossComp->GetCollisionRadius();
+              if (distSq <= rSum * rSum) {
+                  SpawnHitEffect(objPos);
+                  bossComp->TakeDamage(1);
+                  isHit = true;
+                  if (!bossComp->IsActive()) {
+                      phase_ = GamePhase::Clear;
+                      RequestSceneChange(SceneId::Clear);
+                      isTransitioning = true;
+                  }
+              }
+          }
+
+          if (isHit) {
+              bullet.Deactivate();
+              break;
           }
       }
   }
 
-  // 撃破された（IsActive() == false）EnemyComponentを持つGameObjectをシーンから削除
+  // 撃破された（IsActive() == false）EnemyComponentまたはBossComponentを持つGameObjectをシーンから削除
   rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), [](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
       if (!obj) return true;
       for (const auto& comp : obj->GetComponents()) {
           if (comp->GetTypeName() == "EnemyComponent") {
               auto* enemyComp = dynamic_cast<EnemyComponent*>(comp.get());
               if (enemyComp && !enemyComp->IsActive()) return true;
+          } else if (comp->GetTypeName() == "BossComponent") {
+              auto* bossComp = dynamic_cast<BossComponent*>(comp.get());
+              if (bossComp && !bossComp->IsActive()) return true;
           }
       }
       return false;
@@ -291,7 +329,12 @@ void GameScene::Update() {
           // 被弾！
           SpawnHitEffect(playerPos);
           bullet.Deactivate();
-          // 今後、プレイヤーのダメージ処理やHP減少をここに追加します
+          player_.TakeDamage(1);
+          if (player_.IsDead()) {
+              phase_ = GamePhase::GameOver;
+              RequestSceneChange(SceneId::GameOver);
+              isTransitioning = true;
+          }
       }
   }
 
@@ -315,7 +358,7 @@ void GameScene::Update() {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::Begin("Viewport##GameView");
   ImGui::PopStyleVar();
-  if (postProcessTexture_) {
+  if (!isTransitioning && postProcessTexture_) {
     ImVec2 viewportSize = ImGui::GetContentRegionAvail();
     if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
     if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
@@ -352,6 +395,7 @@ void GameScene::Update() {
       const auto& pos = bullets_[0].GetPosition();
       ImGui::Text("Bullet[0] Pos: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
   }
+  ImGui::Text("Player HP: %d / %d", player_.GetHp(), player_.GetMaxHp());
   
   ImGui::SeparatorText("Camera Controls");
   Vector3 eye = gameCamera_->GetEye();

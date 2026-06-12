@@ -8,6 +8,7 @@ void Player::Initialize(std::shared_ptr<ModelResource> modelRes) {
   transform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
   modelInstance_.Initialize({ modelRes, {1, 1, 1, 1}, 0 });
   localPos_ = { 0.0f, -1.0f }; // 初期位置：少し下側
+  hp_ = maxHp_;
 }
 
 void Player::Update(const Input &input, const GameCamera &camera, float deltaTime) {
@@ -59,4 +60,15 @@ void Player::Update(const Input &input, const GameCamera &camera, float deltaTim
 
 void Player::Draw() {
   modelInstance_.Draw();
+}
+
+void Player::TakeDamage(int damage) {
+  hp_ -= damage;
+  if (hp_ < 0) {
+    hp_ = 0;
+  }
+}
+
+bool Player::IsDead() const {
+  return hp_ <= 0;
 }

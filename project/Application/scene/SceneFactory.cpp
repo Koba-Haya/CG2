@@ -4,6 +4,8 @@
 #include "DevScene.h"
 #include "SceneIds.h"
 #include "TitleScene.h"
+#include "ClearScene.h"
+#include "GameOverScene.h"
 
 std::unique_ptr<BaseScene> SceneFactory::Create(const std::string &sceneId,
                                                 const SceneServices &services) {
@@ -17,6 +19,12 @@ std::unique_ptr<BaseScene> SceneFactory::Create(const std::string &sceneId,
   }
   if (sceneId == SceneId::Dev) {
     return std::make_unique<DevScene>();
+  }
+  if (sceneId == SceneId::Clear) {
+    return std::make_unique<ClearScene>();
+  }
+  if (sceneId == SceneId::GameOver) {
+    return std::make_unique<GameOverScene>();
   }
   return nullptr;
 }

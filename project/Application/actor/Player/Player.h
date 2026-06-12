@@ -16,6 +16,11 @@ public:
   const Transform &GetTransform() const { return transform_; }
   const Vector3 &GetWorldPosition() const { return worldPos_; }
 
+  void TakeDamage(int damage);
+  bool IsDead() const;
+  int GetHp() const { return hp_; }
+  int GetMaxHp() const { return maxHp_; }
+
 private:
   Transform transform_;
   ModelInstance modelInstance_;
@@ -25,4 +30,7 @@ private:
   Vector2 localPos_{ 0.0f, 0.0f };
   float moveSpeed_ = 3.0f;
   float cameraDistance_ = 10.0f; // カメラ前方どれくらいに配置するか
+
+  int hp_ = 5;
+  int maxHp_ = 5;
 };

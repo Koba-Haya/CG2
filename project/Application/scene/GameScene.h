@@ -13,6 +13,13 @@
 #include <memory>
 #include <vector>
 
+enum class GamePhase {
+  InProgress,
+  Boss,
+  Clear,
+  GameOver
+};
+
 class GameScene final : public BaseScene {
 public:
   GameScene() = default;
@@ -75,4 +82,6 @@ private:
 
   float shootCooldown_ = 0.0f;
   float time_ = 0.0f;
+
+  GamePhase phase_ = GamePhase::InProgress;
 };
