@@ -80,6 +80,10 @@ public:
   const std::string& GetTag() const { return tag_; }
   void SetTag(const std::string& tag) { tag_ = tag; }
 
+  // 環境マッピング
+  void SetEnvironmentCoefficient(float c);
+  float GetEnvironmentCoefficient() const { return environmentCoefficient_; }
+
   // プレハブパス
   const std::string& GetPrefabPath() const { return prefabPath_; }
   void SetPrefabPath(const std::string& path) { prefabPath_ = path; }
@@ -102,6 +106,7 @@ private:
   ColliderInfo collider_;
   LightComponent light_;
   DissolveInfo dissolve_;
+  float environmentCoefficient_ = 0.0f;
 
   std::string modelPath_;
   std::string texturePath_;

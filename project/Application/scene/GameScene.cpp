@@ -181,6 +181,7 @@ void GameScene::Update() {
       bossObj->GetTransform().translate = { eye.x + forward.x * 20.0f, eye.y + forward.y * 20.0f, eye.z + forward.z * 20.0f };
       bossObj->GetTransform().scale = {3.0f, 3.0f, 3.0f};
       bossObj->LoadModel("resources/app/cube/cube.obj");
+      bossObj->SetEnvironmentCoefficient(1.0f);
       bossObj->AddComponent(std::make_unique<BossComponent>());
       bossObj->AddComponent(std::make_unique<EnemyShootComponent>());
       rootObjects_.push_back(bossObj);

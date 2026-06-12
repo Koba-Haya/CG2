@@ -8,6 +8,13 @@ namespace AbsoluteEngine {
 GameObject::GameObject(const std::string& name) : name_(name) {
 }
 
+void GameObject::SetEnvironmentCoefficient(float c) {
+  environmentCoefficient_ = c;
+  if (modelInstance_) {
+    modelInstance_->SetEnvironmentCoefficient(c);
+  }
+}
+
 void GameObject::AddChild(std::shared_ptr<GameObject> child) {
   if (child) {
     child->parent_ = shared_from_this();
@@ -83,6 +90,7 @@ void GameObject::LoadModel(const std::string& path) {
   ci.resource = res;
   ci.baseColor = {1, 1, 1, 1};
   ci.lightingMode = 1;
+  ci.environmentCoefficient = environmentCoefficient_;
   modelInstance_->Initialize(ci);
   
   if (!texturePath_.empty()) {
