@@ -68,7 +68,6 @@ DevScene::~DevScene() {}
 void DevScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
 
-  InitLogging_();
   InitResources_();
 
 
@@ -377,8 +376,7 @@ void DevScene::Draw() {
 }
 
 void DevScene::InitLogging_() {
-  std::filesystem::create_directory("logs");
-  logStream_.open("logs/dev_scene.log"); // シンプル化
+  // 古いログ機能は削除されました。今後はLoggerクラスを使用します。
 }
 
 void DevScene::InitResources_() {

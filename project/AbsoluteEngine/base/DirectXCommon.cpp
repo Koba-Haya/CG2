@@ -2,6 +2,7 @@
 #include "DirectXResourceUtils.h"
 #include "graphics/texture/RenderTexture.h"
 #include "graphics/texture/DepthTexture.h"
+#include "Logger.h"
 #include <cassert>
 #include <dxcapi.h>
 
@@ -108,6 +109,9 @@ void DirectXCommon::EndFrame() {
   assert(SUCCEEDED(hr));
   hr = commandList_->Reset(commandAllocator_.Get(), nullptr);
   assert(SUCCEEDED(hr));
+
+  // 毎フレームの終わりにDirectXのエラーメッセージがあればログに吐き出す
+  Logger::GetInstance().CheckDirectXErrors(device_.Get());
 }
 
 void DirectXCommon::PreDraw() {
