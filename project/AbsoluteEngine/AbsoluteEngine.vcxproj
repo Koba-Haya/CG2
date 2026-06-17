@@ -123,6 +123,7 @@
     <ClCompile Include="base\DirectXResourceUtils.cpp" />
     <ClCompile Include="base\FrameWork.cpp" />
     <ClCompile Include="base\ImGuiManager.cpp" />
+    <ClCompile Include="base\Logger.cpp" />
     <ClCompile Include="base\WinApp.cpp" />
     <ClCompile Include="base\input\Input.cpp" />
     <ClCompile Include="camera\Camera.cpp" />
@@ -176,6 +177,7 @@
     <ClInclude Include="base\DirectXResourceUtils.h" />
     <ClInclude Include="base\FrameWork.h" />
     <ClInclude Include="base\ImGuiManager.h" />
+    <ClInclude Include="base\Logger.h" />
     <ClInclude Include="base\WinApp.h" />
     <ClInclude Include="base\input\Input.h" />
     <ClInclude Include="camera\Camera.h" />

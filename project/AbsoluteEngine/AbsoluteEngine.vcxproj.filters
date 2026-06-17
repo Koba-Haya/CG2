@@ -84,6 +84,9 @@
     <ClCompile Include="base\ImGuiManager.cpp">
       <Filter>engine\base</Filter>
     </ClCompile>
+    <ClCompile Include="base\Logger.cpp">
+      <Filter>engine\base</Filter>
+    </ClCompile>
     <ClCompile Include="base\WinApp.cpp">
       <Filter>engine\base</Filter>
     </ClCompile>
@@ -222,6 +225,9 @@
       <Filter>engine\base</Filter>
     </ClInclude>
     <ClInclude Include="base\ImGuiManager.h">
+      <Filter>engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\Logger.h">
       <Filter>engine\base</Filter>
     </ClInclude>
     <ClInclude Include="base\WinApp.h">
