@@ -2,12 +2,16 @@
 #include "DevScene.h"
 #include "SceneIds.h"
 #include "SceneManager.h"
+#include "Bullet/Bullet.h"
+#include "component/enemy/EnemyComponent.h"
 #include "DebugCamera.h"
 #include "AbsoluteEngine/editor/Command.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "graphics/Renderer.h"
 #include "AbsoluteEngine/editor/EditorCamera.h"
 #include "AbsoluteEngine/editor/EditorUIManager.h"
+#include "AbsoluteEngine/base/FrameWork.h"
+#include "AbsoluteEngine/base/WinApp.h"
 #include "DirectXCommon.h"
 #include "Renderer.h"
 #include "TextureResource.h"
@@ -84,17 +88,18 @@ void DevScene::Initialize(const SceneServices &services) {
 
   
   auto obj1 = std::make_shared<AbsoluteEngine::GameObject>("Player");
-  obj1->GetTransform().translate = { 0.0f, 0.0f, 0.0f };
-  
-  auto obj2 = std::make_shared<AbsoluteEngine::GameObject>("Enemy");
-  obj2->GetTransform().translate = { 5.0f, 0.0f, 0.0f };
+  obj1->LoadModel("resources/app/cube/cube.obj");
+  obj1->GetTransform().translate = { 0.0f, -1.1f, -15.0f };
   
   auto obj3 = std::make_shared<AbsoluteEngine::GameObject>("Weapon");
   obj3->GetTransform().translate = { 1.0f, 0.0f, 0.0f };
   obj1->AddChild(obj3); // Playerの子にする
   
   rootObjects_.push_back(obj1);
-  rootObjects_.push_back(obj2);
+
+#ifndef USE_IMGUI
+  playMode_ = PlayMode::Play;
+#endif
 }
 
 void DevScene::Finalize() {
@@ -107,7 +112,234 @@ void DevScene::Finalize() {
 void DevScene::Update() {
   const float deltaTime = 1.0f / 60.0f;
   time_ += deltaTime;
+
+  // カメラシェイク更新
+  if (cameraShakeTimer_ < cameraShakeDuration_) {
+      cameraShakeTimer_ += deltaTime;
+      float t = 1.0f - (cameraShakeTimer_ / cameraShakeDuration_);
+      float intensity = cameraShakeIntensity_ * t;
+      float rX = ((rand() % 100) / 100.0f * 2.0f - 1.0f) * intensity;
+      float rY = ((rand() % 100) / 100.0f * 2.0f - 1.0f) * intensity;
+      float rZ = ((rand() % 100) / 100.0f * 2.0f - 1.0f) * intensity;
+      cameraShakeOffset_ = {rX, rY, rZ};
+  } else {
+      cameraShakeOffset_ = {0.0f, 0.0f, 0.0f};
+  }
+
+  // 画面歪み更新
+  if (hitDistortionTimer_ < hitDistortionDuration_) {
+      hitDistortionTimer_ += deltaTime;
+      float t = 1.0f - (hitDistortionTimer_ / hitDistortionDuration_);
+      radialBlurWidth_ = hitDistortionIntensity_ * t;
+      postProcessMode_ = Renderer::PostProcessMode::RadialBlur;
+  } else if (hitDistortionDuration_ > 0.0f) {
+      radialBlurWidth_ = 0.0f;
+      postProcessMode_ = Renderer::PostProcessMode::Normal;
+      hitDistortionDuration_ = 0.0f;
+  }
+
+  // --- エネミースポーン処理 ---
+  if (playMode_ == PlayMode::Play) {
+      int enemyCount = 0;
+      for (const auto& obj : rootObjects_) {
+          if (obj && obj->GetName() == "Enemy") {
+              enemyCount++;
+          }
+      }
+      
+      if (enemyCount < maxEnemies_) {
+          enemySpawnTimer_ += deltaTime;
+          if (enemySpawnTimer_ >= enemySpawnInterval_) {
+              enemySpawnTimer_ = 0.0f;
+              // ランダムな次回スポーン間隔（1.0〜3.0秒）
+              enemySpawnInterval_ = 1.0f + static_cast<float>(rand() % 200) / 100.0f;
+
+              auto newEnemy = std::make_shared<AbsoluteEngine::GameObject>("Enemy");
+              newEnemy->LoadModel("resources/app/sphere/sphere.obj");
+              newEnemy->LoadTexture("resources/app/cube/white100x100.png");
+              
+              // ランダムな出現位置 (X: -15〜15, Y: -5〜5, Z: 5〜25)
+              float rX = ((rand() % 300) / 10.0f) - 15.0f;
+              float rY = ((rand() % 100) / 10.0f) - 5.0f;
+              float rZ = ((rand() % 200) / 10.0f) + 5.0f;
+              newEnemy->GetTransform().translate = { rX, rY, rZ };
+              
+              newEnemy->AddComponent(std::make_unique<EnemyComponent>());
+              rootObjects_.push_back(newEnemy);
+          }
+      }
+  }
+
+  std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> newObjects;
   
+  if (services_.input) {
+      float moveX = 0.0f;
+      float moveY = 0.0f;
+
+      // キーボード (矢印キーのみ)
+      if (services_.input->PressKey(DIK_UP)) {
+          moveY -= 1.0f;
+      }
+      if (services_.input->PressKey(DIK_DOWN)) {
+          moveY += 1.0f;
+      }
+      if (services_.input->PressKey(DIK_LEFT)) {
+          moveX -= 1.0f;
+      }
+      if (services_.input->PressKey(DIK_RIGHT)) {
+          moveX += 1.0f;
+      }
+
+      // ゲームパッド対応 (左スティック)
+      if (services_.input->IsGamepadConnected()) {
+          auto pad = services_.input->GetGamepad();
+          float padX = pad.lx / 32767.0f;
+          float padY = -pad.ly / 32767.0f; // Y軸は上がプラスなので反転
+          if (std::abs(padX) > 0.2f) moveX = padX;
+          if (std::abs(padY) > 0.2f) moveY = padY;
+      }
+
+      // 速度の正規化
+      float length = std::sqrt(moveX * moveX + moveY * moveY);
+      if (length > 1.0f) {
+          moveX /= length;
+          moveY /= length;
+      }
+
+      reticlePos_.x += moveX * reticleSpeed_ * deltaTime;
+      reticlePos_.y += moveY * reticleSpeed_ * deltaTime;
+
+      // 画面内にクランプ (仮で1280x720)
+      reticlePos_.x = std::clamp(reticlePos_.x, 0.0f, 1280.0f);
+      reticlePos_.y = std::clamp(reticlePos_.y, 0.0f, 720.0f);
+
+      // --- スナップエイムと即着弾(ヒットスキャン)の実装 ---
+      if (editorCamera_) {
+          Matrix4x4 viewProj = Multiply(editorCamera_->GetViewMatrix(), editorCamera_->GetProjectionMatrix());
+          
+          Vector3 bestEnemyPos = {0,0,0};
+          bool enemyFound = false;
+          bool isSnapped = false;
+          float minDistSq = 150.0f * 150.0f; // スナップ判定半径の二乗
+          Vector2 bestEnemyScreen;
+
+          for(const auto& obj : rootObjects_) {
+              if (obj && obj->GetName() == "Enemy") {
+                  bool isDead = false;
+                  for (const auto& comp : obj->GetComponents()) {
+                      if (comp->GetTypeName() == "EnemyComponent") {
+                          isDead = static_cast<EnemyComponent*>(comp.get())->IsDead();
+                          break;
+                      }
+                  }
+                  if (isDead) continue;
+
+                  Vector3 ePos = obj->GetTransform().translate;
+                  Vector3 ndc = TransformPoint(ePos, viewProj);
+                  if (ndc.z > 0.0f && ndc.z < 1.0f) {
+                      Vector2 eScreen;
+                      eScreen.x = (ndc.x + 1.0f) * 0.5f * 1280.0f;
+                      eScreen.y = (1.0f - ndc.y) * 0.5f * 720.0f;
+
+                      float dx = reticlePos_.x - eScreen.x;
+                      float dy = reticlePos_.y - eScreen.y;
+                      float distSq = dx * dx + dy * dy;
+
+                      if (distSq < minDistSq) {
+                          minDistSq = distSq;
+                          bestEnemyPos = ePos;
+                          bestEnemyScreen = eScreen;
+                          enemyFound = true;
+                      }
+                  }
+              }
+          }
+
+          if (enemyFound) {
+              float snapRadius = 150.0f;
+              float dist = std::sqrt(minDistSq);
+              isSnapped = true;
+              
+              float dx = reticlePos_.x - bestEnemyScreen.x;
+              float dy = reticlePos_.y - bestEnemyScreen.y;
+
+              if (dist > 1.0f) {
+                  float dirX = -dx / dist;
+                  float dirY = -dy / dist;
+                  float pullFactor = 1.0f - (dist / snapRadius) * 0.5f; 
+                  reticlePos_.x += dirX * snapPullSpeed_ * pullFactor * deltaTime;
+                  reticlePos_.y += dirY * snapPullSpeed_ * pullFactor * deltaTime;
+              }
+          }
+
+          // --- 発射入力判定と弾の生成 ---
+          fireTimer_ += deltaTime;
+          bool firePressed = services_.input->PressKey(DIK_SPACE);
+          if (services_.input->IsGamepadConnected()) {
+              if (services_.input->IsPadDown(XINPUT_GAMEPAD_A) || services_.input->IsPadDown(XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
+                  firePressed = true;
+              }
+          }
+
+          if (firePressed && fireTimer_ >= fireInterval_) {
+              fireTimer_ = 0.0f;
+              Vector3 targetPos = {0,0,0};
+              if (isSnapped) {
+                  targetPos = bestEnemyPos;
+              } else {
+                  // レティクル方向へ飛ばす（ScreenPointToRay相当）
+                  Matrix4x4 viewMat = editorCamera_->GetViewMatrix();
+                  Matrix4x4 projMat = editorCamera_->GetProjectionMatrix();
+                  float ndcX = (reticlePos_.x / 1280.0f) * 2.0f - 1.0f;
+                  float ndcY = 1.0f - (reticlePos_.y / 720.0f) * 2.0f;
+                  Matrix4x4 invViewProj = Inverse(Multiply(viewMat, projMat));
+                  
+                  // FarClip面上の点を計算
+                  Vector3 rayFar = TransformPoint({ndcX, ndcY, 1.0f}, invViewProj);
+                  
+                  // カメラ位置の取得（viewMatの逆行列の平行移動成分）
+                  Matrix4x4 invView = Inverse(viewMat);
+                  Vector3 rayOrigin = { invView.m[3][0], invView.m[3][1], invView.m[3][2] };
+                  
+                  Vector3 dir = { rayFar.x - rayOrigin.x, rayFar.y - rayOrigin.y, rayFar.z - rayOrigin.z };
+                  float len = std::sqrt(dir.x*dir.x + dir.y*dir.y + dir.z*dir.z);
+                  dir = { dir.x/len, dir.y/len, dir.z/len };
+                  
+                  targetPos = { rayOrigin.x + dir.x * 100.0f, rayOrigin.y + dir.y * 100.0f, rayOrigin.z + dir.z * 100.0f };
+              }
+
+              // 発射位置（Playerの位置）
+              Vector3 spawnPos = {0,0,0};
+              for(const auto& obj : rootObjects_) {
+                  if (obj && obj->GetName() == "Player") {
+                      spawnPos = obj->GetTransform().translate;
+                      break;
+                  }
+              }
+
+              // 弾の生成
+              auto bullet = std::make_shared<AbsoluteEngine::GameObject>("Bullet");
+              bullet->LoadModel("resources/app/sphere/sphere.obj");
+              bullet->GetTransform().translate = spawnPos;
+              bullet->GetTransform().scale = {0.2f, 0.2f, 0.2f};
+
+              // 速度計算
+              Vector3 diff = { targetPos.x - spawnPos.x, targetPos.y - spawnPos.y, targetPos.z - spawnPos.z };
+              float dLen = std::sqrt(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
+              float speed = 50.0f; // 弾速
+              Vector3 velocity = { (diff.x/dLen)*speed, (diff.y/dLen)*speed, (diff.z/dLen)*speed };
+
+              auto comp = std::make_unique<BulletComponent>();
+              comp->Initialize(velocity);
+              bullet->AddComponent(std::move(comp));
+
+              rootObjects_.push_back(bullet);
+          }
+      }
+
+      reticleSprite_.SetPosition({reticlePos_.x - reticleSize_.x / 2.0f, reticlePos_.y - reticleSize_.y / 2.0f, 0.0f});
+  }
+
   // BaseSceneのエディタ機能（カメラ、オブジェクトの更新）
   UpdateEditor();
 
@@ -251,13 +483,149 @@ void DevScene::Update() {
 
 #endif
 
+  // --- 弾の寿命チェックと敵の当たり判定 ---
+  for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
+      auto& obj = *it;
+      if (obj && obj->GetName() == "Bullet") {
+          // 寿命(Active状態)の確認
+          bool isActive = true;
+          for (const auto& comp : obj->GetComponents()) {
+              if (comp->GetTypeName() == "BulletComponent") {
+                  auto bulletComp = static_cast<BulletComponent*>(comp.get());
+                  if (!bulletComp->IsActive()) {
+                      isActive = false;
+                  }
+                  break;
+              }
+          }
+
+          if (!isActive) {
+              it = rootObjects_.erase(it);
+              continue;
+          }
+
+          // すべての生きた敵と当たり判定
+          bool hit = false;
+          Vector3 bPos = obj->GetTransform().translate;
+          float hitRadius = 1.5f;
+
+          for (const auto& eObj : rootObjects_) {
+              if (eObj && eObj->GetName() == "Enemy") {
+                  bool isDead = false;
+                  for (const auto& comp : eObj->GetComponents()) {
+                      if (comp->GetTypeName() == "EnemyComponent") {
+                          isDead = static_cast<EnemyComponent*>(comp.get())->IsDead();
+                          break;
+                      }
+                  }
+                  if (isDead) continue;
+
+                  Vector3 targetEnemyPos = eObj->GetTransform().translate;
+                  float dx = bPos.x - targetEnemyPos.x;
+                  float dy = bPos.y - targetEnemyPos.y;
+                  float dz = bPos.z - targetEnemyPos.z;
+                  float distSq = dx*dx + dy*dy + dz*dz;
+
+                  if (distSq < hitRadius * hitRadius) {
+                      hit = true;
+                      
+                      // ヒットエフェクトの発生
+                      SpawnHitEffect(targetEnemyPos);
+                      auto device = Renderer::GetInstance()->GetDX()->GetDevice();
+                      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_.get(), targetEnemyPos));
+
+                      // カメラシェイク開始
+                      cameraShakeDuration_ = 0.3f;
+                      cameraShakeTimer_ = 0.0f;
+                      cameraShakeIntensity_ = 0.2f;
+
+                      // ヒット時の歪み開始
+                      hitDistortionDuration_ = 0.2f;
+                      hitDistortionTimer_ = 0.0f;
+                      hitDistortionIntensity_ = 0.05f;
+                      
+                      Matrix4x4 viewMat = editorCamera_->GetViewMatrix();
+                      Matrix4x4 projMat = editorCamera_->GetProjectionMatrix();
+                      Matrix4x4 viewProj = Multiply(viewMat, projMat);
+                      Vector3 screenPos = TransformPoint(targetEnemyPos, viewProj);
+                      radialBlurCenter_ = { screenPos.x * 0.5f + 0.5f, -screenPos.y * 0.5f + 0.5f };
+
+                      // 爆発の光（ポイントライト）の生成
+                      auto lightObj = std::make_shared<AbsoluteEngine::GameObject>("ExplosionLight");
+                      lightObj->GetTransform().translate = targetEnemyPos;
+                      auto& light = lightObj->GetLight();
+                      light.type = AbsoluteEngine::LightComponent::Type::Point;
+                      light.color = { 1.0f, 0.5f, 0.1f };
+                      light.radius = 30.0f;
+                      light.decay = 1.0f;
+                      auto lightComp = std::make_unique<ExplosionLightComponent>();
+                      lightComp->maxIntensity_ = 20.0f;
+                      lightComp->lifeTime_ = 0.5f;
+                      lightObj->AddComponent(std::move(lightComp));
+                      newObjects.push_back(lightObj);
+
+                      // 敵をディゾルブ消滅させる
+                      for (const auto& comp : eObj->GetComponents()) {
+                          if (comp->GetTypeName() == "EnemyComponent") {
+                              static_cast<EnemyComponent*>(comp.get())->OnHit();
+                              break;
+                          }
+                      }
+                      
+                      break; // 1つの弾は1体の敵にしか当たらない
+                  }
+              }
+          }
+
+          if (hit) {
+              it = rootObjects_.erase(it);
+              continue;
+          }
+      }
+      ++it;
+  }
+
+  // ディゾルブ完了のEnemyや寿命切れのライト削除
+  for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
+      auto& obj = *it;
+      bool shouldDelete = false;
+
+      if (obj) {
+          if (obj->GetName() == "Enemy") {
+              auto& dissolve = obj->GetDissolve();
+              if (dissolve.enable && dissolve.threshold >= 1.0f) {
+                  shouldDelete = true;
+              }
+          } else if (obj->GetName() == "ExplosionLight") {
+              for (const auto& comp : obj->GetComponents()) {
+                  if (comp->GetTypeName() == "ExplosionLightComponent") {
+                      auto lComp = static_cast<ExplosionLightComponent*>(comp.get());
+                      if (lComp->IsDead()) {
+                          shouldDelete = true;
+                      }
+                      break;
+                  }
+              }
+          }
+      }
+
+      if (shouldDelete) {
+          it = rootObjects_.erase(it);
+      } else {
+          ++it;
+      }
+  }
+
+  // 新規オブジェクトの追加
+  rootObjects_.insert(rootObjects_.end(), newObjects.begin(), newObjects.end());
+
   EffectManager::GetInstance()->Update(deltaTime, editorCamera_.get());
 
   // ゲームロジックは PlayMode の時のみ更新する
   if (playMode_ == PlayMode::Play) {
 
 
-      particleEmitter_.Update(deltaTime);
+      // particleEmitter_.Update(deltaTime);
       ParticleManager::GetInstance()->SetEnableAccelerationField(enableAccelerationField_);
       ParticleManager::GetInstance()->SetAccelerationField(accelerationField_);
       ParticleManager::GetInstance()->Update(deltaTime);
@@ -266,15 +634,7 @@ void DevScene::Update() {
       modelSimpleSkin_.UpdateAnimation(deltaTime);
       modelHuman_.UpdateAnimation(deltaTime);
 
-      if (services_.input->TriggerKey(DIK_SPACE)) {
-        SpawnHitEffect({0.0f, 0.0f, -1.0f});
-        
-        // スペースキーでクラス化されたエフェクトを一斉に発生させる
-        auto device = Renderer::GetInstance()->GetDX()->GetDevice();
-        EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_.get(), Vector3{0.0f, 0.0f, -1.0f}));
-        EffectManager::GetInstance()->AddEffect(std::make_unique<CylinderEffect>(device, texCylinder_.get(), Vector3{0.0f, 0.0f, -1.0f}));
-        EffectManager::GetInstance()->AddEffect(std::make_unique<PlaneHitEffect>(resEffect_, Vector3{0.0f, 0.0f, -1.0f}));
-      }
+
   }
 }
 
@@ -285,6 +645,10 @@ void DevScene::Draw() {
 
   // --- カメラ・ライト設定（オフスクリーンパス前に確定させる） ---
   if (editorCamera_) {
+    if (auto edCam = dynamic_cast<AbsoluteEngine::EditorCamera*>(editorCamera_.get())) {
+        edCam->SetShakeOffset(cameraShakeOffset_);
+        edCam->UpdateMatrix();
+    }
     renderer->SetCamera(*editorCamera_);
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
@@ -305,7 +669,7 @@ void DevScene::Draw() {
     cmdList->ClearDepthStencilView(depthTexture_->GetDsvHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     // --- シーンを RenderTexture に描画 ---
-    modelSphere_.SetWorld(MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate));
+    /*modelSphere_.SetWorld(MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate));
     modelSphere_.SetEnvironmentCoefficient(enableReflection_ ? reflectionWeight_ : 0.0f);
     modelSphere_.Draw();
 
@@ -313,13 +677,13 @@ void DevScene::Draw() {
     modelAnimCube_.Draw();
 
     modelSimpleSkin_.Draw();
-    modelHuman_.Draw();
+    modelHuman_.Draw();*/
 
-    if (showSkeleton_) {
+    /*if (showSkeleton_) {
       modelSimpleSkin_.DrawSkeleton();
       modelHuman_.DrawSkeleton();
       modelAnimCube_.DrawSkeleton();
-    }
+    }*/
 
     // --- エディタ上で配置したオブジェクト群の描画 ---
     for (auto& obj : rootObjects_) {
@@ -332,8 +696,14 @@ void DevScene::Draw() {
     // 新しいエフェクトマネージャによる描画
     EffectManager::GetInstance()->Draw();
 
+    // パーティクルの描画
+    ParticleManager::GetInstance()->Draw(static_cast<BlendMode>(particleBlendMode_ + 1));
+
     // GPUパーティクル描画
-    renderer->DrawGPUParticles(static_cast<BlendMode>(particleBlendMode_ + 1));
+    //renderer->DrawGPUParticles(static_cast<BlendMode>(particleBlendMode_ + 1));
+
+    // --- レティクルの描画 ---
+    reticleSprite_.Draw();
 
     // RenderTexture を SRV 状態に戻す
     dx->FinishRenderingWithDepth(renderTexture_.get(), depthTexture_.get());
@@ -373,6 +743,12 @@ void DevScene::Draw() {
 
   // --- バックバッファへの追加描画（必要なら UI 等をここに） ---
   // 現在はImGuiがメインのUIとなるため、バックバッファへの直接描画はなし
+#ifndef USE_IMGUI
+  if (postProcessTexture_) {
+      dx->ResetRenderTarget();
+      renderer->DrawFullscreen(postProcessTexture_->GetSrvGpuHandle(), Renderer::PostProcessMode::Normal);
+  }
+#endif
 }
 
 void DevScene::InitLogging_() {
@@ -409,6 +785,14 @@ void DevScene::InitResources_() {
   sprite_.Initialize({"resources/app/plane/uvChecker.png", {640, 360}, {1, 1, 1, 1}});
   skybox_.Initialize("resources/app/dds/dds.dds");
 
+  // --- 照準（レティクル）の初期化 ---
+  texReticle_ = tm->Load("resources/Reticle/reticle.png");
+  Sprite::CreateInfo reticleInfo;
+  reticleInfo.texturePath = "resources/Reticle/reticle.png";
+  reticleInfo.size = reticleSize_;
+  reticleInfo.color = {1.0f, 1.0f, 1.0f, 1.0f}; // 白色
+  reticleSprite_.Initialize(reticleInfo);
+
   texRing_ = tm->Load("resources/app/textures/gradationLine.png");
 
   texNoise0_ = tm->Load("resources/noise/noise0.png");
@@ -417,6 +801,7 @@ void DevScene::InitResources_() {
   texCylinder_ = tm->Load("resources/app/textures/gradationLine.png");
 
   ParticleManager::GetInstance()->CreateParticleGroup(particleGroupName_, "resources/app/particle/circle.png", kParticleCount_);
+  ParticleManager::GetInstance()->CreateParticleGroup("explosion", "resources/explosion/explosion.png", 100);
   ParticleEmitter::Params p{};
   p.groupName = particleGroupName_;
   p.emitRate = 10.0f;
@@ -463,9 +848,15 @@ void DevScene::InitCamera_() {
 }
 
 void DevScene::SpawnHitEffect(const Vector3 &pos) {
-  for (int i = 0; i < 8; ++i) {
-    ParticleManager::GetInstance()->Emit(
-        particleGroupName_, pos, Vector3{0, 0, 0}, Vector3{0.05f, 1.0f, 1.0f},
-        Vector3{0, 0, (float)i}, 0.5f, Vector4{1, 1, 1, 1});
+  // 爆発の画像（explosion.png）を使ったパーティクルをランダムな方向へ大きく拡散
+  for (int i = 0; i < 30; ++i) {
+      float rX = ((rand() % 200) / 100.0f) - 1.0f;
+      float rY = ((rand() % 200) / 100.0f) - 1.0f;
+      float rZ = ((rand() % 200) / 100.0f) - 1.0f;
+      // 速度と大きさを中間に調整（飛び散りすぎないように）
+      Vector3 vel = {rX * 1.5f, rY * 1.5f, rZ * 1.5f};
+      ParticleManager::GetInstance()->Emit(
+          "explosion", pos, vel,
+          Vector3{1.5f, 1.5f, 1.5f}, Vector3{0, 0, 0}, 0.7f, Vector4{1, 1, 1, 1});
   }
 }

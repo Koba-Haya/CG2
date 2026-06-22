@@ -70,10 +70,16 @@ void EditorCamera::Update(const Input& input) {
     // ======================
     // View 行列更新
     // ======================
+    UpdateMatrix();
+}
+
+void EditorCamera::UpdateMatrix() {
     Vector3 cameraPosition = TransformNormal(translate_, matRot_);
+    cameraPosition.x += shakeOffset_.x;
+    cameraPosition.y += shakeOffset_.y;
+    cameraPosition.z += shakeOffset_.z;
     Matrix4x4 translateMatrix = MakeTranslateMatrix(cameraPosition);
     Matrix4x4 worldMatrix = Multiply(matRot_, translateMatrix);
-
     view_ = Inverse(worldMatrix);
 }
 
@@ -87,10 +93,7 @@ void EditorCamera::FocusOn(const Vector3& targetPosition, float distance) {
                    targetPosition.z - forward.z * distance };
     
     // View行列の再計算
-    Vector3 cameraPosition = TransformNormal(translate_, matRot_);
-    Matrix4x4 translateMatrix = MakeTranslateMatrix(cameraPosition);
-    Matrix4x4 worldMatrix = Multiply(matRot_, translateMatrix);
-    view_ = Inverse(worldMatrix);
+    UpdateMatrix();
 }
 
 } // namespace AbsoluteEngine

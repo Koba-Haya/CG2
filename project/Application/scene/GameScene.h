@@ -55,9 +55,9 @@ private:
   Skybox skybox_;
 
   // アクター関連
-  Player player_;
-  std::vector<Bullet> bullets_;
-  std::vector<Bullet> enemyBullets_;
+  std::shared_ptr<AbsoluteEngine::GameObject> playerObj_;
+  std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> bulletObjs_;
+  std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> enemyBulletObjs_;
 
   // リソース
   std::shared_ptr<ModelResource> resPlayer_;

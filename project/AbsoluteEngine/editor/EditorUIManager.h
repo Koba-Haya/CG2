@@ -58,6 +58,7 @@ private:
   bool useSnap_ = false;
   float snapValue_ = 1.0f;
   float dropDistance_ = 20.0f; // ドラッグ＆ドロップ時のカメラからの距離
+  bool showColliderDebug_ = true;
   
   bool isGizmoUsing_ = false;
   Transform transformBeforeGizmo_;

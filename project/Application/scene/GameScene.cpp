@@ -90,7 +90,17 @@ void GameScene::Initialize(const SceneServices &services) {
   gameCamera_->Update(*services_.input);
 
   // プレイヤー初期化
-  player_.Initialize(resPlayer_);
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", []() { return std::make_unique<PlayerComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("BulletComponent", []() { return std::make_unique<BulletComponent>(); });
+
+  playerObj_ = std::make_shared<AbsoluteEngine::GameObject>("Player");
+  playerObj_->LoadModel("resources/app/player/player.obj");
+  auto playerComp = std::make_unique<PlayerComponent>();
+  playerComp->Initialize();
+  playerComp->SetInput(services_.input);
+  playerComp->SetCamera(gameCamera_.get());
+  playerObj_->AddComponent(std::move(playerComp));
+  rootObjects_.push_back(playerObj_);
 
   // 敵の固定配置は削除されました（エディタでの配置に移行）
 
@@ -168,9 +178,8 @@ void GameScene::Update() {
       }
 
   // プレイヤー更新 (常にゲームカメラを基準とする)
-  if (phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss) {
-      player_.Update(*services_.input, *gameCamera_, deltaTime);
-  }
+  // PlayerComponentのUpdateは、rootObjects_の中にいるためUpdateEditor経由で自動的に呼ばれます。
+  // ただしPlayMode時のみ。
 
   // ボスフェーズ移行
   if (phase_ == GamePhase::InProgress && railController_->GetProgress() >= 1.0f) {
@@ -189,24 +198,38 @@ void GameScene::Update() {
 
   // 弾の発射（スペースキー）
   if (shootCooldown_ > 0.0f) shootCooldown_ -= deltaTime;
-  if (services_.input->PressKey(DIK_SPACE) && shootCooldown_ <= 0.0f && resBullet_) {
+  if (services_.input->PressKey(DIK_SPACE) && shootCooldown_ <= 0.0f && resBullet_ && playerObj_) {
       shootCooldown_ = 0.25f; // 連射速度を適正化（光線化を防ぎ1発ずつの独立感を強調）
-      Bullet bullet;
-      Vector3 spawnPos = player_.GetWorldPosition();
+      auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("Bullet");
+      bulletObj->LoadModel("resources/app/bullet/bullet.obj");
+      bulletObj->GetTransform().translate = playerObj_->GetTransform().translate;
       Vector3 forward = gameCamera_->GetForward();
       Vector3 vel = { forward.x * 35.0f, forward.y * 35.0f, forward.z * 35.0f }; // 弾速を適正化
-      bullet.Initialize(spawnPos, vel, resBullet_);
-      if (bullet.IsActive()) {
-          bullets_.push_back(std::move(bullet));
-      }
+      auto bulletComp = std::make_unique<BulletComponent>();
+      bulletComp->Initialize(vel);
+      bulletObj->AddComponent(std::move(bulletComp));
+      bulletObjs_.push_back(bulletObj);
+      rootObjects_.push_back(bulletObj);
   }
 
-  // 弾の更新
-  for (auto& bullet : bullets_) {
-      bullet.Update(deltaTime);
-  }
+  // 弾の更新（コンポーネント化されたためrootObjects_経由で呼ばれるが、削除管理はこちらで行う）
   // 消えた弾を削除
-  bullets_.erase(std::remove_if(bullets_.begin(), bullets_.end(), [](const Bullet& b) { return !b.IsActive(); }), bullets_.end());
+  bulletObjs_.erase(std::remove_if(bulletObjs_.begin(), bulletObjs_.end(), [&](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
+      if (!obj) return true;
+      bool isActive = false;
+      for (const auto& comp : obj->GetComponents()) {
+          if (comp->GetTypeName() == "BulletComponent") {
+              auto* bComp = dynamic_cast<BulletComponent*>(comp.get());
+              if (bComp) isActive = bComp->IsActive();
+              break;
+          }
+      }
+      if (!isActive) {
+          rootObjects_.erase(std::remove(rootObjects_.begin(), rootObjects_.end(), obj), rootObjects_.end());
+          return true;
+      }
+      return false;
+  }), bulletObjs_.end());
 
   // --- 敵からの弾の発射処理 ---
   for (auto& obj : rootObjects_) {
@@ -215,20 +238,23 @@ void GameScene::Update() {
       for (const auto& comp : obj->GetComponents()) {
           if (comp->GetTypeName() == "EnemyShootComponent") {
               auto* shootComp = dynamic_cast<EnemyShootComponent*>(comp.get());
-              if (shootComp && shootComp->WantToShoot()) {
+              if (shootComp && shootComp->WantToShoot() && playerObj_) {
                   Vector3 spawnPos = obj->GetTransform().translate;
-                  Vector3 targetPos = player_.GetWorldPosition();
+                  Vector3 targetPos = playerObj_->GetTransform().translate;
                   
                   Vector3 diff = { targetPos.x - spawnPos.x, targetPos.y - spawnPos.y, targetPos.z - spawnPos.z };
                   Vector3 dir = Normalize(diff);
                   Vector3 vel = { dir.x * 20.0f, dir.y * 20.0f, dir.z * 20.0f }; // 弾速
                   
-                  Bullet bullet;
-                  // 敵の弾も同じモデル（resBullet_）を一旦使用
-                  bullet.Initialize(spawnPos, vel, resBullet_);
-                  if (bullet.IsActive()) {
-                      enemyBullets_.push_back(std::move(bullet));
-                  }
+                  auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("EnemyBullet");
+                  bulletObj->LoadModel("resources/app/bullet/bullet.obj");
+                  bulletObj->GetTransform().translate = spawnPos;
+                  auto bulletComp = std::make_unique<BulletComponent>();
+                  bulletComp->Initialize(vel);
+                  bulletObj->AddComponent(std::move(bulletComp));
+                  enemyBulletObjs_.push_back(bulletObj);
+                  rootObjects_.push_back(bulletObj);
+                  
                   shootComp->ClearShootFlag();
               }
               break;
@@ -236,18 +262,38 @@ void GameScene::Update() {
       }
   }
 
-  // 敵の弾の更新
-  for (auto& bullet : enemyBullets_) {
-      bullet.Update(deltaTime);
-  }
-  enemyBullets_.erase(std::remove_if(enemyBullets_.begin(), enemyBullets_.end(), [](const Bullet& b) { return !b.IsActive(); }), enemyBullets_.end());
+  // 敵の弾の更新（削除管理）
+  enemyBulletObjs_.erase(std::remove_if(enemyBulletObjs_.begin(), enemyBulletObjs_.end(), [&](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
+      if (!obj) return true;
+      bool isActive = false;
+      for (const auto& comp : obj->GetComponents()) {
+          if (comp->GetTypeName() == "BulletComponent") {
+              auto* bComp = dynamic_cast<BulletComponent*>(comp.get());
+              if (bComp) isActive = bComp->IsActive();
+              break;
+          }
+      }
+      if (!isActive) {
+          rootObjects_.erase(std::remove(rootObjects_.begin(), rootObjects_.end(), obj), rootObjects_.end());
+          return true;
+      }
+      return false;
+  }), enemyBulletObjs_.end());
 
   // --- 当たり判定（弾 vs 敵 GameObject） ---
-  for (auto& bullet : bullets_) {
-      if (!bullet.IsActive()) continue;
+  for (auto& bulletObj : bulletObjs_) {
+      if (!bulletObj) continue;
+      BulletComponent* bComp = nullptr;
+      for (const auto& comp : bulletObj->GetComponents()) {
+          if (comp->GetTypeName() == "BulletComponent") {
+              bComp = dynamic_cast<BulletComponent*>(comp.get());
+              break;
+          }
+      }
+      if (!bComp || !bComp->IsActive()) continue;
 
       for (auto& obj : rootObjects_) {
-          if (!obj) continue;
+          if (!obj || obj == bulletObj || obj == playerObj_) continue;
           
           EnemyComponent* enemyComp = nullptr;
           BossComponent* bossComp = nullptr;
@@ -262,9 +308,10 @@ void GameScene::Update() {
           bool isHit = false;
           if (enemyComp && enemyComp->IsActive()) {
               Vector3 objPos = obj->GetTransform().translate;
-              Vector3 diff = { bullet.GetPosition().x - objPos.x, bullet.GetPosition().y - objPos.y, bullet.GetPosition().z - objPos.z };
+              Vector3 bulletPos = bulletObj->GetTransform().translate;
+              Vector3 diff = { bulletPos.x - objPos.x, bulletPos.y - objPos.y, bulletPos.z - objPos.z };
               float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-              float rSum = bullet.GetCollisionRadius() + enemyComp->GetCollisionRadius();
+              float rSum = bComp->GetCollisionRadius() + enemyComp->GetCollisionRadius();
               if (distSq <= rSum * rSum) {
                   SpawnHitEffect(objPos);
                   enemyComp->OnHit();
@@ -272,9 +319,10 @@ void GameScene::Update() {
               }
           } else if (bossComp && bossComp->IsActive()) {
               Vector3 objPos = obj->GetTransform().translate;
-              Vector3 diff = { bullet.GetPosition().x - objPos.x, bullet.GetPosition().y - objPos.y, bullet.GetPosition().z - objPos.z };
+              Vector3 bulletPos = bulletObj->GetTransform().translate;
+              Vector3 diff = { bulletPos.x - objPos.x, bulletPos.y - objPos.y, bulletPos.z - objPos.z };
               float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-              float rSum = bullet.GetCollisionRadius() + bossComp->GetCollisionRadius();
+              float rSum = bComp->GetCollisionRadius() + bossComp->GetCollisionRadius();
               if (distSq <= rSum * rSum) {
                   SpawnHitEffect(objPos);
                   bossComp->TakeDamage(1);
@@ -288,7 +336,7 @@ void GameScene::Update() {
           }
 
           if (isHit) {
-              bullet.Deactivate();
+              bComp->Deactivate();
               break;
           }
       }
@@ -310,31 +358,51 @@ void GameScene::Update() {
   }), rootObjects_.end());
 
   // --- 当たり判定（敵の弾 vs プレイヤー） ---
-  for (auto& bullet : enemyBullets_) {
-      if (!bullet.IsActive()) continue;
+  if (playerObj_) {
+      PlayerComponent* pComp = nullptr;
+      for (const auto& comp : playerObj_->GetComponents()) {
+          if (comp->GetTypeName() == "PlayerComponent") {
+              pComp = dynamic_cast<PlayerComponent*>(comp.get());
+              break;
+          }
+      }
 
-      Vector3 bulletPos = bullet.GetPosition();
-      Vector3 playerPos = player_.GetWorldPosition();
-      
-      Vector3 diff = {
-          bulletPos.x - playerPos.x,
-          bulletPos.y - playerPos.y,
-          bulletPos.z - playerPos.z
-      };
-      float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-      
-      float playerRadius = 1.0f; // プレイヤーの当たり判定（仮）
-      float rSum = bullet.GetCollisionRadius() + playerRadius;
+      if (pComp) {
+          for (auto& bulletObj : enemyBulletObjs_) {
+              if (!bulletObj) continue;
+              BulletComponent* bComp = nullptr;
+              for (const auto& comp : bulletObj->GetComponents()) {
+                  if (comp->GetTypeName() == "BulletComponent") {
+                      bComp = dynamic_cast<BulletComponent*>(comp.get());
+                      break;
+                  }
+              }
+              if (!bComp || !bComp->IsActive()) continue;
 
-      if (distSq <= rSum * rSum) {
-          // 被弾！
-          SpawnHitEffect(playerPos);
-          bullet.Deactivate();
-          player_.TakeDamage(1);
-          if (player_.IsDead()) {
-              phase_ = GamePhase::GameOver;
-              RequestSceneChange(SceneId::GameOver);
-              isTransitioning = true;
+              Vector3 bulletPos = bulletObj->GetTransform().translate;
+              Vector3 playerPos = playerObj_->GetTransform().translate;
+              
+              Vector3 diff = {
+                  bulletPos.x - playerPos.x,
+                  bulletPos.y - playerPos.y,
+                  bulletPos.z - playerPos.z
+              };
+              float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+              
+              float playerRadius = 1.0f; // プレイヤーの当たり判定（仮）
+              float rSum = bComp->GetCollisionRadius() + playerRadius;
+
+              if (distSq <= rSum * rSum) {
+                  // 被弾！
+                  SpawnHitEffect(playerPos);
+                  bComp->Deactivate();
+                  pComp->TakeDamage(1);
+                  if (pComp->IsDead()) {
+                      phase_ = GamePhase::GameOver;
+                      RequestSceneChange(SceneId::GameOver);
+                      isTransitioning = true;
+                  }
+              }
           }
       }
   }
@@ -391,12 +459,25 @@ void GameScene::Update() {
   ImGui::Separator();
   
   ImGui::SeparatorText("Bullet Controls & Info");
-  ImGui::Text("Active Bullets: %d", (int)bullets_.size());
-  if (!bullets_.empty()) {
-      const auto& pos = bullets_[0].GetPosition();
+  ImGui::Text("Active Bullets: %d", (int)bulletObjs_.size());
+  if (!bulletObjs_.empty() && bulletObjs_[0]) {
+      const auto& pos = bulletObjs_[0]->GetTransform().translate;
       ImGui::Text("Bullet[0] Pos: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
   }
-  ImGui::Text("Player HP: %d / %d", player_.GetHp(), player_.GetMaxHp());
+  
+  int hp = 0;
+  int maxHp = 0;
+  if (playerObj_) {
+      for (const auto& comp : playerObj_->GetComponents()) {
+          if (comp->GetTypeName() == "PlayerComponent") {
+              if (auto* pComp = dynamic_cast<PlayerComponent*>(comp.get())) {
+                  hp = pComp->GetHp();
+                  maxHp = pComp->GetMaxHp();
+              }
+          }
+      }
+  }
+  ImGui::Text("Player HP: %d / %d", hp, maxHp);
   
   ImGui::SeparatorText("Camera Controls");
   Vector3 eye = gameCamera_->GetEye();
@@ -490,19 +571,10 @@ void GameScene::Draw() {
   skybox_.Draw();
 
   // エディタ上で配置したオブジェクト群の描画
+  // rootObjects_にすべて登録されているので、手動での描画は不要。
   for (auto& obj : rootObjects_) {
       if (obj) obj->Draw();
   }
-
-  for (auto& bullet : bullets_) {
-      bullet.Draw();
-  }
-
-  for (auto& bullet : enemyBullets_) {
-      bullet.Draw();
-  }
-
-  player_.Draw();
 
   for (auto& ef : hitEffects_) {
       renderer->DrawEffectModel(&ef.instance);

@@ -18,6 +18,8 @@
 #include "graphics/texture/RenderTexture.h"
 #include "graphics/texture/DepthTexture.h"
 #include "graphics/Renderer.h"
+#include "AbsoluteEngine/audio/Audio.h"
+#include "component/ExplosionLightComponent.h"
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -104,7 +106,32 @@ private:
   Transform transformSprite_;
   Transform uvTransformSprite_;
 
+  // --- 照準(レティクル)用 ---
+  Sprite reticleSprite_;
+  std::shared_ptr<TextureResource> texReticle_;
+  Vector2 reticlePos_ = {640.0f, 360.0f};
+  Vector2 reticleSize_ = {64.0f, 64.0f};
+  float reticleSpeed_ = 500.0f; // 少し遅くした
+  float snapPullSpeed_ = 350.0f; // 敵の中心に引っ張る力(プレイヤーの速度より低くして振り切れるようにする)
+  
+  float fireTimer_ = 0.0f;
+  float fireInterval_ = 0.25f; // 発射間隔を少し遅く調整
 
+  // カメラシェイク用
+  float cameraShakeTimer_ = 0.0f;
+  float cameraShakeDuration_ = 0.0f;
+  float cameraShakeIntensity_ = 0.0f;
+  Vector3 cameraShakeOffset_{0,0,0};
+
+  // 画面歪み（RadialBlur）用
+  float hitDistortionTimer_ = 0.0f;
+  float hitDistortionDuration_ = 0.0f;
+  float hitDistortionIntensity_ = 0.0f;
+
+  // エネミースポーン用
+  float enemySpawnTimer_ = 0.0f;
+  float enemySpawnInterval_ = 2.0f;
+  const int maxEnemies_ = 5;
 
   std::shared_ptr<ModelResource> resEffect_;
   std::shared_ptr<TextureResource> texRing_;
