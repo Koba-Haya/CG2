@@ -612,7 +612,10 @@ void Renderer::DrawSprite(Sprite *sprite) {
   // WVP行列の合成 (Spriteは通常、カメラのViewを無視してProjectionのみ掛ける)
   auto *cbTrans = sprite->GetTransformMapped();
   if (cbTrans) {
-    cbTrans->WVP = Multiply(sprite->GetWorldMatrix(), proj_);
+    float w = GetScreenWidth();
+    float h = GetScreenHeight();
+    Matrix4x4 orthoProj = MakeOrthographicMatrix(0.0f, 0.0f, w, h, 0.0f, 100.0f);
+    cbTrans->WVP = Multiply(sprite->GetWorldMatrix(), orthoProj);
   }
 
   UnifiedPipeline *pipeline = GetSpritePipeline_(sprite->GetBlendMode());

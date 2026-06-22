@@ -16,13 +16,12 @@
 void BaseScene::Initialize(const SceneServices &services) {
     services_ = services;
 
-#ifdef USE_IMGUI
-    // エディタカメラの初期化
+    // カメラの初期化（ゲーム中も使用するためマクロ外で生成）
     editorCamera_ = std::make_unique<AbsoluteEngine::EditorCamera>();
     editorCamera_->Initialize();
-    // デフォルトのパースペクティブ設定（アスペクト比などは適宜派生クラスで上書き可能）
     editorCamera_->SetPerspective(0.45f, 16.0f / 9.0f, 0.1f, 1000.0f);
 
+#ifdef USE_IMGUI
     // エディタUIマネージャーの初期化
     editorUIManager_ = std::make_unique<AbsoluteEngine::EditorUIManager>();
 #endif
@@ -43,6 +42,7 @@ void BaseScene::UpdateEditor() {
     if (editorCamera_ && playMode_ == PlayMode::Edit && !isDragging) {
         editorCamera_->Update(*services_.input);
     }
+#endif
 
     // プレイモード中のオブジェクトの更新
     if (playMode_ == PlayMode::Play) {
@@ -53,7 +53,6 @@ void BaseScene::UpdateEditor() {
             }
         }
     }
-#endif
 }
 
 void BaseScene::DrawEditorUI() {

@@ -63,6 +63,9 @@ void EditorUIManager::DrawToolbar() {
   ImGui::SetNextItemWidth(100.0f);
   ImGui::DragFloat("Snap Value", &snapValue_, 0.1f, 0.1f, 100.0f);
   
+  ImGui::Separator();
+  ImGui::Checkbox("Show Collider Debug", &showColliderDebug_);
+
   ImGui::End();
 }
 
@@ -235,7 +238,9 @@ void EditorUIManager::DrawGizmo(std::vector<std::shared_ptr<GameObject>>& rootOb
   vMax.y += wPos.y;
 
   // デバッグ描画
-  DrawColliderDebug(rootObjects, viewMatrix, projectionMatrix, vMin, vMax);
+  if (showColliderDebug_) {
+    DrawColliderDebug(rootObjects, viewMatrix, projectionMatrix, vMin, vMax);
+  }
 
   auto obj = selectedObject_.lock();
   if (!obj) {

@@ -15,7 +15,6 @@ public:
   void Update(float deltaTime);
   void Draw();
 
-
   bool IsActive() const { return isActive_; }
   void OnHit(); // 弾が当たった時の処理
 

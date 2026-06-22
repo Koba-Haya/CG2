@@ -31,7 +31,7 @@ void GameApp::Initialize() {
   Renderer::GetInstance()->Initialize(&GetDX());
   sceneManager_->Initialize(services);
   sceneManager_->SetFactory(std::make_unique<SceneFactory>());
-  sceneManager_->Start(SceneId::Title);
+  sceneManager_->Start(SceneId::Dev);
 }
 
 void GameApp::Finalize() {

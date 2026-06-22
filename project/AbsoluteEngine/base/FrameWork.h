@@ -38,6 +38,7 @@ protected:
 	// 終了要求（ESCで終わる、ウィンドウ閉じる、などをゲーム側で判定して呼べる）
 	void RequestEnd() { endRequest_ = true; }
 
+public:
 	// --- エンジン機能へアクセスするためのゲッタ ---
 	WinApp& GetWinApp() { return winApp_; }
 	DirectXCommon& GetDX() { return dx_; }

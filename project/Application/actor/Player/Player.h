@@ -1,20 +1,24 @@
 #pragma once
-#include "Transform.h"
-#include "ModelInstance.h"
-#include "ModelResource.h"
+#include "AbsoluteEngine/scene/Component.h"
+#include "AbsoluteEngine/scene/GameObject.h"
+#include "Type/Vector.h"
 #include <memory>
 
 class Input;
 class GameCamera;
 
-class Player {
+class PlayerComponent : public AbsoluteEngine::IComponent {
 public:
-  void Initialize(std::shared_ptr<ModelResource> modelRes);
-  void Update(const Input &input, const GameCamera &camera, float deltaTime);
-  void Draw();
+  PlayerComponent() = default;
+  ~PlayerComponent() override = default;
 
-  const Transform &GetTransform() const { return transform_; }
-  const Vector3 &GetWorldPosition() const { return worldPos_; }
+  void SetInput(Input* input) { input_ = input; }
+  void SetCamera(GameCamera* camera) { camera_ = camera; }
+
+  void Initialize();
+  void Update(float deltaTime) override;
+
+  std::string GetTypeName() const override { return "PlayerComponent"; }
 
   void TakeDamage(int damage);
   bool IsDead() const;
@@ -22,14 +26,12 @@ public:
   int GetMaxHp() const { return maxHp_; }
 
 private:
-  Transform transform_;
-  ModelInstance modelInstance_;
-  Vector3 worldPos_{ 0.0f, 0.0f, 0.0f };
+  Input* input_ = nullptr;
+  GameCamera* camera_ = nullptr;
 
-  // カメラ空間でのローカル座標
-  Vector2 localPos_{ 0.0f, 0.0f };
+  Vector2 localPos_{ 0.0f, -1.0f };
   float moveSpeed_ = 3.0f;
-  float cameraDistance_ = 10.0f; // カメラ前方どれくらいに配置するか
+  float cameraDistance_ = 10.0f;
 
   int hp_ = 5;
   int maxHp_ = 5;

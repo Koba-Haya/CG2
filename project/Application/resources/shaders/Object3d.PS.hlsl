@@ -284,10 +284,7 @@ PixelShaderOutput main(VertexShaderOutput input)
         
         if (mask <= gMaterial.dissolveThreshold)
         {
-            // オブジェクトのディゾルブの場合、通常は discard で透明にするが
-            // maskColor を使う設定の場合は discard せずに色を上書きする運用も可能。
-            // 今回の要件に合わせて、完全に溶けた部分を maskColor で塗る
-            finalRGB = gMaterial.dissolveMaskColor;
+            discard;
         }
         else if (mask <= gMaterial.dissolveThreshold + gMaterial.dissolveEdgeRange)
         {
