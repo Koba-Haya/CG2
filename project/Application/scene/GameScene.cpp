@@ -90,7 +90,15 @@ void GameScene::Initialize(const SceneServices &services) {
   gameCamera_->Update(*services_.input);
 
   // プレイヤー初期化
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", []() { return std::make_unique<PlayerComponent>(); });
+  auto* inputPtr = services_.input;
+  auto* cameraPtr = gameCamera_.get();
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", [inputPtr, cameraPtr]() {
+      auto comp = std::make_unique<PlayerComponent>();
+      comp->Initialize();
+      comp->SetInput(inputPtr);
+      comp->SetCamera(cameraPtr);
+      return comp;
+  });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BulletComponent", []() { return std::make_unique<BulletComponent>(); });
 
   playerObj_ = std::make_shared<AbsoluteEngine::GameObject>("Player");
@@ -157,6 +165,27 @@ void GameScene::Update() {
   bool isTransitioning = false;
   const float deltaTime = 1.0f / 60.0f;
   time_ += deltaTime;
+
+  // プレイヤーを探す（ロード時などでポインタが切り替わった場合に対応）
+  playerObj_.reset();
+  for (const auto& obj : rootObjects_) {
+      if (!obj) continue;
+      
+      bool isPlayer = (obj->GetName() == "Player" || obj->GetName() == "player");
+      if (!isPlayer) {
+          for (const auto& comp : obj->GetComponents()) {
+              if (comp->GetTypeName() == "PlayerComponent") {
+                  isPlayer = true;
+                  break;
+              }
+          }
+      }
+      
+      if (isPlayer) {
+          playerObj_ = obj;
+          break;
+      }
+  }
 
   UpdateEditor();
 

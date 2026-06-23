@@ -53,11 +53,43 @@
             }
         },
         {
-            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "children": [],
+            "collider": {
+                "centerOffset": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "radius": 1.0,
+                "size": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "type": 1
+            },
+            "components": [],
+            "light": {
+                "color": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "coneAngleDeg": 30.0,
+                "decay": 2.0,
+                "distance": 10.0,
+                "intensity": 1.0,
+                "radius": 10.0,
+                "type": 2
+            },
+            "modelPath": "",
+            "name": "Point Light",
+            "tag": "Untagged",
+            "texturePath": "",
             "transform": {
                 "rotate": {
                     "x": 0.0,
-                    "y": -0.0,
+                    "y": 0.0,
                     "z": 0.0
                 },
                 "scale": {
@@ -66,18 +98,77 @@
                     "z": 1.0
                 },
                 "translate": {
-                    "x": 0.33868879079818726,
-                    "y": 1.3985487222671509,
-                    "z": 21.64900016784668
+                    "x": 0.0,
+                    "y": 2.0,
+                    "z": -2.0
                 }
             }
         },
         {
-            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "children": [
+                {
+                    "children": [],
+                    "collider": {
+                        "centerOffset": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "radius": 1.0,
+                        "size": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "type": 1
+                    },
+                    "components": [],
+                    "modelPath": "",
+                    "name": "Weapon",
+                    "tag": "Untagged",
+                    "texturePath": "",
+                    "transform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 1.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        }
+                    }
+                }
+            ],
+            "collider": {
+                "centerOffset": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "radius": 1.0,
+                "size": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "type": 1
+            },
+            "components": [],
+            "modelPath": "resources/app/cube/cube.obj",
+            "name": "Player",
+            "tag": "Untagged",
+            "texturePath": "",
             "transform": {
                 "rotate": {
                     "x": 0.0,
-                    "y": -0.0,
+                    "y": 0.0,
                     "z": 0.0
                 },
                 "scale": {
@@ -86,9 +177,9 @@
                     "z": 1.0
                 },
                 "translate": {
-                    "x": -1.287296175956726,
-                    "y": 1.2261707782745361,
-                    "z": 31.82200050354004
+                    "x": 0.0,
+                    "y": -1.100000023841858,
+                    "z": -15.0
                 }
             }
         }
