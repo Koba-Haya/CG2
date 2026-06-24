@@ -462,11 +462,9 @@ void GameScene::Update() {
   } // end of if (playMode_ == PlayMode::Play)
 
 #ifdef USE_IMGUI
-  DrawEditorUI();
-
-  // --- ゲームビューポートウィンドウ ---
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-  ImGui::Begin("Viewport##GameView");
+    // --- ゲームビューポートウィンドウ ---
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::Begin("Viewport##GameView");
   ImGui::PopStyleVar();
   if (!isTransitioning && postProcessTexture_) {
     ImVec2 viewportSize = ImGui::GetContentRegionAvail();
@@ -475,27 +473,37 @@ void GameScene::Update() {
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = postProcessTexture_->GetSrvGpuHandle();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
     
+    Matrix4x4 viewMat, projMat;
+    if (playMode_ == PlayMode::Edit && editorCamera_) {
+        viewMat = editorCamera_->GetViewMatrix();
+        projMat = editorCamera_->GetProjectionMatrix();
+    } else if (isDebugCamera_ && debugCamera_) {
+        viewMat = debugCamera_->GetViewMatrix();
+        projMat = debugCamera_->GetProjectionMatrix();
+    } else if (gameCamera_) {
+        viewMat = gameCamera_->GetViewMatrix();
+        projMat = gameCamera_->GetProjectionMatrix();
+    } else {
+        viewMat = Renderer::GetInstance()->GetViewMatrix();
+        projMat = Renderer::GetInstance()->GetProjectionMatrix();
+    }
+
     if (editorUIManager_) {
-        Matrix4x4 viewMat, projMat;
-        if (playMode_ == PlayMode::Edit && editorCamera_) {
-            viewMat = editorCamera_->GetViewMatrix();
-            projMat = editorCamera_->GetProjectionMatrix();
-        } else if (isDebugCamera_ && debugCamera_) {
-            viewMat = debugCamera_->GetViewMatrix();
-            projMat = debugCamera_->GetProjectionMatrix();
-        } else if (gameCamera_) {
-            viewMat = gameCamera_->GetViewMatrix();
-            projMat = gameCamera_->GetProjectionMatrix();
-        } else {
-            viewMat = Renderer::GetInstance()->GetViewMatrix();
-            projMat = Renderer::GetInstance()->GetProjectionMatrix();
-        }
         editorUIManager_->HandleViewportDragDrop(rootObjects_, viewMat, projMat);
+    }
+
+    if (railController_) {
+        ImVec2 windowPos = ImGui::GetWindowPos();
+        ImVec2 windowSize = ImGui::GetWindowSize();
+        railController_->HandleMousePicking(viewMat, projMat, windowPos.x, windowPos.y, windowSize.x, windowSize.y);
+        railController_->DrawGizmo(viewMat, projMat, windowPos.x, windowPos.y, windowSize.x, windowSize.y);
     }
   }
   ImGui::End();
 
-  ImGui::Begin("GameScene Controls##LeftPanel");
+    DrawEditorUI();
+
+    ImGui::Begin("GameScene Controls##LeftPanel");
   ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
   ImGui::Separator();
   
@@ -527,6 +535,11 @@ void GameScene::Update() {
   ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
   ImGui::Text("Rail Progress: %.1f %%", railController_->GetProgress() * 100.0f);
   
+  // レールカメラのUI描画
+  if (railController_) {
+      railController_->DrawEditorUI(eye);
+  }
+
   ImGui::Checkbox("Debug Camera Mode", &isDebugCamera_);
   if (isDebugCamera_) {
       Vector3 camPos = debugCamera_->GetTranslate();

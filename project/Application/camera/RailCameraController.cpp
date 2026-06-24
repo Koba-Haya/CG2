@@ -3,6 +3,12 @@
 #include "GameCamera.h"
 #include "Method.h"
 #include <algorithm>
+#include <string>
+
+#ifdef USE_IMGUI
+#include <imgui.h>
+#include "../../externals/ImGuizmo/ImGuizmo.h"
+#endif
 
 RailCameraController::RailCameraController() {
     waypoints_ = {
@@ -43,4 +49,161 @@ void RailCameraController::Update(GameCamera& camera, const CameraContext& ctx) 
     camera.SetEye(currentPos);
     camera.SetTarget(targetPos);
     camera.SetUp({ 0.0f, 1.0f, 0.0f });
+}
+
+void RailCameraController::AddWaypoint(const Vector3& pos) {
+    if (waypoints_.size() < 3) {
+        waypoints_.push_back(pos);
+        waypoints_.push_back({pos.x, pos.y, pos.z + 10.0f});
+        waypoints_.push_back({pos.x, pos.y, pos.z + 20.0f});
+    } else {
+        waypoints_.push_back(pos);
+    }
+}
+
+void RailCameraController::InsertWaypoint(size_t index, const Vector3& pos) {
+    if (index <= waypoints_.size()) {
+        waypoints_.insert(waypoints_.begin() + index, pos);
+    }
+}
+
+void RailCameraController::RemoveWaypoint(size_t index) {
+    if (index < waypoints_.size()) {
+        waypoints_.erase(waypoints_.begin() + index);
+        if (selectedPointIndex_ == static_cast<int>(index)) {
+            selectedPointIndex_ = -1;
+        } else if (selectedPointIndex_ > static_cast<int>(index)) {
+            selectedPointIndex_--;
+        }
+    }
+}
+
+void RailCameraController::DrawEditorUI(const Vector3& cameraPos) {
+#ifdef USE_IMGUI
+    ImGui::Begin("Rail Camera Editor");
+    ImGui::Text("Waypoints: %d", static_cast<int>(waypoints_.size()));
+
+    if (ImGui::Button("Add Point (End)")) {
+        Vector3 newPos = waypoints_.empty() ? cameraPos : waypoints_.back();
+        if (!waypoints_.empty()) newPos.z += 10.0f;
+        AddWaypoint(newPos);
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Points List (Right-Click for menu):");
+
+    for (int i = 0; i < static_cast<int>(waypoints_.size()); ++i) {
+        std::string label = "Point " + std::to_string(i);
+        if (ImGui::Selectable(label.c_str(), selectedPointIndex_ == i)) {
+            selectedPointIndex_ = i;
+        }
+
+        // ポイント単位の右クリックメニュー
+        if (ImGui::BeginPopupContextItem(("PointContextMenu" + std::to_string(i)).c_str(), ImGuiPopupFlags_MouseButtonRight)) {
+            if (ImGui::MenuItem("Insert After")) {
+                Vector3 newPos = waypoints_[i];
+                newPos.z += 5.0f; // 適当なオフセット
+                InsertWaypoint(i + 1, newPos);
+            }
+            if (ImGui::MenuItem("Delete")) {
+                RemoveWaypoint(i);
+            }
+            ImGui::EndPopup();
+        }
+    }
+
+    ImGui::Separator();
+    if (selectedPointIndex_ >= 0 && selectedPointIndex_ < static_cast<int>(waypoints_.size())) {
+        ImGui::Text("Selected Point: %d", selectedPointIndex_);
+        Vector3& pos = waypoints_[selectedPointIndex_];
+        float posArray[3] = { pos.x, pos.y, pos.z };
+        if (ImGui::DragFloat3("Position", posArray, 0.1f)) {
+            pos.x = posArray[0];
+            pos.y = posArray[1];
+            pos.z = posArray[2];
+        }
+    }
+
+    ImGui::End();
+#endif
+}
+
+void RailCameraController::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY) {
+#ifdef USE_IMGUI
+    if (selectedPointIndex_ >= 0 && selectedPointIndex_ < static_cast<int>(waypoints_.size())) {
+        ImGuizmo::SetOrthographic(false);
+        ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
+        ImGuizmo::SetRect(windowPosX, windowPosY, windowSizeX, windowSizeY);
+
+        // Transform行列の作成 (位置のみ)
+        Matrix4x4 pointTransform = MakeTranslateMatrix(waypoints_[selectedPointIndex_]);
+
+        bool isManipulated = ImGuizmo::Manipulate(
+            &viewMatrix.m[0][0], 
+            &projectionMatrix.m[0][0],
+            ImGuizmo::TRANSLATE, 
+            ImGuizmo::WORLD, 
+            &pointTransform.m[0][0]
+        );
+
+        isGizmoUsing_ = ImGuizmo::IsUsing();
+
+        if (isManipulated) {
+            // ギズモの行列から位置を抽出
+            waypoints_[selectedPointIndex_].x = pointTransform.m[3][0];
+            waypoints_[selectedPointIndex_].y = pointTransform.m[3][1];
+            waypoints_[selectedPointIndex_].z = pointTransform.m[3][2];
+        }
+    }
+#endif
+}
+
+void RailCameraController::HandleMousePicking(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY) {
+#ifdef USE_IMGUI
+    if (!ImGui::IsWindowHovered() || ImGuizmo::IsOver() || isGizmoUsing_) return;
+
+    if (ImGui::IsMouseClicked(0)) {
+        ImVec2 mousePos = ImGui::GetMousePos();
+        
+        float u = (mousePos.x - windowPosX) / windowSizeX;
+        float v = (mousePos.y - windowPosY) / windowSizeY;
+        if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) return;
+
+        float ndcX = u * 2.0f - 1.0f;
+        float ndcY = 1.0f - v * 2.0f;
+
+        Matrix4x4 viewProj = Multiply(viewMatrix, projectionMatrix);
+        Matrix4x4 invViewProj = Inverse(viewProj);
+
+        Vector3 nearPos = TransformPoint({ ndcX, ndcY, 0.0f }, invViewProj);
+        Vector3 farPos = TransformPoint({ ndcX, ndcY, 1.0f }, invViewProj);
+        Vector3 rayDir = Normalize({ farPos.x - nearPos.x, farPos.y - nearPos.y, farPos.z - nearPos.z });
+
+        float closestDist = -1.0f;
+        int hitIndex = -1;
+        float pointRadius = 2.0f; // ピッキング用の判定半径
+
+        for (int i = 0; i < static_cast<int>(waypoints_.size()); ++i) {
+            Vector3 m = { nearPos.x - waypoints_[i].x, nearPos.y - waypoints_[i].y, nearPos.z - waypoints_[i].z };
+            float b = Dot(m, rayDir);
+            float c = Dot(m, m) - pointRadius * pointRadius;
+            
+            if (c > 0.0f && b > 0.0f) continue;
+            
+            float discriminant = b * b - c;
+            if (discriminant >= 0.0f) {
+                float t = -b - std::sqrt(discriminant);
+                if (t < 0.0f) t = 0.0f;
+                if (closestDist < 0.0f || t < closestDist) {
+                    closestDist = t;
+                    hitIndex = i;
+                }
+            }
+        }
+
+        if (hitIndex != -1) {
+            selectedPointIndex_ = hitIndex;
+        }
+    }
+#endif
 }

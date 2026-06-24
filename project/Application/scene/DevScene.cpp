@@ -160,6 +160,7 @@ void DevScene::Update() {
               enemySpawnInterval_ = 1.0f + static_cast<float>(rand() % 200) / 100.0f;
 
               auto newEnemy = std::make_shared<AbsoluteEngine::GameObject>("Enemy");
+              newEnemy->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
               auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
               modelComp->LoadModel("resources/app/sphere/sphere.obj");
               modelComp->LoadTexture("resources/app/cube/white100x100.png");

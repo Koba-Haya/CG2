@@ -409,6 +409,28 @@ void EditorUIManager::CheckIntersection(std::shared_ptr<GameObject> obj, const V
         }
       }
     }
+  } else {
+    // フォールバック: コライダーが無い場合でもモデルがあれば簡易的な球体判定を行う
+    auto modelComp = obj->GetComponent<ModelComponent>();
+    if (modelComp) {
+      Vector3 objPos = obj->GetTransform().translate;
+      Vector3 scale = obj->GetTransform().scale;
+      float maxScale = (std::max)({ scale.x, scale.y, scale.z });
+      float scaledRadius = 1.0f * maxScale; // デフォルト半径 1.0
+
+      Vector3 m = { rayOrigin.x - objPos.x, rayOrigin.y - objPos.y, rayOrigin.z - objPos.z };
+      float b = Dot(m, rayDir);
+      float c = Dot(m, m) - scaledRadius * scaledRadius;
+
+      float discriminant = b * b - c;
+      if (discriminant > 0.0f) {
+        float t = -b - std::sqrt(discriminant);
+        if (t > 0.0f && t < minT) {
+          minT = t;
+          hitObject = obj;
+        }
+      }
+    }
   }
 
   // 子ノードも再帰的にチェック
@@ -665,6 +687,16 @@ void EditorUIManager::DrawInspector() {
           if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
             const char* payloadPath = (const char*)payload->Data;
             modelComp->LoadTexture(payloadPath);
+          }
+          ImGui::EndDragDropTarget();
+        }
+
+        // モデル適用用のドロップエリア
+        ImGui::Button("Drop Model Here (.obj)", ImVec2(-FLT_MIN, 30));
+        if (ImGui::BeginDragDropTarget()) {
+          if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
+            const char* payloadPath = (const char*)payload->Data;
+            modelComp->LoadModel(payloadPath);
           }
           ImGui::EndDragDropTarget();
         }

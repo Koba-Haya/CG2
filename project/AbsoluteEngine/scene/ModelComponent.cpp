@@ -42,14 +42,10 @@ void ModelComponent::Draw() {
         
         modelInstance_->SetWorld(world);
 
-        // TODO: This uses HasComponent and GetComponent which we will implement on GameObject shortly
-        // For now we assume they exist or we'll add them to GameObject in Phase 2
-        /*
-        if (owner_->HasComponent<DissolveComponent>()) {
-            auto dissolve = owner_->GetComponent<DissolveComponent>();
+        auto dissolve = owner_->GetComponent<DissolveComponent>();
+        if (dissolve) {
             modelInstance_->SetDissolveParam(dissolve->enable, dissolve->threshold, dissolve->edgeRange, dissolve->edgeColor, dissolve->maskColor);
         }
-        */
         
         modelInstance_->Draw();
     }
