@@ -5,7 +5,10 @@
 #include "EditorCamera.h"
 #include "Method.h"
 #include <filesystem>
-
+#include "../scene/ColliderComponent.h"
+#include "../scene/LightNodeComponent.h"
+#include "../scene/ModelComponent.h"
+#include "../scene/DissolveComponent.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include "../../externals/ImGuizmo/ImGuizmo.h"
@@ -359,15 +362,16 @@ void EditorUIManager::HandleMousePicking(const std::vector<std::shared_ptr<GameO
 void EditorUIManager::CheckIntersection(std::shared_ptr<GameObject> obj, const Vector3& rayOrigin, const Vector3& rayDir, std::shared_ptr<GameObject>& hitObject, float& minT) {
   if (!obj) return;
 
-  const ColliderInfo& collider = obj->GetCollider();
-  if (collider.type != ColliderInfo::Type::None) {
+  auto colliderComp = obj->GetComponent<ColliderComponent>();
+  if (colliderComp && colliderComp->type != ColliderComponent::Type::None) {
+    const auto& collider = *colliderComp;
     Vector3 objPos = obj->GetTransform().translate;
     Vector3 scale = obj->GetTransform().scale;
     Vector3 center = { objPos.x + collider.centerOffset.x * scale.x, 
                        objPos.y + collider.centerOffset.y * scale.y, 
                        objPos.z + collider.centerOffset.z * scale.z };
 
-    if (collider.type == ColliderInfo::Type::Sphere) {
+    if (collider.type == ColliderComponent::Type::Sphere) {
       float maxScale = (std::max)({ scale.x, scale.y, scale.z });
       float scaledRadius = collider.radius * maxScale;
 
@@ -383,7 +387,7 @@ void EditorUIManager::CheckIntersection(std::shared_ptr<GameObject> obj, const V
           hitObject = obj;
         }
       }
-    } else if (collider.type == ColliderInfo::Type::AABB) {
+    } else if (collider.type == ColliderComponent::Type::AABB) {
       Vector3 scaledSize = { collider.size.x * scale.x, collider.size.y * scale.y, collider.size.z * scale.z };
       Vector3 minBounds = { center.x - scaledSize.x, center.y - scaledSize.y, center.z - scaledSize.z };
       Vector3 maxBounds = { center.x + scaledSize.x, center.y + scaledSize.y, center.z + scaledSize.z };
@@ -433,15 +437,16 @@ void EditorUIManager::DrawColliderDebug(const std::vector<std::shared_ptr<GameOb
   auto drawObj = [&](auto& self, const std::shared_ptr<GameObject>& obj) -> void {
     if (!obj) return;
 
-    const ColliderInfo& collider = obj->GetCollider();
-    if (collider.type != ColliderInfo::Type::None) {
+    auto colliderComp = obj->GetComponent<ColliderComponent>();
+    if (colliderComp && colliderComp->type != ColliderComponent::Type::None) {
+      const auto& collider = *colliderComp;
       Vector3 objPos = obj->GetTransform().translate;
       Vector3 scale = obj->GetTransform().scale;
       Vector3 center = { objPos.x + collider.centerOffset.x * scale.x, 
                          objPos.y + collider.centerOffset.y * scale.y, 
                          objPos.z + collider.centerOffset.z * scale.z };
 
-      if (collider.type == ColliderInfo::Type::AABB) {
+      if (collider.type == ColliderComponent::Type::AABB) {
         Vector3 scaledSize = { collider.size.x * scale.x, collider.size.y * scale.y, collider.size.z * scale.z };
         
         Vector3 corners[8] = {
@@ -471,7 +476,7 @@ void EditorUIManager::DrawColliderDebug(const std::vector<std::shared_ptr<GameOb
         drawLine(4, 5); drawLine(5, 6); drawLine(6, 7); drawLine(7, 4);
         drawLine(0, 4); drawLine(1, 5); drawLine(2, 6); drawLine(3, 7);
 
-      } else if (collider.type == ColliderInfo::Type::Sphere) {
+      } else if (collider.type == ColliderComponent::Type::Sphere) {
         float maxScale = (std::max)({ scale.x, scale.y, scale.z });
         float r = collider.radius * maxScale;
         
@@ -532,7 +537,9 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
       if (objName.empty()) objName = "Model";
 
       auto newObj = std::make_shared<AbsoluteEngine::GameObject>(objName);
-      newObj->LoadModel(payloadPath);
+      auto modelComp = std::make_unique<ModelComponent>();
+      modelComp->LoadModel(payloadPath);
+      newObj->AddComponent(std::move(modelComp));
       newObj->GetTransform().translate = {0, 0, 0};
       
       if (commandManager_) {
@@ -564,20 +571,26 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
       if (ImGui::BeginMenu("Create Light")) {
           if (ImGui::Selectable("Directional Light")) {
               auto newObj = std::make_shared<GameObject>("Directional Light");
-              newObj->GetLight().type = LightComponent::Type::Directional;
+              auto lightComp = std::make_unique<LightNodeComponent>();
+              lightComp->type = LightNodeComponent::Type::Directional;
+              newObj->AddComponent(std::move(lightComp));
               newObj->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
               if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); }
               selectedObject_ = newObj;
           }
           if (ImGui::Selectable("Point Light")) {
               auto newObj = std::make_shared<GameObject>("Point Light");
-              newObj->GetLight().type = LightComponent::Type::Point;
+              auto lightComp = std::make_unique<LightNodeComponent>();
+              lightComp->type = LightNodeComponent::Type::Point;
+              newObj->AddComponent(std::move(lightComp));
               if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); }
               selectedObject_ = newObj;
           }
           if (ImGui::Selectable("Spot Light")) {
               auto newObj = std::make_shared<GameObject>("Spot Light");
-              newObj->GetLight().type = LightComponent::Type::Spot;
+              auto lightComp = std::make_unique<LightNodeComponent>();
+              lightComp->type = LightNodeComponent::Type::Spot;
+              newObj->AddComponent(std::move(lightComp));
               if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); }
               selectedObject_ = newObj;
           }
@@ -641,17 +654,25 @@ void EditorUIManager::DrawInspector() {
     
     // モデルとテクスチャの設定表示
     if (ImGui::CollapsingHeader("Model & Texture", ImGuiTreeNodeFlags_DefaultOpen)) {
-      ImGui::Text("Model: %s", obj->GetModelPath().empty() ? "None" : obj->GetModelPath().c_str());
-      ImGui::Text("Texture: %s", obj->GetTexturePath().empty() ? "None" : obj->GetTexturePath().c_str());
-      
-      // テクスチャ適用用のドロップエリア
-      ImGui::Button("Drop Texture Here (.png/.dds)", ImVec2(-FLT_MIN, 30));
-      if (ImGui::BeginDragDropTarget()) {
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
-          const char* payloadPath = (const char*)payload->Data;
-          obj->LoadTexture(payloadPath);
+      auto modelComp = obj->GetComponent<ModelComponent>();
+      if (modelComp) {
+        ImGui::Text("Model: %s", modelComp->GetModelPath().empty() ? "None" : modelComp->GetModelPath().c_str());
+        ImGui::Text("Texture: %s", modelComp->GetTexturePath().empty() ? "None" : modelComp->GetTexturePath().c_str());
+        
+        // テクスチャ適用用のドロップエリア
+        ImGui::Button("Drop Texture Here (.png/.dds)", ImVec2(-FLT_MIN, 30));
+        if (ImGui::BeginDragDropTarget()) {
+          if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+            const char* payloadPath = (const char*)payload->Data;
+            modelComp->LoadTexture(payloadPath);
+          }
+          ImGui::EndDragDropTarget();
         }
-        ImGui::EndDragDropTarget();
+      } else {
+        ImGui::Text("No ModelComponent attached.");
+        if (ImGui::Button("Add ModelComponent")) {
+          obj->AddComponent(std::make_unique<ModelComponent>());
+        }
       }
     }
 
@@ -705,96 +726,120 @@ void EditorUIManager::DrawInspector() {
 
     // --- LightComponent ---
     if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
-      LightComponent& l = obj->GetLight();
-      int currentType = static_cast<int>(l.type);
-      const char* lightTypes[] = { "None", "Directional", "Point", "Spot" };
+      auto lightComp = obj->GetComponent<LightNodeComponent>();
+      if (lightComp) {
+        LightNodeComponent& l = *lightComp;
+        int currentType = static_cast<int>(l.type);
+        const char* lightTypes[] = { "None", "Directional", "Point", "Spot" };
 
-      bool activated = false;
-      bool deactivatedAfterEdit = false;
+        bool activated = false;
+        bool deactivatedAfterEdit = false;
 
-      if (ImGui::Combo("Type", &currentType, lightTypes, IM_ARRAYSIZE(lightTypes))) {
-        l.type = static_cast<LightComponent::Type>(currentType);
-      }
-      activated |= ImGui::IsItemActivated();
-      deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-      if (l.type != LightComponent::Type::None) {
-        float color[3] = { l.color.x, l.color.y, l.color.z };
-        if (ImGui::ColorEdit3("Color", color)) {
-          l.color = { color[0], color[1], color[2] };
+        if (ImGui::Combo("Type", &currentType, lightTypes, IM_ARRAYSIZE(lightTypes))) {
+          l.type = static_cast<LightNodeComponent::Type>(currentType);
         }
         activated |= ImGui::IsItemActivated();
         deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
 
-        ImGui::DragFloat("Intensity", &l.intensity, 0.05f, 0.0f, 100.0f);
-        activated |= ImGui::IsItemActivated();
-        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-        
-        if (l.type == LightComponent::Type::Point || l.type == LightComponent::Type::Spot) {
-          ImGui::DragFloat("Radius", &l.radius, 0.1f, 0.0f, 1000.0f);
-          activated |= ImGui::IsItemActivated();
-          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-          ImGui::DragFloat("Decay", &l.decay, 0.05f, 0.0f, 10.0f);
-          activated |= ImGui::IsItemActivated();
-          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-        }
-        if (l.type == LightComponent::Type::Spot) {
-          ImGui::DragFloat("Distance", &l.distance, 0.1f, 0.0f, 1000.0f);
-          activated |= ImGui::IsItemActivated();
-          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-          ImGui::DragFloat("ConeAngle (deg)", &l.coneAngleDeg, 0.5f, 0.0f, 180.0f);
-          activated |= ImGui::IsItemActivated();
-          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-        }
-      }
-
-      if (activated) {
-          lightBeforeInspector_ = obj->GetLight();
-      }
-      if (deactivatedAfterEdit) {
-          if (commandManager_) {
-              commandManager_->AddCommand(std::make_shared<LightCommand>(obj, lightBeforeInspector_, l));
+        if (l.type != LightNodeComponent::Type::None) {
+          float color[3] = { l.color.x, l.color.y, l.color.z };
+          if (ImGui::ColorEdit3("Color", color)) {
+            l.color = { color[0], color[1], color[2] };
           }
+          activated |= ImGui::IsItemActivated();
+          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+          ImGui::DragFloat("Intensity", &l.intensity, 0.05f, 0.0f, 100.0f);
+          activated |= ImGui::IsItemActivated();
+          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+          
+          if (l.type == LightNodeComponent::Type::Point || l.type == LightNodeComponent::Type::Spot) {
+            ImGui::DragFloat("Radius", &l.radius, 0.1f, 0.0f, 1000.0f);
+            activated |= ImGui::IsItemActivated();
+            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+            ImGui::DragFloat("Decay", &l.decay, 0.05f, 0.0f, 10.0f);
+            activated |= ImGui::IsItemActivated();
+            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+          }
+          if (l.type == LightNodeComponent::Type::Spot) {
+            ImGui::DragFloat("Distance", &l.distance, 0.1f, 0.0f, 1000.0f);
+            activated |= ImGui::IsItemActivated();
+            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+            ImGui::DragFloat("ConeAngle (deg)", &l.coneAngleDeg, 0.5f, 0.0f, 180.0f);
+            activated |= ImGui::IsItemActivated();
+            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+          }
+        }
+
+        if (activated) {
+            lightBeforeInspector_ = *obj->GetComponent<LightNodeComponent>();
+        }
+        if (deactivatedAfterEdit) {
+            if (commandManager_) {
+                commandManager_->AddCommand(std::make_shared<LightCommand>(obj, lightBeforeInspector_, l));
+            }
+        }
+      } else {
+        ImGui::Text("No LightNodeComponent attached.");
+        if (ImGui::Button("Add LightNodeComponent")) {
+          obj->AddComponent(std::make_unique<LightNodeComponent>());
+        }
       }
     }
 
     // --- Dissolve ---
     if (ImGui::CollapsingHeader("Dissolve", ImGuiTreeNodeFlags_DefaultOpen)) {
-      auto& dissolve = obj->GetDissolve();
-      ImGui::Checkbox("Enable Dissolve", &dissolve.enable);
-      if (dissolve.enable) {
-        ImGui::SliderFloat("Threshold", &dissolve.threshold, 0.0f, 1.0f);
-        ImGui::SliderFloat("Edge Range", &dissolve.edgeRange, 0.0f, 0.1f);
-        float edgeCol[3] = { dissolve.edgeColor.x, dissolve.edgeColor.y, dissolve.edgeColor.z };
-        if (ImGui::ColorEdit3("Edge Color", edgeCol)) {
-          dissolve.edgeColor = { edgeCol[0], edgeCol[1], edgeCol[2] };
+      auto dissolveComp = obj->GetComponent<DissolveComponent>();
+      if (dissolveComp) {
+        auto& dissolve = *dissolveComp;
+        ImGui::Checkbox("Enable Dissolve", &dissolve.enable);
+        if (dissolve.enable) {
+          ImGui::SliderFloat("Threshold", &dissolve.threshold, 0.0f, 1.0f);
+          ImGui::SliderFloat("Edge Range", &dissolve.edgeRange, 0.0f, 0.1f);
+          float edgeCol[3] = { dissolve.edgeColor.x, dissolve.edgeColor.y, dissolve.edgeColor.z };
+          if (ImGui::ColorEdit3("Edge Color", edgeCol)) {
+            dissolve.edgeColor = { edgeCol[0], edgeCol[1], edgeCol[2] };
+          }
+          float maskCol[3] = { dissolve.maskColor.x, dissolve.maskColor.y, dissolve.maskColor.z };
+          if (ImGui::ColorEdit3("Mask Color", maskCol)) {
+            dissolve.maskColor = { maskCol[0], maskCol[1], maskCol[2] };
+          }
         }
-        float maskCol[3] = { dissolve.maskColor.x, dissolve.maskColor.y, dissolve.maskColor.z };
-        if (ImGui::ColorEdit3("Mask Color", maskCol)) {
-          dissolve.maskColor = { maskCol[0], maskCol[1], maskCol[2] };
+      } else {
+        ImGui::Text("No DissolveComponent attached.");
+        if (ImGui::Button("Add DissolveComponent")) {
+          obj->AddComponent(std::make_unique<DissolveComponent>());
         }
       }
     }
 
     // Colliderの編集
     if (ImGui::CollapsingHeader("Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
-      ColliderInfo& collider = obj->GetCollider();
+      auto colliderComp = obj->GetComponent<ColliderComponent>();
+      if (colliderComp) {
+        ColliderComponent& collider = *colliderComp;
 
-      const char* types[] = { "None", "Sphere", "AABB" };
-      int currentType = static_cast<int>(collider.type);
-      if (ImGui::Combo("Type", &currentType, types, IM_ARRAYSIZE(types))) {
-        collider.type = static_cast<ColliderInfo::Type>(currentType);
-      }
+        const char* types[] = { "None", "Sphere", "AABB" };
+        int currentType = static_cast<int>(collider.type);
+        if (ImGui::Combo("Type", &currentType, types, IM_ARRAYSIZE(types))) {
+          collider.type = static_cast<ColliderComponent::Type>(currentType);
+        }
 
-      if (collider.type != ColliderInfo::Type::None) {
-        ImGui::DragFloat3("Center Offset", &collider.centerOffset.x, 0.1f);
+        if (collider.type != ColliderComponent::Type::None) {
+          ImGui::DragFloat3("Center Offset", &collider.centerOffset.x, 0.1f);
 
-        if (collider.type == ColliderInfo::Type::Sphere) {
-          ImGui::DragFloat("Radius", &collider.radius, 0.1f, 0.0f);
-        } else if (collider.type == ColliderInfo::Type::AABB) {
-          ImGui::DragFloat3("Size (Half Extents)", &collider.size.x, 0.1f, 0.0f);
+          if (collider.type == ColliderComponent::Type::Sphere) {
+            ImGui::DragFloat("Radius", &collider.radius, 0.1f, 0.0f);
+          } else if (collider.type == ColliderComponent::Type::AABB) {
+            ImGui::DragFloat3("Size (Half Extents)", &collider.size.x, 0.1f, 0.0f);
+          }
+        }
+      } else {
+        ImGui::Text("No ColliderComponent attached.");
+        if (ImGui::Button("Add ColliderComponent")) {
+          obj->AddComponent(std::make_unique<ColliderComponent>());
         }
       }
     }
@@ -950,7 +995,9 @@ void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObj
         if (objName.empty()) objName = "Model";
 
         auto newObj = std::make_shared<AbsoluteEngine::GameObject>(objName);
-        newObj->LoadModel(payloadPath);
+        auto modelComp = std::make_unique<ModelComponent>();
+        modelComp->LoadModel(payloadPath);
+        newObj->AddComponent(std::move(modelComp));
         newObj->GetTransform().translate = targetPos;
         
         if (commandManager_) {

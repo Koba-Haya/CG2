@@ -3,6 +3,10 @@
 #include <iostream>
 #include "../../externals/nlohmann/json.hpp"
 #include "ComponentFactory.h"
+#include "ColliderComponent.h"
+#include "LightNodeComponent.h"
+#include "ModelComponent.h"
+#include "DissolveComponent.h"
 
 using json = nlohmann::json;
 
@@ -36,8 +40,11 @@ static json SerializeGameObject(const std::shared_ptr<GameObject>& obj, bool for
 
   j["name"] = obj->GetName();
   j["tag"] = obj->GetTag();
-  j["modelPath"] = obj->GetModelPath();
-  j["texturePath"] = obj->GetTexturePath();
+  auto modelComp = obj->GetComponent<ModelComponent>();
+  if (modelComp) {
+    j["modelPath"] = modelComp->GetModelPath();
+    j["texturePath"] = modelComp->GetTexturePath();
+  }
   
   const Transform& t = obj->GetTransform();
   j["transform"] = {
@@ -46,16 +53,20 @@ static json SerializeGameObject(const std::shared_ptr<GameObject>& obj, bool for
     {"scale", Vector3ToJson(t.scale)}
   };
 
-  const ColliderInfo& c = obj->GetCollider();
-  j["collider"] = {
-    {"type", static_cast<int>(c.type)},
-    {"centerOffset", Vector3ToJson(c.centerOffset)},
-    {"radius", c.radius},
-    {"size", Vector3ToJson(c.size)}
-  };
+  auto colliderComp = obj->GetComponent<ColliderComponent>();
+  if (colliderComp) {
+    const ColliderComponent& c = *colliderComp;
+    j["collider"] = {
+      {"type", static_cast<int>(c.type)},
+      {"centerOffset", Vector3ToJson(c.centerOffset)},
+      {"radius", c.radius},
+      {"size", Vector3ToJson(c.size)}
+    };
+  }
 
-  const LightComponent& l = obj->GetLight();
-  if (l.type != LightComponent::Type::None) {
+  auto lightComp = obj->GetComponent<LightNodeComponent>();
+  if (lightComp && lightComp->type != LightNodeComponent::Type::None) {
+    const LightNodeComponent& l = *lightComp;
     j["light"] = {
       {"type", static_cast<int>(l.type)},
       {"color", Vector3ToJson(l.color)},
@@ -110,11 +121,11 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
 
   std::string modelPath = j.value("modelPath", "");
   std::string texturePath = j.value("texturePath", "");
-  if (!modelPath.empty()) {
-    obj->LoadModel(modelPath);
-  }
-  if (!texturePath.empty()) {
-    obj->LoadTexture(texturePath);
+  if (!modelPath.empty() || !texturePath.empty()) {
+    auto modelComp = std::make_unique<ModelComponent>();
+    if (!modelPath.empty()) modelComp->LoadModel(modelPath);
+    if (!texturePath.empty()) modelComp->LoadTexture(texturePath);
+    obj->AddComponent(std::move(modelComp));
   }
 
   if (j.contains("transform")) {
@@ -127,23 +138,25 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
 
   if (j.contains("collider")) {
     const auto& cJson = j["collider"];
-    ColliderInfo& c = obj->GetCollider();
-    c.type = static_cast<ColliderInfo::Type>(cJson.value("type", 1));
-    if (cJson.contains("centerOffset")) c.centerOffset = JsonToVector3(cJson["centerOffset"]);
-    c.radius = cJson.value("radius", 1.0f);
-    if (cJson.contains("size")) c.size = JsonToVector3(cJson["size"]);
+    auto colliderComp = std::make_unique<ColliderComponent>();
+    colliderComp->type = static_cast<ColliderComponent::Type>(cJson.value("type", 1));
+    if (cJson.contains("centerOffset")) colliderComp->centerOffset = JsonToVector3(cJson["centerOffset"]);
+    colliderComp->radius = cJson.value("radius", 1.0f);
+    if (cJson.contains("size")) colliderComp->size = JsonToVector3(cJson["size"]);
+    obj->AddComponent(std::move(colliderComp));
   }
 
   if (j.contains("light")) {
     const auto& lJson = j["light"];
-    LightComponent& l = obj->GetLight();
-    l.type = static_cast<LightComponent::Type>(lJson.value("type", 0));
-    if (lJson.contains("color")) l.color = JsonToVector3(lJson["color"]);
-    l.intensity = lJson.value("intensity", 1.0f);
-    l.radius = lJson.value("radius", 10.0f);
-    l.decay = lJson.value("decay", 2.0f);
-    l.distance = lJson.value("distance", 10.0f);
-    l.coneAngleDeg = lJson.value("coneAngleDeg", 30.0f);
+    auto lightComp = std::make_unique<LightNodeComponent>();
+    lightComp->type = static_cast<LightNodeComponent::Type>(lJson.value("type", 0));
+    if (lJson.contains("color")) lightComp->color = JsonToVector3(lJson["color"]);
+    lightComp->intensity = lJson.value("intensity", 1.0f);
+    lightComp->radius = lJson.value("radius", 10.0f);
+    lightComp->decay = lJson.value("decay", 2.0f);
+    lightComp->distance = lJson.value("distance", 10.0f);
+    lightComp->coneAngleDeg = lJson.value("coneAngleDeg", 30.0f);
+    obj->AddComponent(std::move(lightComp));
   }
 
   if (j.contains("components") && j["components"].is_array()) {

@@ -23,6 +23,8 @@
 #include "../component/enemy/EnemyShootComponent.h"
 #include "../component/enemy/BossComponent.h"
 #include "SceneIds.h"
+#include "AbsoluteEngine/scene/ModelComponent.h"
+#include "AbsoluteEngine/scene/LightNodeComponent.h"
 
 // テスト用コンポーネント
 class SpinComponent : public AbsoluteEngine::IComponent {
@@ -102,7 +104,9 @@ void GameScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BulletComponent", []() { return std::make_unique<BulletComponent>(); });
 
   playerObj_ = std::make_shared<AbsoluteEngine::GameObject>("Player");
-  playerObj_->LoadModel("resources/app/player/player.obj");
+  auto playerModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+  playerModelComp->LoadModel("resources/app/player/player.obj");
+  playerObj_->AddComponent(std::move(playerModelComp));
   auto playerComp = std::make_unique<PlayerComponent>();
   playerComp->Initialize();
   playerComp->SetInput(services_.input);
@@ -136,9 +140,11 @@ void GameScene::Initialize(const SceneServices &services) {
   // デフォルトのライトを一つ配置しておく
   auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
   initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
-  initialDirLight->GetLight().type = AbsoluteEngine::LightComponent::Type::Directional;
-  initialDirLight->GetLight().color = { 1.0f, 1.0f, 1.0f };
-  initialDirLight->GetLight().intensity = 1.0f;
+  auto lightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
+  lightComp->type = AbsoluteEngine::LightNodeComponent::Type::Directional;
+  lightComp->color = { 1.0f, 1.0f, 1.0f };
+  lightComp->intensity = 1.0f;
+  initialDirLight->AddComponent(std::move(lightComp));
   rootObjects_.push_back(initialDirLight);
 }
 
@@ -218,8 +224,10 @@ void GameScene::Update() {
       Vector3 forward = gameCamera_->GetForward();
       bossObj->GetTransform().translate = { eye.x + forward.x * 20.0f, eye.y + forward.y * 20.0f, eye.z + forward.z * 20.0f };
       bossObj->GetTransform().scale = {3.0f, 3.0f, 3.0f};
-      bossObj->LoadModel("resources/app/cube/cube.obj");
-      bossObj->SetEnvironmentCoefficient(1.0f);
+      auto bossModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+      bossModelComp->LoadModel("resources/app/cube/cube.obj");
+      bossModelComp->SetEnvironmentCoefficient(1.0f);
+      bossObj->AddComponent(std::move(bossModelComp));
       bossObj->AddComponent(std::make_unique<BossComponent>());
       bossObj->AddComponent(std::make_unique<EnemyShootComponent>());
       rootObjects_.push_back(bossObj);
@@ -230,7 +238,9 @@ void GameScene::Update() {
   if (services_.input->PressKey(DIK_SPACE) && shootCooldown_ <= 0.0f && resBullet_ && playerObj_) {
       shootCooldown_ = 0.25f; // 連射速度を適正化（光線化を防ぎ1発ずつの独立感を強調）
       auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("Bullet");
-      bulletObj->LoadModel("resources/app/bullet/bullet.obj");
+      auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+      bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
+      bulletObj->AddComponent(std::move(bulletModelComp));
       bulletObj->GetTransform().translate = playerObj_->GetTransform().translate;
       Vector3 forward = gameCamera_->GetForward();
       Vector3 vel = { forward.x * 35.0f, forward.y * 35.0f, forward.z * 35.0f }; // 弾速を適正化
@@ -276,7 +286,9 @@ void GameScene::Update() {
                   Vector3 vel = { dir.x * 20.0f, dir.y * 20.0f, dir.z * 20.0f }; // 弾速
                   
                   auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("EnemyBullet");
-                  bulletObj->LoadModel("resources/app/bullet/bullet.obj");
+                  auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+                  bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
+                  bulletObj->AddComponent(std::move(bulletModelComp));
                   bulletObj->GetTransform().translate = spawnPos;
                   auto bulletComp = std::make_unique<BulletComponent>();
                   bulletComp->Initialize(vel);

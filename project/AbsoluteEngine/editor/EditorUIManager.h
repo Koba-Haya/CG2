@@ -6,6 +6,7 @@
 #include "../Type/Vector.h"
 #include "../Type/Transform.h"
 #include "CommandManager.h"
+#include "../scene/LightNodeComponent.h"
 
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -64,7 +65,7 @@ private:
   Transform transformBeforeGizmo_;
 
   Transform transformBeforeInspector_;
-  LightComponent lightBeforeInspector_;
+  LightNodeComponent lightBeforeInspector_;
 #endif
 };
 

@@ -1,5 +1,8 @@
 #include "BaseScene.h"
 #include "SceneManager.h"
+#include "../graphics/3d/model/ModelManager.h"
+#include "../graphics/texture/TextureManager.h"
+#include "LightNodeComponent.h"
 
 // エンジン機能用インクルード
 #include "AbsoluteEngine/editor/EditorUIManager.h"
@@ -107,46 +110,50 @@ void BaseScene::ApplyEditorLightsToRenderer(Renderer* renderer) {
 
     auto collectLights = [&](auto& self, const std::shared_ptr<AbsoluteEngine::GameObject>& obj) -> void {
         if (!obj) return;
-        const auto& light = obj->GetLight();
         const auto& t = obj->GetTransform();
 
-        // Transformの回転から方向ベクトルを計算
-        Matrix4x4 rotX = MakeRotateXMatrix(t.rotate.x);
-        Matrix4x4 rotY = MakeRotateYMatrix(t.rotate.y);
-        Matrix4x4 rotZ = MakeRotateZMatrix(t.rotate.z);
-        Matrix4x4 rotMatrix = Multiply(Multiply(rotZ, rotX), rotY);
-        
-        Vector3 defaultDir = {0.0f, -1.0f, 0.0f};
-        Vector3 dir = TransformNormal(defaultDir, rotMatrix);
-        dir = Normalize(dir);
+        auto lightComp = obj->GetComponent<AbsoluteEngine::LightNodeComponent>();
+        if (lightComp && lightComp->type != AbsoluteEngine::LightNodeComponent::Type::None) {
+            const auto& light = *lightComp;
+            
+            // Transformの回転から方向ベクトルを計算
+            Matrix4x4 rotX = MakeRotateXMatrix(t.rotate.x);
+            Matrix4x4 rotY = MakeRotateYMatrix(t.rotate.y);
+            Matrix4x4 rotZ = MakeRotateZMatrix(t.rotate.z);
+            Matrix4x4 rotMatrix = Multiply(Multiply(rotZ, rotX), rotY);
+            
+            Vector3 defaultDir = {0.0f, -1.0f, 0.0f};
+            Vector3 dir = TransformNormal(defaultDir, rotMatrix);
+            dir = Normalize(dir);
 
-        if (light.type == AbsoluteEngine::LightComponent::Type::Directional) {
-            DirLight dl;
-            dl.color = light.color;
-            dl.intensity = light.intensity;
-            dl.direction = dir;
-            dl.enabled = true;
-            dirLights.push_back(dl);
-        } else if (light.type == AbsoluteEngine::LightComponent::Type::Point) {
-            PointLight pl;
-            pl.color = light.color;
-            pl.intensity = light.intensity;
-            pl.radius = light.radius;
-            pl.decay = light.decay;
-            pl.position = t.translate; 
-            pl.enabled = true;
-            pointLights.push_back(pl);
-        } else if (light.type == AbsoluteEngine::LightComponent::Type::Spot) {
-            SpotLight sl;
-            sl.color = light.color;
-            sl.intensity = light.intensity;
-            sl.distance = light.distance;
-            sl.decay = light.decay;
-            sl.coneAngleDeg = light.coneAngleDeg;
-            sl.position = t.translate;
-            sl.direction = dir;
-            sl.enabled = true;
-            spotLights.push_back(sl);
+            if (light.type == AbsoluteEngine::LightNodeComponent::Type::Directional) {
+                DirLight dl;
+                dl.color = light.color;
+                dl.intensity = light.intensity;
+                dl.direction = dir;
+                dl.enabled = true;
+                dirLights.push_back(dl);
+            } else if (light.type == AbsoluteEngine::LightNodeComponent::Type::Point) {
+                PointLight pl;
+                pl.color = light.color;
+                pl.intensity = light.intensity;
+                pl.radius = light.radius;
+                pl.decay = light.decay;
+                pl.position = t.translate; 
+                pl.enabled = true;
+                pointLights.push_back(pl);
+            } else if (light.type == AbsoluteEngine::LightNodeComponent::Type::Spot) {
+                SpotLight sl;
+                sl.color = light.color;
+                sl.intensity = light.intensity;
+                sl.distance = light.distance;
+                sl.decay = light.decay;
+                sl.coneAngleDeg = light.coneAngleDeg;
+                sl.position = t.translate;
+                sl.direction = dir;
+                sl.enabled = true;
+                spotLights.push_back(sl);
+            }
         }
 
         for (const auto& child : obj->GetChildren()) {
