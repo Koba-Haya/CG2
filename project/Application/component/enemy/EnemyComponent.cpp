@@ -1,5 +1,6 @@
 #include "EnemyComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
+#include "AbsoluteEngine/scene/DissolveComponent.h"
 #include <algorithm>
 
 void EnemyComponent::Update(float deltaTime) {
@@ -9,9 +10,14 @@ void EnemyComponent::Update(float deltaTime) {
         dissolveTimer_ += deltaTime;
         float t = std::clamp(dissolveTimer_ / dissolveDuration_, 0.0f, 1.0f);
         
-        auto& dissolve = owner_->GetDissolve();
-        dissolve.enable = true;
-        dissolve.threshold = t;
+        if (auto dissolveComp = owner_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
+            auto& dissolve = *dissolveComp;
+            dissolve.enable = true;
+            dissolve.threshold = t;
+            dissolve.edgeRange = 0.05f;
+            dissolve.edgeColor = {1.0f, 0.0f, 0.0f}; // 赤色のエッジ
+            dissolve.maskColor = {1.0f, 0.0f, 0.0f}; 
+        }
     }
 }
 

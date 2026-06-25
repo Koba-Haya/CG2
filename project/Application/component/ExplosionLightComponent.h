@@ -1,6 +1,7 @@
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
 #include "AbsoluteEngine/scene/GameObject.h"
+#include "AbsoluteEngine/scene/LightNodeComponent.h"
 #include <algorithm>
 
 class ExplosionLightComponent : public AbsoluteEngine::IComponent {
@@ -9,13 +10,20 @@ public:
         if (!owner_) return;
 
         timer_ += deltaTime;
-        if (timer_ >= lifeTime_) {
-            isDead_ = true;
-            owner_->GetLight().type = AbsoluteEngine::LightComponent::Type::None;
+        auto lightComp = owner_->GetComponent<AbsoluteEngine::LightNodeComponent>();
+        if (lightComp) {
+            if (timer_ >= lifeTime_) {
+                isDead_ = true;
+                lightComp->type = AbsoluteEngine::LightNodeComponent::Type::None;
+            } else {
+                float t = timer_ / lifeTime_;
+                float currentIntensity = maxIntensity_ * (1.0f - t);
+                lightComp->intensity = currentIntensity;
+            }
         } else {
-            float t = timer_ / lifeTime_;
-            float currentIntensity = maxIntensity_ * (1.0f - t);
-            owner_->GetLight().intensity = currentIntensity;
+            if (timer_ >= lifeTime_) {
+                isDead_ = true;
+            }
         }
     }
 

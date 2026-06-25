@@ -15,12 +15,17 @@ void CommandManager::AddCommand(std::shared_ptr<ICommand> command) {
     
     history_.push_back(command);
     currentIndex_++;
+
+    if (onCommandExecuted_) {
+        onCommandExecuted_();
+    }
 }
 
 void CommandManager::Undo() {
     if (currentIndex_ >= 0) {
         history_[currentIndex_]->Undo();
         currentIndex_--;
+        if (onCommandExecuted_) onCommandExecuted_();
     }
 }
 
@@ -28,6 +33,7 @@ void CommandManager::Redo() {
     if (currentIndex_ < static_cast<int>(history_.size()) - 1) {
         currentIndex_++;
         history_[currentIndex_]->Execute();
+        if (onCommandExecuted_) onCommandExecuted_();
     }
 }
 

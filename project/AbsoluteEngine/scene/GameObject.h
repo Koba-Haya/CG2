@@ -8,36 +8,8 @@
 
 namespace AbsoluteEngine {
 
-struct ColliderInfo {
-  enum class Type {
-    None,
-    Sphere,
-    AABB
-  };
-  Type type = Type::Sphere; // デフォルトでSphere（第3段階の仕様と互換）
-  Vector3 centerOffset = { 0.0f, 0.0f, 0.0f };
-  float radius = 1.0f; // Sphere用
-  Vector3 size = { 1.0f, 1.0f, 1.0f }; // AABB用
-};
-
-struct LightComponent {
-  enum class Type { None, Directional, Point, Spot };
-  Type type = Type::None;
-  Vector3 color = {1.0f, 1.0f, 1.0f};
-  float intensity = 1.0f;
-  float radius = 10.0f;       // Point, Spot用
-  float decay = 2.0f;         // Point, Spot用
-  float distance = 10.0f;     // Spot用
-  float coneAngleDeg = 30.0f; // Spot用
-};
-
-struct DissolveInfo {
-  bool enable = false;
-  float threshold = 0.5f;
-  float edgeRange = 0.03f;
-  Vector3 edgeColor = {1.0f, 0.4f, 0.3f};
-  Vector3 maskColor = {1.0f, 1.0f, 1.0f};
-};
+// Removed hardcoded structs (ColliderInfo, LightComponent, DissolveInfo)
+// These are now handled by respective component classes.
 
 class GameObject : public std::enable_shared_from_this<GameObject> {
 public:
@@ -66,51 +38,38 @@ public:
   void RemoveComponent(IComponent* component);
   const std::vector<std::unique_ptr<IComponent>>& GetComponents() const { return components_; }
 
+  template <typename T>
+  T* GetComponent() const {
+    for (auto& comp : components_) {
+      if (T* t = dynamic_cast<T*>(comp.get())) {
+        return t;
+      }
+    }
+    return nullptr;
+  }
+
+  template <typename T>
+  bool HasComponent() const {
+    return GetComponent<T>() != nullptr;
+  }
+
   // オブジェクトと子ノードの描画
   virtual void Draw();
-
-  // モデルとテクスチャのロード
-  void LoadModel(const std::string& path);
-  void LoadTexture(const std::string& path);
-
-  const std::string& GetModelPath() const { return modelPath_; }
-  const std::string& GetTexturePath() const { return texturePath_; }
 
   // メタデータプロパティ
   const std::string& GetTag() const { return tag_; }
   void SetTag(const std::string& tag) { tag_ = tag; }
-
-  // 環境マッピング
-  void SetEnvironmentCoefficient(float c);
-  float GetEnvironmentCoefficient() const { return environmentCoefficient_; }
 
   // プレハブパス
   const std::string& GetPrefabPath() const { return prefabPath_; }
   void SetPrefabPath(const std::string& path) { prefabPath_ = path; }
   bool IsPrefabInstance() const { return !prefabPath_.empty(); }
 
-  ColliderInfo& GetCollider() { return collider_; }
-  const ColliderInfo& GetCollider() const { return collider_; }
-
-  LightComponent& GetLight() { return light_; }
-  const LightComponent& GetLight() const { return light_; }
-
-  DissolveInfo& GetDissolve() { return dissolve_; }
-  const DissolveInfo& GetDissolve() const { return dissolve_; }
-
 private:
   std::string name_;
   std::string tag_ = "Untagged";
   std::string prefabPath_ = "";
   Transform transform_;
-  ColliderInfo collider_;
-  LightComponent light_;
-  DissolveInfo dissolve_;
-  float environmentCoefficient_ = 0.0f;
-
-  std::string modelPath_;
-  std::string texturePath_;
-  std::unique_ptr<ModelInstance> modelInstance_;
 
   std::weak_ptr<GameObject> parent_;
   std::vector<std::shared_ptr<GameObject>> children_;

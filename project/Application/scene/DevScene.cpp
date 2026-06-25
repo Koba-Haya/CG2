@@ -2,6 +2,9 @@
 #include "DevScene.h"
 #include "SceneIds.h"
 #include "SceneManager.h"
+#include "AbsoluteEngine/scene/ModelComponent.h"
+#include "AbsoluteEngine/scene/DissolveComponent.h"
+#include "AbsoluteEngine/scene/LightNodeComponent.h"
 #include "Bullet/Bullet.h"
 #include "component/enemy/EnemyComponent.h"
 #include "DebugCamera.h"
@@ -88,7 +91,9 @@ void DevScene::Initialize(const SceneServices &services) {
 
   
   auto obj1 = std::make_shared<AbsoluteEngine::GameObject>("Player");
-  obj1->LoadModel("resources/app/cube/cube.obj");
+  auto modelComp1 = std::make_unique<AbsoluteEngine::ModelComponent>();
+  modelComp1->LoadModel("resources/app/cube/cube.obj");
+  obj1->AddComponent(std::move(modelComp1));
   obj1->GetTransform().translate = { 0.0f, -1.1f, -15.0f };
   
   auto obj3 = std::make_shared<AbsoluteEngine::GameObject>("Weapon");
@@ -155,8 +160,11 @@ void DevScene::Update() {
               enemySpawnInterval_ = 1.0f + static_cast<float>(rand() % 200) / 100.0f;
 
               auto newEnemy = std::make_shared<AbsoluteEngine::GameObject>("Enemy");
-              newEnemy->LoadModel("resources/app/sphere/sphere.obj");
-              newEnemy->LoadTexture("resources/app/cube/white100x100.png");
+              newEnemy->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
+              auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+              modelComp->LoadModel("resources/app/sphere/sphere.obj");
+              modelComp->LoadTexture("resources/app/cube/white100x100.png");
+              newEnemy->AddComponent(std::move(modelComp));
               
               // ランダムな出現位置 (X: -15〜15, Y: -5〜5, Z: 5〜25)
               float rX = ((rand() % 300) / 10.0f) - 15.0f;
@@ -319,7 +327,9 @@ void DevScene::Update() {
 
               // 弾の生成
               auto bullet = std::make_shared<AbsoluteEngine::GameObject>("Bullet");
-              bullet->LoadModel("resources/app/sphere/sphere.obj");
+              auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+              modelComp->LoadModel("resources/app/sphere/sphere.obj");
+              bullet->AddComponent(std::move(modelComp));
               bullet->GetTransform().translate = spawnPos;
               bullet->GetTransform().scale = {0.2f, 0.2f, 0.2f};
 
@@ -553,11 +563,12 @@ void DevScene::Update() {
                       // 爆発の光（ポイントライト）の生成
                       auto lightObj = std::make_shared<AbsoluteEngine::GameObject>("ExplosionLight");
                       lightObj->GetTransform().translate = targetEnemyPos;
-                      auto& light = lightObj->GetLight();
-                      light.type = AbsoluteEngine::LightComponent::Type::Point;
-                      light.color = { 1.0f, 0.5f, 0.1f };
-                      light.radius = 30.0f;
-                      light.decay = 1.0f;
+                      auto lightNodeComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
+                      lightNodeComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
+                      lightNodeComp->color = { 1.0f, 0.5f, 0.1f };
+                      lightNodeComp->radius = 30.0f;
+                      lightNodeComp->decay = 1.0f;
+                      lightObj->AddComponent(std::move(lightNodeComp));
                       auto lightComp = std::make_unique<ExplosionLightComponent>();
                       lightComp->maxIntensity_ = 20.0f;
                       lightComp->lifeTime_ = 0.5f;
@@ -592,8 +603,8 @@ void DevScene::Update() {
 
       if (obj) {
           if (obj->GetName() == "Enemy") {
-              auto& dissolve = obj->GetDissolve();
-              if (dissolve.enable && dissolve.threshold >= 1.0f) {
+              auto dissolveComp = obj->GetComponent<AbsoluteEngine::DissolveComponent>();
+              if (dissolveComp && dissolveComp->enable && dissolveComp->threshold >= 1.0f) {
                   shouldDelete = true;
               }
           } else if (obj->GetName() == "ExplosionLight") {
@@ -811,17 +822,21 @@ void DevScene::InitResources_() {
   // 最初からシーンに配置しておくライトを rootObjects_ に追加する
   auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
   initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f }; // 適当な方向
-  initialDirLight->GetLight().type = AbsoluteEngine::LightComponent::Type::Directional;
-  initialDirLight->GetLight().color = { 1.0f, 1.0f, 1.0f };
-  initialDirLight->GetLight().intensity = 1.0f;
+  auto dirLightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
+  dirLightComp->type = AbsoluteEngine::LightNodeComponent::Type::Directional;
+  dirLightComp->color = { 1.0f, 1.0f, 1.0f };
+  dirLightComp->intensity = 1.0f;
+  initialDirLight->AddComponent(std::move(dirLightComp));
   rootObjects_.push_back(initialDirLight);
 
   auto initialPointLight = std::make_shared<AbsoluteEngine::GameObject>("Point Light");
   initialPointLight->GetTransform().translate = { 0.0f, 2.0f, -2.0f };
-  initialPointLight->GetLight().type = AbsoluteEngine::LightComponent::Type::Point;
-  initialPointLight->GetLight().color = { 1.0f, 1.0f, 1.0f };
-  initialPointLight->GetLight().intensity = 1.0f;
-  initialPointLight->GetLight().radius = 10.0f;
+  auto pointLightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
+  pointLightComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
+  pointLightComp->color = { 1.0f, 1.0f, 1.0f };
+  pointLightComp->intensity = 1.0f;
+  pointLightComp->radius = 10.0f;
+  initialPointLight->AddComponent(std::move(pointLightComp));
   rootObjects_.push_back(initialPointLight);
 
   // オフスクリーンテスト初期化

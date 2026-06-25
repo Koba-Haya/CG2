@@ -7,7 +7,7 @@
 #include "LightNodeComponent.h"
 #include "ModelComponent.h"
 #include "DissolveComponent.h"
-#include "../../Application/camera/RailCameraController.h"
+#include "RailCameraController.h"
 
 using json = nlohmann::json;
 
