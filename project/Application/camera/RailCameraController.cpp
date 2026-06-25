@@ -52,29 +52,24 @@ void RailCameraController::Update(GameCamera& camera, const CameraContext& ctx) 
 }
 
 void RailCameraController::AddWaypoint(const Vector3& pos) {
-    if (waypoints_.size() < 3) {
-        waypoints_.push_back(pos);
-        waypoints_.push_back({pos.x, pos.y, pos.z + 10.0f});
-        waypoints_.push_back({pos.x, pos.y, pos.z + 20.0f});
-    } else {
-        waypoints_.push_back(pos);
-    }
+    waypoints_.push_back(pos);
+    isModified_ = true;
 }
 
 void RailCameraController::InsertWaypoint(size_t index, const Vector3& pos) {
     if (index <= waypoints_.size()) {
         waypoints_.insert(waypoints_.begin() + index, pos);
+        isModified_ = true;
     }
 }
 
 void RailCameraController::RemoveWaypoint(size_t index) {
-    if (index < waypoints_.size()) {
+    if (index < waypoints_.size() && waypoints_.size() > 3) {
         waypoints_.erase(waypoints_.begin() + index);
-        if (selectedPointIndex_ == static_cast<int>(index)) {
-            selectedPointIndex_ = -1;
-        } else if (selectedPointIndex_ > static_cast<int>(index)) {
-            selectedPointIndex_--;
+        if (selectedPointIndex_ >= static_cast<int>(waypoints_.size())) {
+            selectedPointIndex_ = static_cast<int>(waypoints_.size()) - 1;
         }
+        isModified_ = true;
     }
 }
 
@@ -83,10 +78,11 @@ void RailCameraController::DrawEditorUI(const Vector3& cameraPos) {
     ImGui::Begin("Rail Camera Editor");
     ImGui::Text("Waypoints: %d", static_cast<int>(waypoints_.size()));
 
-    if (ImGui::Button("Add Point (End)")) {
-        Vector3 newPos = waypoints_.empty() ? cameraPos : waypoints_.back();
-        if (!waypoints_.empty()) newPos.z += 10.0f;
+    if (ImGui::Button("Add Point")) {
+        Vector3 newPos = waypoints_.empty() ? Vector3(0,0,0) : waypoints_.back();
+        newPos.x += 10.0f;
         AddWaypoint(newPos);
+        selectedPointIndex_ = static_cast<int>(waypoints_.size()) - 1;
     }
 
     ImGui::Separator();
@@ -114,13 +110,13 @@ void RailCameraController::DrawEditorUI(const Vector3& cameraPos) {
 
     ImGui::Separator();
     if (selectedPointIndex_ >= 0 && selectedPointIndex_ < static_cast<int>(waypoints_.size())) {
+        ImGui::Separator();
         ImGui::Text("Selected Point: %d", selectedPointIndex_);
-        Vector3& pos = waypoints_[selectedPointIndex_];
-        float posArray[3] = { pos.x, pos.y, pos.z };
-        if (ImGui::DragFloat3("Position", posArray, 0.1f)) {
-            pos.x = posArray[0];
-            pos.y = posArray[1];
-            pos.z = posArray[2];
+        
+        float p[3] = { waypoints_[selectedPointIndex_].x, waypoints_[selectedPointIndex_].y, waypoints_[selectedPointIndex_].z };
+        if (ImGui::DragFloat3("Position", p, 0.1f)) {
+            waypoints_[selectedPointIndex_] = { p[0], p[1], p[2] };
+            isModified_ = true;
         }
     }
 
@@ -137,22 +133,32 @@ void RailCameraController::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x
 
         // Transform行列の作成 (位置のみ)
         Matrix4x4 pointTransform = MakeTranslateMatrix(waypoints_[selectedPointIndex_]);
+        float objectMatrix[16];
+        memcpy(objectMatrix, &pointTransform.m[0][0], sizeof(float) * 16);
 
-        bool isManipulated = ImGuizmo::Manipulate(
+        bool wasGizmoUsing = isGizmoUsing_;
+        isGizmoUsing_ = ImGuizmo::Manipulate(
             &viewMatrix.m[0][0], 
             &projectionMatrix.m[0][0],
             ImGuizmo::TRANSLATE, 
             ImGuizmo::WORLD, 
-            &pointTransform.m[0][0]
+            objectMatrix
         );
 
-        isGizmoUsing_ = ImGuizmo::IsUsing();
+        if (isGizmoUsing_) {
+            float matrixTranslation[3], matrixRotation[3], matrixScale[3];
+            ImGuizmo::DecomposeMatrixToComponents(objectMatrix, matrixTranslation, matrixRotation, matrixScale);
+            
+            Vector3 newPos = { matrixTranslation[0], matrixTranslation[1], matrixTranslation[2] };
+            if (waypoints_[selectedPointIndex_].x != newPos.x || 
+                waypoints_[selectedPointIndex_].y != newPos.y || 
+                waypoints_[selectedPointIndex_].z != newPos.z) {
+                waypoints_[selectedPointIndex_] = newPos;
+            }
+        }
 
-        if (isManipulated) {
-            // ギズモの行列から位置を抽出
-            waypoints_[selectedPointIndex_].x = pointTransform.m[3][0];
-            waypoints_[selectedPointIndex_].y = pointTransform.m[3][1];
-            waypoints_[selectedPointIndex_].z = pointTransform.m[3][2];
+        if (wasGizmoUsing && !isGizmoUsing_) {
+            isModified_ = true;
         }
     }
 #endif

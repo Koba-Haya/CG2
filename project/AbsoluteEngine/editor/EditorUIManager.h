@@ -20,7 +20,7 @@ class EditorCamera;
 
 class EditorUIManager {
 public:
-  EditorUIManager() = default;
+  EditorUIManager();
   ~EditorUIManager() = default;
 
   // 毎フレームのUI描画
@@ -32,6 +32,14 @@ public:
   // 現在選択されているオブジェクトを取得
   std::shared_ptr<GameObject> GetSelectedObject() const { return selectedObject_.lock(); }
   void SetSelectedObject(std::shared_ptr<GameObject> obj) { selectedObject_ = obj; }
+
+  // シーンが変更されたかどうかを取得・クリアする
+  bool ConsumeSceneModifiedFlag() {
+      bool flag = isSceneModified_;
+      isSceneModified_ = false;
+      return flag;
+  }
+  void SetSceneModified() { isSceneModified_ = true; }
 
 private:
 #ifdef USE_IMGUI
@@ -67,6 +75,7 @@ private:
   Transform transformBeforeInspector_;
   LightNodeComponent lightBeforeInspector_;
 #endif
+  bool isSceneModified_ = false;
 };
 
 } // namespace AbsoluteEngine

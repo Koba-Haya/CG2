@@ -3,17 +3,19 @@
 #include <string>
 #include <vector>
 
+class RailCameraController;
+
 namespace AbsoluteEngine {
 
 class SceneSerializer {
 public:
   // 現在のシーンツリーを JSON 形式で保存
-  static bool Serialize(const std::string& filepath, const std::vector<std::shared_ptr<GameObject>>& rootObjects);
-  static std::string SerializeToString(const std::vector<std::shared_ptr<GameObject>>& rootObjects);
+  static bool Serialize(const std::string& filepath, const std::vector<std::shared_ptr<GameObject>>& rootObjects, const RailCameraController* railCamera = nullptr);
+  static std::string SerializeToString(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const RailCameraController* railCamera = nullptr);
 
   // JSON からシーンツリーを読み込み
-  static bool Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects);
-  static bool DeserializeFromString(const std::string& jsonString, std::vector<std::shared_ptr<GameObject>>& outRootObjects);
+  static bool Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects, RailCameraController* outRailCamera = nullptr);
+  static bool DeserializeFromString(const std::string& jsonString, std::vector<std::shared_ptr<GameObject>>& outRootObjects, RailCameraController* outRailCamera = nullptr);
 
   // プレハブの保存と読み込み
   static bool SavePrefab(const std::string& filepath, std::shared_ptr<GameObject> obj);

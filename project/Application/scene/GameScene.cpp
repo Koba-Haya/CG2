@@ -88,10 +88,7 @@ void GameScene::Initialize(const SceneServices &services) {
   CameraContext ctx{};
   ctx.deltaTime = 1.0f / 60.0f;
   gameCamera_->SetController(std::move(railController), ctx);
-  // シーン開始直後の初期視点がワープしないように1度更新して位置を確定させる
-  gameCamera_->Update(*services_.input);
-
-  // プレイヤー初期化
+  // コンポーネントファクトリの登録
   auto* inputPtr = services_.input;
   auto* cameraPtr = gameCamera_.get();
   AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", [inputPtr, cameraPtr]() {
@@ -102,19 +99,50 @@ void GameScene::Initialize(const SceneServices &services) {
       return comp;
   });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BulletComponent", []() { return std::make_unique<BulletComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("BossComponent", []() { return std::make_unique<BossComponent>(); });
 
-  playerObj_ = std::make_shared<AbsoluteEngine::GameObject>("Player");
-  auto playerModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-  playerModelComp->LoadModel("resources/app/player/player.obj");
-  playerObj_->AddComponent(std::move(playerModelComp));
-  auto playerComp = std::make_unique<PlayerComponent>();
-  playerComp->Initialize();
-  playerComp->SetInput(services_.input);
-  playerComp->SetCamera(gameCamera_.get());
-  playerObj_->AddComponent(std::move(playerComp));
-  rootObjects_.push_back(playerObj_);
+  // オートロード：保存されたシーンを読み込む
+  LoadScene();
 
-  // 敵の固定配置は削除されました（エディタでの配置に移行）
+  // シーン開始直後の初期視点がワープしないように1度更新して位置を確定させる
+  gameCamera_->Update(*services_.input);
+
+  // プレイヤーを探す（ロードされたデータにあるか）
+  playerObj_.reset();
+  for (const auto& obj : rootObjects_) {
+      if (obj && (obj->GetName() == "Player" || obj->GetName() == "player")) {
+          playerObj_ = obj;
+          break;
+      }
+  }
+
+  // プレイヤーがいなければ生成
+  if (!playerObj_) {
+      playerObj_ = std::make_shared<AbsoluteEngine::GameObject>("Player");
+      auto playerModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+      playerModelComp->LoadModel("resources/app/player/player.obj");
+      playerObj_->AddComponent(std::move(playerModelComp));
+      rootObjects_.push_back(playerObj_);
+  }
+  
+  // PlayerComponent がアタッチされているか確認し、無ければ追加・初期化
+  auto playerComp = playerObj_->GetComponent<PlayerComponent>();
+  if (!playerComp) {
+      auto pComp = std::make_unique<PlayerComponent>();
+      pComp->Initialize();
+      pComp->SetInput(services_.input);
+      pComp->SetCamera(gameCamera_.get());
+      playerObj_->AddComponent(std::move(pComp));
+  } else {
+      playerComp->Initialize();
+      playerComp->SetInput(services_.input);
+      playerComp->SetCamera(gameCamera_.get());
+  }
 
   auto* dx = Renderer::GetInstance()->GetDX();
   renderTexture_ = std::make_unique<RenderTexture>();
@@ -129,23 +157,24 @@ void GameScene::Initialize(const SceneServices &services) {
   gaussianTempTexture_ = std::make_unique<RenderTexture>();
   gaussianTempTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
 
-  // サンプルコンポーネントの登録
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("BossComponent", []() { return std::make_unique<BossComponent>(); });
-
-  // デフォルトのライトを一つ配置しておく
-  auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
-  initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
-  auto lightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
-  lightComp->type = AbsoluteEngine::LightNodeComponent::Type::Directional;
-  lightComp->color = { 1.0f, 1.0f, 1.0f };
-  lightComp->intensity = 1.0f;
-  initialDirLight->AddComponent(std::move(lightComp));
-  rootObjects_.push_back(initialDirLight);
+  // デフォルトのライトを探す
+  bool hasLight = false;
+  for (const auto& obj : rootObjects_) {
+      if (obj && obj->GetComponent<AbsoluteEngine::LightNodeComponent>()) {
+          hasLight = true;
+          break;
+      }
+  }
+  if (!hasLight) {
+      auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
+      initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
+      auto lightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
+      lightComp->type = AbsoluteEngine::LightNodeComponent::Type::Directional;
+      lightComp->color = { 1.0f, 1.0f, 1.0f };
+      lightComp->intensity = 1.0f;
+      initialDirLight->AddComponent(std::move(lightComp));
+      rootObjects_.push_back(initialDirLight);
+  }
 }
 
 void GameScene::Finalize() {
@@ -591,6 +620,18 @@ void GameScene::Update() {
 
   ImGui::End();
 #endif
+
+  // シーンの自動セーブ
+  bool shouldSave = false;
+  if (editorUIManager_ && editorUIManager_->ConsumeSceneModifiedFlag()) {
+      shouldSave = true;
+  }
+  if (railController_ && railController_->ConsumeModifiedFlag()) {
+      shouldSave = true;
+  }
+  if (shouldSave) {
+      SaveScene();
+  }
 }
 
 void GameScene::Draw() {
@@ -708,4 +749,19 @@ void GameScene::Draw() {
       dx->FinishRendering(postProcessTexture_.get());
     }
   }
+}
+
+#include "AbsoluteEngine/scene/SceneSerializer.h"
+#include <filesystem>
+
+void GameScene::SaveScene() {
+    std::filesystem::create_directories("C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/");
+    AbsoluteEngine::SceneSerializer::Serialize(sceneFilePath_, rootObjects_, railController_);
+}
+
+void GameScene::LoadScene() {
+    AbsoluteEngine::SceneSerializer::Deserialize(sceneFilePath_, rootObjects_, railController_);
+    if (editorUIManager_) {
+        editorUIManager_->SetSelectedObject(nullptr);
+    }
 }

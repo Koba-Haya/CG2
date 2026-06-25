@@ -16,6 +16,12 @@
 
 namespace AbsoluteEngine {
 
+EditorUIManager::EditorUIManager() {
+    if (commandManager_) {
+        commandManager_->SetOnCommandExecutedCallback([this]() { SetSceneModified(); });
+    }
+}
+
 void EditorUIManager::DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, EditorCamera* camera) {
 #ifdef USE_IMGUI
   DrawMenuBar(rootObjects);
@@ -140,6 +146,7 @@ void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>
                   commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
               } else {
                   rootObjects.push_back(prefabInstance);
+                  SetSceneModified();
               }
                 selectedObject_ = prefabInstance;
             }
@@ -548,6 +555,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
           commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
         } else {
           rootObjects.push_back(prefabInstance);
+          SetSceneModified();
         }
         selectedObject_ = prefabInstance;
       }
@@ -568,6 +576,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
         commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
       } else {
         rootObjects.push_back(newObj);
+        SetSceneModified();
       }
       selectedObject_ = newObj;
     }
@@ -587,6 +596,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
           } else {
               rootObjects.push_back(newObj);
+              SetSceneModified();
           }
           selectedObject_ = newObj;
       }
@@ -597,7 +607,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               lightComp->type = LightNodeComponent::Type::Directional;
               newObj->AddComponent(std::move(lightComp));
               newObj->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
-              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); }
+              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); SetSceneModified(); }
               selectedObject_ = newObj;
           }
           if (ImGui::Selectable("Point Light")) {
@@ -605,7 +615,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               auto lightComp = std::make_unique<LightNodeComponent>();
               lightComp->type = LightNodeComponent::Type::Point;
               newObj->AddComponent(std::move(lightComp));
-              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); }
+              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); SetSceneModified(); }
               selectedObject_ = newObj;
           }
           if (ImGui::Selectable("Spot Light")) {
@@ -613,7 +623,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               auto lightComp = std::make_unique<LightNodeComponent>();
               lightComp->type = LightNodeComponent::Type::Spot;
               newObj->AddComponent(std::move(lightComp));
-              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); }
+              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); SetSceneModified(); }
               selectedObject_ = newObj;
           }
           ImGui::EndMenu();
@@ -663,6 +673,7 @@ void EditorUIManager::DrawInspector() {
     strncpy_s(nameBuffer, obj->GetName().c_str(), sizeof(nameBuffer));
     if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer))) {
       obj->SetName(nameBuffer);
+      SetSceneModified();
     }
 
     // タグの編集
@@ -670,6 +681,7 @@ void EditorUIManager::DrawInspector() {
     strncpy_s(tagBuffer, obj->GetTag().c_str(), sizeof(tagBuffer));
     if (ImGui::InputText("Tag", tagBuffer, sizeof(tagBuffer))) {
       obj->SetTag(tagBuffer);
+      SetSceneModified();
     }
 
     ImGui::Separator();
@@ -687,6 +699,7 @@ void EditorUIManager::DrawInspector() {
           if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
             const char* payloadPath = (const char*)payload->Data;
             modelComp->LoadTexture(payloadPath);
+            SetSceneModified();
           }
           ImGui::EndDragDropTarget();
         }
@@ -697,6 +710,7 @@ void EditorUIManager::DrawInspector() {
           if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
             const char* payloadPath = (const char*)payload->Data;
             modelComp->LoadModel(payloadPath);
+            SetSceneModified();
           }
           ImGui::EndDragDropTarget();
         }
@@ -704,6 +718,7 @@ void EditorUIManager::DrawInspector() {
         ImGui::Text("No ModelComponent attached.");
         if (ImGui::Button("Add ModelComponent")) {
           obj->AddComponent(std::make_unique<ModelComponent>());
+          SetSceneModified();
         }
       }
     }

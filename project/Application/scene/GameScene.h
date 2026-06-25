@@ -30,6 +30,9 @@ public:
   void Update() override;
   void Draw() override;
 
+  void SaveScene();
+  void LoadScene();
+
 private:
   void SpawnHitEffect(const Vector3 &pos);
 
@@ -51,6 +54,8 @@ private:
 
   bool isDebugCamera_ = false;
   bool showDebugRail_ = true;
+
+  std::string sceneFilePath_ = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/scene.json";
 
   Skybox skybox_;
 

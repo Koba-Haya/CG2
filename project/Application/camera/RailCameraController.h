@@ -33,6 +33,14 @@ public:
 
     // パラメータ調整用
     void SetSpeed(float speed) { speed_ = speed; }
+
+    // 変更検知用
+    bool ConsumeModifiedFlag() {
+        bool flag = isModified_;
+        isModified_ = false;
+        return flag;
+    }
+
     void SetLookAhead(float offset) { lookAheadOffset_ = offset; }
 
     void ResetProgress() { progress_ = 0.0f; }
@@ -47,4 +55,5 @@ private:
     // エディタ操作用
     int selectedPointIndex_ = -1;
     bool isGizmoUsing_ = false;
+    bool isModified_ = false;
 };
