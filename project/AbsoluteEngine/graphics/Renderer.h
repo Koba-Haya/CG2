@@ -5,6 +5,9 @@
 #include <wrl.h>
 #include <d3d12.h>
 
+#include "graphics/texture/RenderTexture.h"
+#include "graphics/texture/DepthTexture.h"
+
 #include "LightTypes.h"
 #include "Matrix.h"
 #include "Method.h"
@@ -158,6 +161,15 @@ public:
   void SetDissolveMaskTexture(std::shared_ptr<TextureResource> tex) { dissolveMaskTexture_ = tex; }
   void SetRandomParam(float time);
 
+  // --- 高レベル レンダリングAPI ---
+  void InitializePostProcess(uint32_t width, uint32_t height);
+  void BeginRenderScene();
+  void EndRenderScene(PostProcessMode mode, const Matrix4x4& projInverse);
+  D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessTextureSrv() const {
+      if (postProcessTexture_) return postProcessTexture_->GetSrvGpuHandle();
+      return {};
+  }
+
   void DispatchSkinning(ModelInstance* instance);
 
   ~Renderer();
@@ -297,4 +309,10 @@ private:
   ComPtr<ID3D12Resource> dissolveParamCB_;
   DissolveParam* dissolveParamMapped_ = nullptr;
   std::shared_ptr<TextureResource> dissolveMaskTexture_;
+
+  // レンダリング・ポストプロセス用バッファ
+  std::unique_ptr<RenderTexture> renderTexture_;
+  std::unique_ptr<DepthTexture> depthTexture_;
+  std::unique_ptr<RenderTexture> postProcessTexture_;
+  std::unique_ptr<RenderTexture> gaussianTempTexture_;
 };

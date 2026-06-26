@@ -6,8 +6,6 @@
 #include "ModelInstance.h"
 #include "ModelResource.h"
 #include "Renderer.h"
-#include "graphics/texture/RenderTexture.h"
-#include "graphics/texture/DepthTexture.h"
 #include "../actor/Player/Player.h"
 #include "../actor/Bullet/Bullet.h"
 #include <memory>
@@ -39,10 +37,6 @@ private:
 private:
   std::unique_ptr<GameCamera> gameCamera_;
   std::unique_ptr<DebugCamera> debugCamera_;
-  std::unique_ptr<RenderTexture> renderTexture_;
-  std::unique_ptr<DepthTexture> depthTexture_;
-  std::unique_ptr<RenderTexture> postProcessTexture_;
-  std::unique_ptr<RenderTexture> gaussianTempTexture_;
   Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
   float vignetteScale_ = 16.0f;
   float vignettePow_ = 0.8f;

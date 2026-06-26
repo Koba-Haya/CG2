@@ -15,9 +15,7 @@
 #include "Sprite.h"
 #include "Transform.h"
 #include "Vector.h"
-#include "graphics/texture/RenderTexture.h"
-#include "graphics/texture/DepthTexture.h"
-#include "graphics/Renderer.h"
+#include "Renderer.h"
 #include "AbsoluteEngine/audio/Audio.h"
 #include "component/ExplosionLightComponent.h"
 #include <cstdint>
@@ -137,11 +135,6 @@ private:
   std::shared_ptr<TextureResource> texRing_;
   std::shared_ptr<TextureResource> texCylinder_;
 
-  // オフスクリーンテスト用
-  std::unique_ptr<RenderTexture> renderTexture_;
-  std::unique_ptr<DepthTexture> depthTexture_;
-  std::unique_ptr<RenderTexture> postProcessTexture_;
-  std::unique_ptr<RenderTexture> gaussianTempTexture_;
   Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
 
   float vignetteScale_ = 16.0f;

@@ -26,32 +26,6 @@
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
 
-// テスト用コンポーネント
-class SpinComponent : public AbsoluteEngine::IComponent {
-public:
-    void Update(float deltaTime) override {
-        if (owner_) {
-            auto& t = owner_->GetTransform();
-            t.rotate.y += 2.0f * deltaTime;
-        }
-    }
-    std::string GetTypeName() const override { return "SpinComponent"; }
-};
-
-class MoveComponent : public AbsoluteEngine::IComponent {
-public:
-    void Update(float deltaTime) override {
-        if (owner_) {
-            auto& t = owner_->GetTransform();
-            t.translate.x += std::sin(frame_ * 0.05f) * 0.05f;
-            frame_ += 1.0f;
-        }
-    }
-    std::string GetTypeName() const override { return "MoveComponent"; }
-private:
-    float frame_ = 0.0f;
-};
-
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
 
@@ -99,8 +73,6 @@ void GameScene::Initialize(const SceneServices &services) {
       return comp;
   });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BulletComponent", []() { return std::make_unique<BulletComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
@@ -144,18 +116,7 @@ void GameScene::Initialize(const SceneServices &services) {
       playerComp->SetCamera(gameCamera_.get());
   }
 
-  auto* dx = Renderer::GetInstance()->GetDX();
-  renderTexture_ = std::make_unique<RenderTexture>();
-  renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
-
-  depthTexture_ = std::make_unique<DepthTexture>();
-  depthTexture_->Initialize(dx, 1280, 720);
-
-  postProcessTexture_ = std::make_unique<RenderTexture>();
-  postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
-
-  gaussianTempTexture_ = std::make_unique<RenderTexture>();
-  gaussianTempTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
+  Renderer::GetInstance()->InitializePostProcess(1280, 720);
 
   // デフォルトのライトを探す
   bool hasLight = false;
@@ -495,11 +456,11 @@ void GameScene::Update() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::Begin("Viewport##GameView");
   ImGui::PopStyleVar();
-  if (!isTransitioning && postProcessTexture_) {
+  if (!isTransitioning) {
     ImVec2 viewportSize = ImGui::GetContentRegionAvail();
     if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
     if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = postProcessTexture_->GetSrvGpuHandle();
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = Renderer::GetInstance()->GetPostProcessTextureSrv();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
     
     Matrix4x4 viewMat, projMat;
@@ -635,16 +596,8 @@ void GameScene::Update() {
 }
 
 void GameScene::Draw() {
-  auto* renderer = Renderer::GetInstance();
-  auto* dx = renderer->GetDX();
-
-  if (renderTexture_ && depthTexture_) {
-    dx->SetRenderTargetWithDepth(renderTexture_.get(), depthTexture_.get());
-    float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
-    dx->GetCommandList()->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
-
-    dx->GetCommandList()->ClearDepthStencilView(depthTexture_->GetDsvHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-  }
+  auto *renderer = Renderer::GetInstance();
+  renderer->BeginRenderScene();
 
   if (playMode_ == PlayMode::Edit) {
       if (editorCamera_) renderer->SetCamera(*editorCamera_);
@@ -717,38 +670,12 @@ void GameScene::Draw() {
   renderer->RenderPrimitives();
   renderer->DrawGPUParticles();
 
-  if (renderTexture_ && depthTexture_) {
-      dx->FinishRenderingWithDepth(renderTexture_.get(), depthTexture_.get());
-  }
+  Matrix4x4 projInverse;
+  if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
+  else if (isDebugCamera_) projInverse = Inverse(debugCamera_->GetProjectionMatrix());
+  else projInverse = Inverse(gameCamera_->GetProjectionMatrix());
 
-  if (renderTexture_ && postProcessTexture_) {
-    if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter && gaussianTempTexture_) {
-      // パス1: 横方向
-      dx->SetRenderTarget(gaussianTempTexture_.get());
-      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
-      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-      dx->FinishRendering(gaussianTempTexture_.get());
-
-      // パス2: 縦方向
-      dx->SetRenderTarget(postProcessTexture_.get());
-      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {0.0f, 1.0f});
-      renderer->DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), postProcessMode_);
-      dx->FinishRendering(postProcessTexture_.get());
-    } else if (postProcessMode_ == Renderer::PostProcessMode::DepthBasedOutline) {
-      dx->SetRenderTarget(postProcessTexture_.get());
-      Matrix4x4 projInverse;
-      if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
-      else if (isDebugCamera_) projInverse = Inverse(debugCamera_->GetProjectionMatrix());
-      else projInverse = Inverse(gameCamera_->GetProjectionMatrix());
-      renderer->SetDepthBasedOutlineParam(projInverse);
-      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, depthTexture_->GetSrvGpuHandle());
-      dx->FinishRendering(postProcessTexture_.get());
-    } else {
-      dx->SetRenderTarget(postProcessTexture_.get());
-      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-      dx->FinishRendering(postProcessTexture_.get());
-    }
-  }
+  renderer->EndRenderScene(postProcessMode_, projInverse);
 }
 
 #include "AbsoluteEngine/scene/SceneSerializer.h"

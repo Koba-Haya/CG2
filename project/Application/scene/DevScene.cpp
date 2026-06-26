@@ -360,12 +360,13 @@ void DevScene::Update() {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::Begin("Viewport##GameView");
   ImGui::PopStyleVar();
-  if (postProcessTexture_) {
-    // ウィンドウのコンテンツ領域サイズに合わせてゲーム画面をリサイズ表示
+  // if (postProcessTexture_) { のチェックを外す、もしくはRendererにテクスチャがあるか確認するが
+  // 今回はRenderer内部で常に作られる前提
+  {
     ImVec2 viewportSize = ImGui::GetContentRegionAvail();
     if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
     if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = postProcessTexture_->GetSrvGpuHandle();
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = Renderer::GetInstance()->GetPostProcessTextureSrv();
     ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
     
     // Viewportへのドラッグ＆ドロップ受付（画像へのドロップ）
@@ -651,8 +652,7 @@ void DevScene::Update() {
 
 void DevScene::Draw() {
   auto* renderer = Renderer::GetInstance();
-  auto* dx = renderer->GetDX();
-  auto* cmdList = dx->GetCommandList();
+  renderer->BeginRenderScene();
 
   // --- カメラ・ライト設定（オフスクリーンパス前に確定させる） ---
   if (editorCamera_) {
@@ -667,99 +667,28 @@ void DevScene::Draw() {
   // --- ライトの適用 ---
   ApplyEditorLightsToRenderer(renderer);
 
-  // --- オフスクリーン描画パス（RenderTexture → ImGui::Image で表示） ---
-  if (renderTexture_ && depthTexture_) {
-    // RenderTexture に切り替え（SRV → RT バリア + OMSetRenderTargets）
-    dx->SetRenderTargetWithDepth(renderTexture_.get(), depthTexture_.get());
-
-    // RenderTexture をクリア（暗いグレー）
-    float clearColor[] = { 0.1f, 0.1f, 0.15f, 1.0f };
-    cmdList->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
-
-    // 深度バッファをクリア
-    cmdList->ClearDepthStencilView(depthTexture_->GetDsvHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-
-    // --- シーンを RenderTexture に描画 ---
-    /*modelSphere_.SetWorld(MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate));
-    modelSphere_.SetEnvironmentCoefficient(enableReflection_ ? reflectionWeight_ : 0.0f);
-    modelSphere_.Draw();
-
-    modelAnimCube_.SetWorld(MakeAffineMatrix(transformAnimCube_.scale, transformAnimCube_.rotate, transformAnimCube_.translate));
-    modelAnimCube_.Draw();
-
-    modelSimpleSkin_.Draw();
-    modelHuman_.Draw();*/
-
-    /*if (showSkeleton_) {
-      modelSimpleSkin_.DrawSkeleton();
-      modelHuman_.DrawSkeleton();
-      modelAnimCube_.DrawSkeleton();
-    }*/
-
-    // --- エディタ上で配置したオブジェクト群の描画 ---
-    for (auto& obj : rootObjects_) {
-      obj->Draw();
-    }
-
-    renderer->RenderPrimitives();
-    skybox_.Draw();
-
-    // 新しいエフェクトマネージャによる描画
-    EffectManager::GetInstance()->Draw();
-
-    // パーティクルの描画
-    ParticleManager::GetInstance()->Draw(static_cast<BlendMode>(particleBlendMode_ + 1));
-
-    // GPUパーティクル描画
-    //renderer->DrawGPUParticles(static_cast<BlendMode>(particleBlendMode_ + 1));
-
-    // --- レティクルの描画 ---
-    reticleSprite_.Draw();
-
-    // RenderTexture を SRV 状態に戻す
-    dx->FinishRenderingWithDepth(renderTexture_.get(), depthTexture_.get());
+  // --- エディタ上で配置したオブジェクト群の描画 ---
+  for (auto& obj : rootObjects_) {
+    obj->Draw();
   }
+
+  renderer->RenderPrimitives();
+  skybox_.Draw();
+
+  // 新しいエフェクトマネージャによる描画
+  EffectManager::GetInstance()->Draw();
+
+  // パーティクルの描画
+  ParticleManager::GetInstance()->Draw(static_cast<BlendMode>(particleBlendMode_ + 1));
+
+  // --- レティクルの描画 ---
+  reticleSprite_.Draw();
 
   // --- ポストプロセスの適用 ---
-  if (renderTexture_ && postProcessTexture_) {
-    if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter && gaussianTempTexture_) {
-      // パス1: 横方向
-      dx->SetRenderTarget(gaussianTempTexture_.get());
-      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
-      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-      dx->FinishRendering(gaussianTempTexture_.get());
+  Matrix4x4 projInverse;
+  if (editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
 
-      // パス2: 縦方向
-      dx->SetRenderTarget(postProcessTexture_.get());
-      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {0.0f, 1.0f});
-      renderer->DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), postProcessMode_);
-      dx->FinishRendering(postProcessTexture_.get());
-    } else if (postProcessMode_ == Renderer::PostProcessMode::DepthBasedOutline) {
-      dx->SetRenderTarget(postProcessTexture_.get());
-      if (editorCamera_) {
-        renderer->SetDepthBasedOutlineParam(Inverse(editorCamera_->GetProjectionMatrix()));
-      }
-      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, depthTexture_->GetSrvGpuHandle());
-      dx->FinishRendering(postProcessTexture_.get());
-    } else if (postProcessMode_ == Renderer::PostProcessMode::Dissolve && texNoise0_) {
-      dx->SetRenderTarget(postProcessTexture_.get());
-      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, texNoise0_->GetSrvGpu());
-      dx->FinishRendering(postProcessTexture_.get());
-    } else {
-      dx->SetRenderTarget(postProcessTexture_.get());
-      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-      dx->FinishRendering(postProcessTexture_.get());
-    }
-  }
-
-  // --- バックバッファへの追加描画（必要なら UI 等をここに） ---
-  // 現在はImGuiがメインのUIとなるため、バックバッファへの直接描画はなし
-#ifndef USE_IMGUI
-  if (postProcessTexture_) {
-      dx->ResetRenderTarget();
-      renderer->DrawFullscreen(postProcessTexture_->GetSrvGpuHandle(), Renderer::PostProcessMode::Normal);
-  }
-#endif
+  renderer->EndRenderScene(postProcessMode_, projInverse);
 }
 
 void DevScene::InitLogging_() {
@@ -840,17 +769,7 @@ void DevScene::InitResources_() {
   rootObjects_.push_back(initialPointLight);
 
   // オフスクリーンテスト初期化
-  renderTexture_ = std::make_unique<RenderTexture>();
-  renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
-
-  depthTexture_ = std::make_unique<DepthTexture>();
-  depthTexture_->Initialize(dx, 1280, 720);
-
-  postProcessTexture_ = std::make_unique<RenderTexture>();
-  postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
-
-  gaussianTempTexture_ = std::make_unique<RenderTexture>();
-  gaussianTempTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {1,0,0,1});
+  Renderer::GetInstance()->InitializePostProcess(1280, 720);
 }
 
 void DevScene::InitCamera_() {

@@ -687,6 +687,71 @@ void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode) {
   pm->DrawInternal(cmdList);
 }
 
+void Renderer::InitializePostProcess(uint32_t width, uint32_t height) {
+    renderTexture_ = std::make_unique<RenderTexture>();
+    renderTexture_->Initialize(dx_, width, height, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, { 0.1f, 0.25f, 0.5f, 1.0f });
+
+    depthTexture_ = std::make_unique<DepthTexture>();
+    depthTexture_->Initialize(dx_, width, height);
+
+    postProcessTexture_ = std::make_unique<RenderTexture>();
+    postProcessTexture_->Initialize(dx_, width, height, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, { 0.1f, 0.25f, 0.5f, 1.0f });
+
+    gaussianTempTexture_ = std::make_unique<RenderTexture>();
+    gaussianTempTexture_->Initialize(dx_, width, height, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, { 0.1f, 0.25f, 0.5f, 1.0f });
+}
+
+void Renderer::BeginRenderScene() {
+    if (renderTexture_ && depthTexture_) {
+        dx_->SetRenderTargetWithDepth(renderTexture_.get(), depthTexture_.get());
+        float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
+        dx_->GetCommandList()->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
+        dx_->GetCommandList()->ClearDepthStencilView(depthTexture_->GetDsvHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    }
+}
+
+void Renderer::EndRenderScene(PostProcessMode mode, const Matrix4x4& projInverse) {
+    if (renderTexture_ && depthTexture_) {
+        dx_->FinishRenderingWithDepth(renderTexture_.get(), depthTexture_.get());
+    }
+
+    if (renderTexture_ && postProcessTexture_) {
+        if (mode == PostProcessMode::GaussianFilter && gaussianTempTexture_) {
+            // パス1: 横方向
+            dx_->SetRenderTarget(gaussianTempTexture_.get());
+            if (gaussianFilterParamMapped_) {
+                SetGaussianFilterParam(gaussianFilterParamMapped_->k, gaussianFilterParamMapped_->sigma, { 1.0f, 0.0f });
+            }
+            DrawFullscreen(renderTexture_->GetSrvGpuHandle(), mode);
+            dx_->FinishRendering(gaussianTempTexture_.get());
+
+            // パス2: 縦方向
+            dx_->SetRenderTarget(postProcessTexture_.get());
+            if (gaussianFilterParamMapped_) {
+                SetGaussianFilterParam(gaussianFilterParamMapped_->k, gaussianFilterParamMapped_->sigma, { 0.0f, 1.0f });
+            }
+            DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), mode);
+            dx_->FinishRendering(postProcessTexture_.get());
+        }
+        else if (mode == PostProcessMode::DepthBasedOutline) {
+            dx_->SetRenderTarget(postProcessTexture_.get());
+            SetDepthBasedOutlineParam(projInverse);
+            DrawFullscreen(renderTexture_->GetSrvGpuHandle(), mode, depthTexture_->GetSrvGpuHandle());
+            dx_->FinishRendering(postProcessTexture_.get());
+        }
+        else if (mode == PostProcessMode::Dissolve && dissolveMaskTexture_) {
+            dx_->SetRenderTarget(postProcessTexture_.get());
+            DrawFullscreen(renderTexture_->GetSrvGpuHandle(), mode, dissolveMaskTexture_->GetSrvGpu());
+            dx_->FinishRendering(postProcessTexture_.get());
+        }
+        else {
+            dx_->SetRenderTarget(postProcessTexture_.get());
+            DrawFullscreen(renderTexture_->GetSrvGpuHandle(), mode);
+            dx_->FinishRendering(postProcessTexture_.get());
+        }
+    }
+}
+
 void Renderer::RenderPrimitives() {
   auto *cmdList = dx_->GetCommandList();
 
