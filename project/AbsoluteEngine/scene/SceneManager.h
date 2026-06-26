@@ -17,6 +17,7 @@ public:
 
   void Update();
   void Draw();
+  void DrawEditorUI();
 
   void SetFactory(std::unique_ptr<ISceneFactory> factory);
   void Start(const std::string &firstSceneId);

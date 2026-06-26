@@ -135,23 +135,9 @@ private:
   std::shared_ptr<TextureResource> texRing_;
   std::shared_ptr<TextureResource> texCylinder_;
 
-  Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
-
-  float vignetteScale_ = 16.0f;
-  float vignettePow_ = 0.8f;
-  int32_t boxFilterK_ = 1;
-  int32_t gaussianFilterK_ = 3;
-  float gaussianFilterSigma_ = 1.0f;
-  
-  Vector2 radialBlurCenter_ = {0.5f, 0.5f};
-  float radialBlurWidth_ = 0.01f;
-
-  float dissolveThreshold_ = 0.5f;
-  float dissolveEdgeRange_ = 0.03f;
-  Vector3 dissolveEdgeColor_ = {1.0f, 0.4f, 0.3f};
-  Vector3 dissolveMaskColor_ = {1.0f, 1.0f, 1.0f};
   std::shared_ptr<TextureResource> texNoise0_;
   float time_ = 0.0f;
+  Vector2 radialBlurCenter_ = {0.5f, 0.5f};
 
   float hsvHue_ = 0.0f;
   float hsvSaturation_ = 0.0f;

@@ -65,10 +65,17 @@ public:
   void SetPrefabPath(const std::string& path) { prefabPath_ = path; }
   bool IsPrefabInstance() const { return !prefabPath_.empty(); }
 
+  // 生存フラグ
+  bool IsActive() const { return isActive_; }
+  void Destroy() { isActive_ = false; }
+
 private:
   std::string name_;
   std::string tag_ = "Untagged";
   std::string prefabPath_ = "";
+
+  bool isActive_ = true;
+
   Transform transform_;
 
   std::weak_ptr<GameObject> parent_;

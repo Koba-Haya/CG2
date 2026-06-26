@@ -143,6 +143,10 @@ void GameApp::Update() {
     *p = 0; // 故意にクラッシュさせる
   }
   ImGui::End();
+
+  if (sceneManager_) {
+    sceneManager_->DrawEditorUI();
+  }
 #endif
 
   sceneManager_->Update();

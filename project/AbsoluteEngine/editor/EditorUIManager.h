@@ -50,12 +50,24 @@ private:
   void DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& rootObjects);
   void DrawGameObjectNode(std::shared_ptr<GameObject> obj, std::vector<std::shared_ptr<GameObject>>& rootObjects);
   void DrawInspector();
-  void DrawGizmo(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
+  void DrawViewport(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
+  void DrawPostProcessSettings();
   void HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& rootObjects, EditorCamera* camera);
   
   void HandleMousePicking(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
   void CheckIntersection(std::shared_ptr<GameObject> obj, const Vector3& rayOrigin, const Vector3& rayDir, std::shared_ptr<GameObject>& hitObject, float& minT);
   void DrawColliderDebug(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const ImVec2& vMin, const ImVec2& vMax);
+
+  // Post process params
+  int postProcessMode_ = 0;
+  float vignetteScale_ = 16.0f;
+  float vignettePow_ = 0.8f;
+  int boxFilterK_ = 1;
+  int gaussianFilterK_ = 3;
+  float gaussianFilterSigma_ = 1.0f;
+  float dissolveThreshold_ = 0.0f;
+  Vector3 dissolveEdgeColor_ = {1.0f, 0.0f, 0.0f};
+  float dissolveEdgeRange_ = 0.1f;
 #endif
 
   std::weak_ptr<GameObject> selectedObject_;

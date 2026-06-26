@@ -223,218 +223,28 @@ void GameScene::Update() {
       rootObjects_.push_back(bossObj);
   }
 
-  // 弾の発射（スペースキー）
-  if (shootCooldown_ > 0.0f) shootCooldown_ -= deltaTime;
-  if (services_.input->PressKey(DIK_SPACE) && shootCooldown_ <= 0.0f && resBullet_ && playerObj_) {
-      shootCooldown_ = 0.25f; // 連射速度を適正化（光線化を防ぎ1発ずつの独立感を強調）
-      auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("Bullet");
-      auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-      bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
-      bulletObj->AddComponent(std::move(bulletModelComp));
-      bulletObj->GetTransform().translate = playerObj_->GetTransform().translate;
-      Vector3 forward = gameCamera_->GetForward();
-      Vector3 vel = { forward.x * 35.0f, forward.y * 35.0f, forward.z * 35.0f }; // 弾速を適正化
-      auto bulletComp = std::make_unique<BulletComponent>();
-      bulletComp->Initialize(vel);
-      bulletObj->AddComponent(std::move(bulletComp));
-      bulletObjs_.push_back(bulletObj);
-      rootObjects_.push_back(bulletObj);
-  }
-
-  // 弾の更新（コンポーネント化されたためrootObjects_経由で呼ばれるが、削除管理はこちらで行う）
-  // 消えた弾を削除
-  bulletObjs_.erase(std::remove_if(bulletObjs_.begin(), bulletObjs_.end(), [&](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
-      if (!obj) return true;
-      bool isActive = false;
-      for (const auto& comp : obj->GetComponents()) {
-          if (comp->GetTypeName() == "BulletComponent") {
-              auto* bComp = dynamic_cast<BulletComponent*>(comp.get());
-              if (bComp) isActive = bComp->IsActive();
-              break;
-          }
-      }
-      if (!isActive) {
-          rootObjects_.erase(std::remove(rootObjects_.begin(), rootObjects_.end(), obj), rootObjects_.end());
-          return true;
-      }
-      return false;
-  }), bulletObjs_.end());
-
-  // --- 敵からの弾の発射処理 ---
-  for (auto& obj : rootObjects_) {
-      if (!obj) continue;
-      
-      for (const auto& comp : obj->GetComponents()) {
-          if (comp->GetTypeName() == "EnemyShootComponent") {
-              auto* shootComp = dynamic_cast<EnemyShootComponent*>(comp.get());
-              if (shootComp && shootComp->WantToShoot() && playerObj_) {
-                  Vector3 spawnPos = obj->GetTransform().translate;
-                  Vector3 targetPos = playerObj_->GetTransform().translate;
-                  
-                  Vector3 diff = { targetPos.x - spawnPos.x, targetPos.y - spawnPos.y, targetPos.z - spawnPos.z };
-                  Vector3 dir = Normalize(diff);
-                  Vector3 vel = { dir.x * 20.0f, dir.y * 20.0f, dir.z * 20.0f }; // 弾速
-                  
-                  auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("EnemyBullet");
-                  auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-                  bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
-                  bulletObj->AddComponent(std::move(bulletModelComp));
-                  bulletObj->GetTransform().translate = spawnPos;
-                  auto bulletComp = std::make_unique<BulletComponent>();
-                  bulletComp->Initialize(vel);
-                  bulletObj->AddComponent(std::move(bulletComp));
-                  enemyBulletObjs_.push_back(bulletObj);
-                  rootObjects_.push_back(bulletObj);
-                  
-                  shootComp->ClearShootFlag();
-              }
-              break;
-          }
-      }
-  }
-
-  // 敵の弾の更新（削除管理）
-  enemyBulletObjs_.erase(std::remove_if(enemyBulletObjs_.begin(), enemyBulletObjs_.end(), [&](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
-      if (!obj) return true;
-      bool isActive = false;
-      for (const auto& comp : obj->GetComponents()) {
-          if (comp->GetTypeName() == "BulletComponent") {
-              auto* bComp = dynamic_cast<BulletComponent*>(comp.get());
-              if (bComp) isActive = bComp->IsActive();
-              break;
-          }
-      }
-      if (!isActive) {
-          rootObjects_.erase(std::remove(rootObjects_.begin(), rootObjects_.end(), obj), rootObjects_.end());
-          return true;
-      }
-      return false;
-  }), enemyBulletObjs_.end());
-
-  // --- 当たり判定（弾 vs 敵 GameObject） ---
-  for (auto& bulletObj : bulletObjs_) {
-      if (!bulletObj) continue;
-      BulletComponent* bComp = nullptr;
-      for (const auto& comp : bulletObj->GetComponents()) {
-          if (comp->GetTypeName() == "BulletComponent") {
-              bComp = dynamic_cast<BulletComponent*>(comp.get());
-              break;
-          }
-      }
-      if (!bComp || !bComp->IsActive()) continue;
-
-      for (auto& obj : rootObjects_) {
-          if (!obj || obj == bulletObj || obj == playerObj_) continue;
-          
-          EnemyComponent* enemyComp = nullptr;
-          BossComponent* bossComp = nullptr;
-          for (const auto& comp : obj->GetComponents()) {
-              if (comp->GetTypeName() == "EnemyComponent") {
-                  enemyComp = dynamic_cast<EnemyComponent*>(comp.get());
-              } else if (comp->GetTypeName() == "BossComponent") {
-                  bossComp = dynamic_cast<BossComponent*>(comp.get());
-              }
-          }
-
-          bool isHit = false;
-          if (enemyComp && enemyComp->IsActive()) {
-              Vector3 objPos = obj->GetTransform().translate;
-              Vector3 bulletPos = bulletObj->GetTransform().translate;
-              Vector3 diff = { bulletPos.x - objPos.x, bulletPos.y - objPos.y, bulletPos.z - objPos.z };
-              float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-              float rSum = bComp->GetCollisionRadius() + enemyComp->GetCollisionRadius();
-              if (distSq <= rSum * rSum) {
-                  SpawnHitEffect(objPos);
-                  enemyComp->OnHit();
-                  isHit = true;
-              }
-          } else if (bossComp && bossComp->IsActive()) {
-              Vector3 objPos = obj->GetTransform().translate;
-              Vector3 bulletPos = bulletObj->GetTransform().translate;
-              Vector3 diff = { bulletPos.x - objPos.x, bulletPos.y - objPos.y, bulletPos.z - objPos.z };
-              float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-              float rSum = bComp->GetCollisionRadius() + bossComp->GetCollisionRadius();
-              if (distSq <= rSum * rSum) {
-                  SpawnHitEffect(objPos);
-                  bossComp->TakeDamage(1);
-                  isHit = true;
-                  if (!bossComp->IsActive()) {
-                      phase_ = GamePhase::Clear;
-                      RequestSceneChange(SceneId::Clear);
-                      isTransitioning = true;
-                  }
-              }
-          }
-
-          if (isHit) {
-              bComp->Deactivate();
-              break;
-          }
-      }
-  }
-
-  // 撃破された（IsActive() == false）EnemyComponentまたはBossComponentを持つGameObjectをシーンから削除
-  rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), [](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
-      if (!obj) return true;
-      for (const auto& comp : obj->GetComponents()) {
-          if (comp->GetTypeName() == "EnemyComponent") {
-              auto* enemyComp = dynamic_cast<EnemyComponent*>(comp.get());
-              if (enemyComp && !enemyComp->IsActive()) return true;
-          } else if (comp->GetTypeName() == "BossComponent") {
-              auto* bossComp = dynamic_cast<BossComponent*>(comp.get());
-              if (bossComp && !bossComp->IsActive()) return true;
-          }
-      }
-      return false;
-  }), rootObjects_.end());
-
-  // --- 当たり判定（敵の弾 vs プレイヤー） ---
+  // --- プレイヤーとボスの生存チェック（シーン遷移用） ---
   if (playerObj_) {
-      PlayerComponent* pComp = nullptr;
-      for (const auto& comp : playerObj_->GetComponents()) {
-          if (comp->GetTypeName() == "PlayerComponent") {
-              pComp = dynamic_cast<PlayerComponent*>(comp.get());
+      auto pComp = playerObj_->GetComponent<PlayerComponent>();
+      if (pComp && pComp->IsDead()) {
+          phase_ = GamePhase::GameOver;
+          RequestSceneChange(SceneId::GameOver);
+          isTransitioning = true;
+      }
+  }
+
+  if (phase_ == GamePhase::Boss) {
+      bool bossAlive = false;
+      for (auto& obj : rootObjects_) {
+          if (obj && obj->GetComponent<BossComponent>()) {
+              bossAlive = true;
               break;
           }
       }
-
-      if (pComp) {
-          for (auto& bulletObj : enemyBulletObjs_) {
-              if (!bulletObj) continue;
-              BulletComponent* bComp = nullptr;
-              for (const auto& comp : bulletObj->GetComponents()) {
-                  if (comp->GetTypeName() == "BulletComponent") {
-                      bComp = dynamic_cast<BulletComponent*>(comp.get());
-                      break;
-                  }
-              }
-              if (!bComp || !bComp->IsActive()) continue;
-
-              Vector3 bulletPos = bulletObj->GetTransform().translate;
-              Vector3 playerPos = playerObj_->GetTransform().translate;
-              
-              Vector3 diff = {
-                  bulletPos.x - playerPos.x,
-                  bulletPos.y - playerPos.y,
-                  bulletPos.z - playerPos.z
-              };
-              float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-              
-              float playerRadius = 1.0f; // プレイヤーの当たり判定（仮）
-              float rSum = bComp->GetCollisionRadius() + playerRadius;
-
-              if (distSq <= rSum * rSum) {
-                  // 被弾！
-                  SpawnHitEffect(playerPos);
-                  bComp->Deactivate();
-                  pComp->TakeDamage(1);
-                  if (pComp->IsDead()) {
-                      phase_ = GamePhase::GameOver;
-                      RequestSceneChange(SceneId::GameOver);
-                      isTransitioning = true;
-                  }
-              }
-          }
+      if (!bossAlive) {
+          phase_ = GamePhase::Clear;
+          RequestSceneChange(SceneId::Clear);
+          isTransitioning = true;
       }
   }
 
@@ -451,136 +261,6 @@ void GameScene::Update() {
   hitEffects_.erase(std::remove_if(hitEffects_.begin(), hitEffects_.end(), [](const HitEffect& e) { return !e.isActive; }), hitEffects_.end());
   } // end of if (playMode_ == PlayMode::Play)
 
-#ifdef USE_IMGUI
-    // --- ゲームビューポートウィンドウ ---
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::Begin("Viewport##GameView");
-  ImGui::PopStyleVar();
-  if (!isTransitioning) {
-    ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-    if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
-    if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = Renderer::GetInstance()->GetPostProcessTextureSrv();
-    ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
-    
-    Matrix4x4 viewMat, projMat;
-    if (playMode_ == PlayMode::Edit && editorCamera_) {
-        viewMat = editorCamera_->GetViewMatrix();
-        projMat = editorCamera_->GetProjectionMatrix();
-    } else if (isDebugCamera_ && debugCamera_) {
-        viewMat = debugCamera_->GetViewMatrix();
-        projMat = debugCamera_->GetProjectionMatrix();
-    } else if (gameCamera_) {
-        viewMat = gameCamera_->GetViewMatrix();
-        projMat = gameCamera_->GetProjectionMatrix();
-    } else {
-        viewMat = Renderer::GetInstance()->GetViewMatrix();
-        projMat = Renderer::GetInstance()->GetProjectionMatrix();
-    }
-
-    if (editorUIManager_) {
-        editorUIManager_->HandleViewportDragDrop(rootObjects_, viewMat, projMat);
-    }
-
-    if (railController_) {
-        ImVec2 windowPos = ImGui::GetWindowPos();
-        ImVec2 windowSize = ImGui::GetWindowSize();
-        railController_->HandleMousePicking(viewMat, projMat, windowPos.x, windowPos.y, windowSize.x, windowSize.y);
-        railController_->DrawGizmo(viewMat, projMat, windowPos.x, windowPos.y, windowSize.x, windowSize.y);
-    }
-  }
-  ImGui::End();
-
-    DrawEditorUI();
-
-    ImGui::Begin("GameScene Controls##LeftPanel");
-  ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-  ImGui::Separator();
-  
-  ImGui::SeparatorText("Bullet Controls & Info");
-  ImGui::Text("Active Bullets: %d", (int)bulletObjs_.size());
-  if (!bulletObjs_.empty() && bulletObjs_[0]) {
-      const auto& pos = bulletObjs_[0]->GetTransform().translate;
-      ImGui::Text("Bullet[0] Pos: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
-  }
-  
-  int hp = 0;
-  int maxHp = 0;
-  if (playerObj_) {
-      for (const auto& comp : playerObj_->GetComponents()) {
-          if (comp->GetTypeName() == "PlayerComponent") {
-              if (auto* pComp = dynamic_cast<PlayerComponent*>(comp.get())) {
-                  hp = pComp->GetHp();
-                  maxHp = pComp->GetMaxHp();
-              }
-          }
-      }
-  }
-  ImGui::Text("Player HP: %d / %d", hp, maxHp);
-  
-  ImGui::SeparatorText("Camera Controls");
-  Vector3 eye = gameCamera_->GetEye();
-  Vector3 target = gameCamera_->GetTarget();
-  ImGui::Text("Camera Eye: (%.2f, %.2f, %.2f)", eye.x, eye.y, eye.z);
-  ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
-  ImGui::Text("Rail Progress: %.1f %%", railController_->GetProgress() * 100.0f);
-  
-  // レールカメラのUI描画
-  if (railController_) {
-      railController_->DrawEditorUI(eye);
-  }
-
-  ImGui::Checkbox("Debug Camera Mode", &isDebugCamera_);
-  if (isDebugCamera_) {
-      Vector3 camPos = debugCamera_->GetTranslate();
-      if (ImGui::DragFloat3("Debug Camera Pos", &camPos.x, 0.1f)) {
-          debugCamera_->SetTranslate(camPos);
-      }
-      Vector3 camRot = debugCamera_->GetRotation();
-      if (ImGui::DragFloat3("Debug Camera Rot", &camRot.x, 0.05f)) {
-          debugCamera_->SetRotation(camRot);
-      }
-  }
-  ImGui::Checkbox("Show Rail Debug Line", &showDebugRail_);
-  if (ImGui::Button("Reset Rail Camera")) {
-      railController_->ResetProgress();
-      CameraContext ctx{ 1.0f / 60.0f };
-      gameCamera_->SetContext(ctx);
-      gameCamera_->Update(*services_.input);
-  }
-
-  ImGui::SeparatorText("Post Process");
-  int mode = static_cast<int>(postProcessMode_);
-  if (ImGui::RadioButton("Normal", &mode, static_cast<int>(Renderer::PostProcessMode::Normal))) postProcessMode_ = Renderer::PostProcessMode::Normal;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Grayscale", &mode, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = Renderer::PostProcessMode::Grayscale;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Vignette", &mode, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = Renderer::PostProcessMode::Vignette;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("BoxFilter", &mode, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = Renderer::PostProcessMode::BoxFilter;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("GaussianFilter", &mode, static_cast<int>(Renderer::PostProcessMode::GaussianFilter))) postProcessMode_ = Renderer::PostProcessMode::GaussianFilter;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("LuminanceOutline", &mode, static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::LuminanceBasedOutline;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("DepthOutline", &mode, static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::DepthBasedOutline;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Random", &mode, static_cast<int>(Renderer::PostProcessMode::Random))) postProcessMode_ = Renderer::PostProcessMode::Random;
-
-  if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
-      ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
-      ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
-      ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter) {
-      ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
-      ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
-  }
-
-  ImGui::End();
-#endif
 
   // シーンの自動セーブ
   bool shouldSave = false;
@@ -607,9 +287,6 @@ void GameScene::Draw() {
       renderer->SetCamera(*gameCamera_);
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
-  renderer->SetVignetteParam(vignetteScale_, vignettePow_);
-  renderer->SetBoxFilterParam(boxFilterK_);
-  renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
   renderer->SetRandomParam(time_);
 
   // --- ライトの適用 ---
@@ -675,7 +352,7 @@ void GameScene::Draw() {
   else if (isDebugCamera_) projInverse = Inverse(debugCamera_->GetProjectionMatrix());
   else projInverse = Inverse(gameCamera_->GetProjectionMatrix());
 
-  renderer->EndRenderScene(postProcessMode_, projInverse);
+  renderer->EndRenderScene(projInverse);
 }
 
 #include "AbsoluteEngine/scene/SceneSerializer.h"
@@ -691,4 +368,64 @@ void GameScene::LoadScene() {
     if (editorUIManager_) {
         editorUIManager_->SetSelectedObject(nullptr);
     }
+}
+
+void GameScene::DrawEditorUI() {
+    BaseScene::DrawEditorUI(); // ツールバー等の描画
+
+#ifdef USE_IMGUI
+    if (phase_ != GamePhase::GameOver && railController_) {
+        // [REMOVED] Duplicated ImGui::Begin("Viewport##GameView") which breaks ImGui rendering
+    }
+
+    ImGui::Begin("GameScene Controls##LeftPanel");
+    ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+    ImGui::Separator();
+    
+    int hp = 0;
+    int maxHp = 0;
+    if (playerObj_) {
+        for (const auto& comp : playerObj_->GetComponents()) {
+            if (comp->GetTypeName() == "PlayerComponent") {
+                if (auto* pComp = dynamic_cast<PlayerComponent*>(comp.get())) {
+                    hp = pComp->GetHp();
+                    maxHp = pComp->GetMaxHp();
+                }
+            }
+        }
+    }
+    ImGui::Text("Player HP: %d / %d", hp, maxHp);
+    
+    ImGui::SeparatorText("Camera Controls");
+    Vector3 eye = gameCamera_->GetEye();
+    Vector3 target = gameCamera_->GetTarget();
+    ImGui::Text("Camera Eye: (%.2f, %.2f, %.2f)", eye.x, eye.y, eye.z);
+    ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
+    
+    if (railController_) {
+        ImGui::Text("Rail Progress: %.1f %%", railController_->GetProgress() * 100.0f);
+        railController_->DrawEditorUI(eye);
+    }
+
+    ImGui::Checkbox("Debug Camera Mode", &isDebugCamera_);
+    if (isDebugCamera_) {
+        Vector3 camPos = debugCamera_->GetTranslate();
+        if (ImGui::DragFloat3("Debug Camera Pos", &camPos.x, 0.1f)) {
+            debugCamera_->SetTranslate(camPos);
+        }
+        Vector3 camRot = debugCamera_->GetRotation();
+        if (ImGui::DragFloat3("Debug Camera Rot", &camRot.x, 0.05f)) {
+            debugCamera_->SetRotation(camRot);
+        }
+    }
+    ImGui::Checkbox("Show Rail Debug Line", &showDebugRail_);
+    if (ImGui::Button("Reset Rail Camera") && railController_) {
+        railController_->ResetProgress();
+        CameraContext ctx{ 1.0f / 60.0f };
+        gameCamera_->SetContext(ctx);
+        if (services_.input) gameCamera_->Update(*services_.input);
+    }
+
+    ImGui::End();
+#endif
 }

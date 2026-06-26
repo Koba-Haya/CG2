@@ -5,7 +5,7 @@
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/DissolveComponent.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
-#include "Bullet/Bullet.h"
+#include "../actor/Bullet/BulletComponent.h"
 #include "component/enemy/EnemyComponent.h"
 #include "DebugCamera.h"
 #include "AbsoluteEngine/editor/Command.h"
@@ -135,11 +135,11 @@ void DevScene::Update() {
   if (hitDistortionTimer_ < hitDistortionDuration_) {
       hitDistortionTimer_ += deltaTime;
       float t = 1.0f - (hitDistortionTimer_ / hitDistortionDuration_);
-      radialBlurWidth_ = hitDistortionIntensity_ * t;
-      postProcessMode_ = Renderer::PostProcessMode::RadialBlur;
+      Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, hitDistortionIntensity_ * t);
+      Renderer::GetInstance()->SetPostProcessMode(Renderer::PostProcessMode::RadialBlur);
   } else if (hitDistortionDuration_ > 0.0f) {
-      radialBlurWidth_ = 0.0f;
-      postProcessMode_ = Renderer::PostProcessMode::Normal;
+      Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, 0.0f);
+      Renderer::GetInstance()->SetPostProcessMode(Renderer::PostProcessMode::Normal);
       hitDistortionDuration_ = 0.0f;
   }
 
@@ -354,37 +354,6 @@ void DevScene::Update() {
   UpdateEditor();
 
 #ifdef USE_IMGUI
-  // --- ゲームビューポートウィンドウ ---
-  // オフスクリーンレンダリングの結果を ImGui ウィンドウ内に表示する
-  // ウィンドウをドッキングして中央に配置することでゲーム画面になる
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-  ImGui::Begin("Viewport##GameView");
-  ImGui::PopStyleVar();
-  // if (postProcessTexture_) { のチェックを外す、もしくはRendererにテクスチャがあるか確認するが
-  // 今回はRenderer内部で常に作られる前提
-  {
-    ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-    if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
-    if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = Renderer::GetInstance()->GetPostProcessTextureSrv();
-    ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
-    
-    // Viewportへのドラッグ＆ドロップ受付（画像へのドロップ）
-    if (editorUIManager_) {
-        Matrix4x4 viewMat, projMat;
-        if (editorCamera_) {
-            viewMat = editorCamera_->GetViewMatrix();
-            projMat = editorCamera_->GetProjectionMatrix();
-        } else {
-            viewMat = Renderer::GetInstance()->GetViewMatrix();
-            projMat = Renderer::GetInstance()->GetProjectionMatrix();
-        }
-        editorUIManager_->HandleViewportDragDrop(rootObjects_, viewMat, projMat);
-    }
-  }
-
-  ImGui::End();
-
   // --- 左パネル：ライト設定（UIから削除し、インスペクター側で管理） ---
 
   // --- 右パネル：エフェクトテスト ---
@@ -437,57 +406,8 @@ void DevScene::Update() {
   }
   ImGui::End();
 
-  // --- ポストプロセスタブ ---
-  ImGui::Begin("PostProcess##Panel");
-  ImGui::SeparatorText("PostProcess Settings");
-  
-  int ppMode = static_cast<int>(postProcessMode_);
-  const char* postProcessItems[] = {
-      "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter", 
-      "GaussianFilter", "LuminanceOutline", "DepthOutline", "RadialBlur", "Dissolve", "Random", "HSV"
-  };
-  
-  if (ImGui::Combo("Effect Mode", &ppMode, postProcessItems, IM_ARRAYSIZE(postProcessItems))) {
-      postProcessMode_ = static_cast<Renderer::PostProcessMode>(ppMode);
-  }
 
-  ImGui::Spacing();
-  ImGui::Separator();
-  ImGui::Spacing();
-
-  if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
-      ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
-      ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
-      ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter) {
-      ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
-      ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::RadialBlur) {
-      ImGui::SliderFloat2("Center", &radialBlurCenter_.x, 0.0f, 1.0f);
-      ImGui::SliderFloat("Blur Width", &radialBlurWidth_, 0.0f, 0.1f);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::Dissolve) {
-      ImGui::SliderFloat("Threshold", &dissolveThreshold_, 0.0f, 1.0f);
-      ImGui::SliderFloat("Edge Range", &dissolveEdgeRange_, 0.0f, 0.1f);
-      ImGui::ColorEdit3("Edge Color", &dissolveEdgeColor_.x);
-      ImGui::ColorEdit3("Mask Color", &dissolveMaskColor_.x);
-  }
-  // else if (postProcessMode_ == Renderer::PostProcessMode::HSV) {
-  //     ImGui::SliderFloat("Hue", &hsvHue_, -1.0f, 1.0f);
-  //     ImGui::SliderFloat("Saturation", &hsvSaturation_, -1.0f, 1.0f);
-  //     ImGui::SliderFloat("Value", &hsvValue_, -1.0f, 1.0f);
-  // }
-
-  // レンダラーにポストエフェクトのパラメータを渡す
-  Renderer::GetInstance()->SetVignetteParam(vignetteScale_, vignettePow_);
-  Renderer::GetInstance()->SetBoxFilterParam(boxFilterK_);
-  Renderer::GetInstance()->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
-  Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, radialBlurWidth_);
-  Renderer::GetInstance()->SetDissolveParam(dissolveThreshold_, dissolveEdgeRange_, dissolveEdgeColor_, dissolveMaskColor_);
   Renderer::GetInstance()->SetRandomParam(time_);
-  // Renderer::GetInstance()->SetHSVParam(hsvHue_, hsvSaturation_, hsvValue_);
-  
-  ImGui::End();
 
   // --- ツールバー・エディタUIの描画（BaseScene側で行う） ---
   DrawEditorUI();
@@ -663,7 +583,6 @@ void DevScene::Draw() {
     renderer->SetCamera(*editorCamera_);
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
-  renderer->SetVignetteParam(vignetteScale_, vignettePow_);
   // --- ライトの適用 ---
   ApplyEditorLightsToRenderer(renderer);
 
@@ -687,8 +606,7 @@ void DevScene::Draw() {
   // --- ポストプロセスの適用 ---
   Matrix4x4 projInverse;
   if (editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
-
-  renderer->EndRenderScene(postProcessMode_, projInverse);
+  renderer->EndRenderScene(projInverse);
 }
 
 void DevScene::InitLogging_() {

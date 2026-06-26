@@ -35,4 +35,5 @@ private:
 
   int hp_ = 5;
   int maxHp_ = 5;
+  float shootCooldown_ = 0.0f;
 };

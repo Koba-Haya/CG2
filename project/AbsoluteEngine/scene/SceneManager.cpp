@@ -64,6 +64,12 @@ void SceneManager::Draw() {
   }
 }
 
+void SceneManager::DrawEditorUI() {
+  if (current_) {
+    current_->DrawEditorUI();
+  }
+}
+
 void SceneManager::Finalize() {
   if (current_) {
     current_->Finalize();

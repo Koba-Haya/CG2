@@ -16,8 +16,11 @@
 #include <imgui.h>
 #endif
 
+BaseScene* BaseScene::activeScene_ = nullptr;
+
 void BaseScene::Initialize(const SceneServices &services) {
     services_ = services;
+    activeScene_ = this;
 
     // カメラの初期化（ゲーム中も使用するためマクロ外で生成）
     editorCamera_ = std::make_unique<AbsoluteEngine::EditorCamera>();
@@ -50,11 +53,20 @@ void BaseScene::UpdateEditor() {
     // プレイモード中のオブジェクトの更新
     if (playMode_ == PlayMode::Play) {
         const float deltaTime = 1.0f / 60.0f; // 共通のdeltaTimeを使う想定
-        for (auto& obj : rootObjects_) {
-            if (obj) {
+        
+        // 追加されたオブジェクトでループが壊れないようインデックスで回す
+        size_t count = rootObjects_.size();
+        for (size_t i = 0; i < count; ++i) {
+            auto obj = rootObjects_[i];
+            if (obj && obj->IsActive()) {
                 obj->Update(deltaTime);
             }
         }
+        
+        // ガベージコレクション（IsActive() == false なオブジェクトを削除）
+        rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), [](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
+            return !obj || !obj->IsActive();
+        }), rootObjects_.end());
     }
 }
 

@@ -9,6 +9,7 @@
 #include "../scene/LightNodeComponent.h"
 #include "../scene/ModelComponent.h"
 #include "../scene/DissolveComponent.h"
+#include "../graphics/Renderer.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include "../../externals/ImGuizmo/ImGuizmo.h"
@@ -30,7 +31,7 @@ void EditorUIManager::DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjec
   DrawPrefabsBrowser(rootObjects);
   DrawHierarchy(rootObjects);
   DrawInspector();
-  DrawGizmo(rootObjects, viewMatrix, projectionMatrix);
+  DrawViewport(rootObjects, viewMatrix, projectionMatrix);
   HandleShortcuts(rootObjects, camera);
 #endif
 }
@@ -227,13 +228,27 @@ void EditorUIManager::HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& 
   }
 }
 
-void EditorUIManager::DrawGizmo(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+void EditorUIManager::DrawViewport(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
   // ImGuizmoの設定
   ImGuizmo::SetOrthographic(false);
   ImGuizmo::BeginFrame();
 
   // "Viewport##GameView" ウィンドウ
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::Begin("Viewport##GameView");
+  ImGui::PopStyleVar();
+
+  ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+  if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
+  if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
+
+  auto* renderer = Renderer::GetInstance();
+  D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = renderer->GetPostProcessTextureSrv();
+  if (srvHandle.ptr != 0) {
+      ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
+  }
+
+  HandleViewportDragDrop(rootObjects, viewMatrix, projectionMatrix);
 
   // Viewportウィンドウ内でのマウスピッキング処理（BeginとEndの間で行うことでHoveredが正しくとれる）
   HandleMousePicking(rootObjects, viewMatrix, projectionMatrix);
@@ -1057,7 +1072,55 @@ void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObj
     }
     ImGui::EndDragDropTarget();
   }
-#endif
 }
+
+void EditorUIManager::DrawPostProcessSettings() {
+    ImGui::Begin("Post Process Settings");
+    
+    if (ImGui::RadioButton("Normal", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Normal))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Normal);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Grayscale", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Grayscale);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Sepia", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Sepia);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Vignette", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Vignette);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("BoxFilter", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::BoxFilter);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("GaussianFilter", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::GaussianFilter))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::GaussianFilter);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("LuminanceOutline", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("DepthOutline", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("RadialBlur", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::RadialBlur))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::RadialBlur);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Dissolve", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Dissolve))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Dissolve);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Random", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Random))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Random);
+
+    auto* renderer = Renderer::GetInstance();
+    if (postProcessMode_ == static_cast<int>(Renderer::PostProcessMode::Vignette)) {
+        ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
+        ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
+        renderer->SetVignetteParam(vignetteScale_, vignettePow_);
+    } else if (postProcessMode_ == static_cast<int>(Renderer::PostProcessMode::BoxFilter)) {
+        ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
+        renderer->SetBoxFilterParam(boxFilterK_);
+    } else if (postProcessMode_ == static_cast<int>(Renderer::PostProcessMode::GaussianFilter)) {
+        ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
+        ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
+        renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1, 1});
+    } else if (postProcessMode_ == static_cast<int>(Renderer::PostProcessMode::Dissolve)) {
+        ImGui::SliderFloat("Threshold", &dissolveThreshold_, 0.0f, 1.0f);
+        ImGui::ColorEdit3("Edge Color", &dissolveEdgeColor_.x);
+        ImGui::SliderFloat("Edge Range", &dissolveEdgeRange_, 0.01f, 0.5f);
+        renderer->SetDissolveParam(dissolveThreshold_, dissolveEdgeRange_, dissolveEdgeColor_, {1, 1, 1});
+    }
+    
+    ImGui::End();
+}
+
+#endif
 
 } // namespace AbsoluteEngine

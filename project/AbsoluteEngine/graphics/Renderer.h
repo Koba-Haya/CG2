@@ -164,7 +164,10 @@ public:
   // --- 高レベル レンダリングAPI ---
   void InitializePostProcess(uint32_t width, uint32_t height);
   void BeginRenderScene();
-  void EndRenderScene(PostProcessMode mode, const Matrix4x4& projInverse);
+  void EndRenderScene(const Matrix4x4& projInverse);
+  
+  PostProcessMode GetPostProcessMode() const { return postProcessMode_; }
+  void SetPostProcessMode(PostProcessMode mode) { postProcessMode_ = mode; }
   D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessTextureSrv() const {
       if (postProcessTexture_) return postProcessTexture_->GetSrvGpuHandle();
       return {};
@@ -251,6 +254,8 @@ private:
   std::unique_ptr<UnifiedPipeline> pipelineDepthBasedOutline_;
   std::unique_ptr<UnifiedPipeline> radialBlurPipeline_;
   std::unique_ptr<UnifiedPipeline> randomPipeline_;
+
+  PostProcessMode postProcessMode_ = PostProcessMode::Normal;
 
   struct alignas(16) VignetteParam {
     float scale;
