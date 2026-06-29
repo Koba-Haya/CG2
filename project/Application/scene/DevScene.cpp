@@ -87,20 +87,17 @@ void DevScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
 
-  // --- エディタUIの初期化とテストオブジェクト追加 ---
-
-  
-  auto obj1 = std::make_shared<AbsoluteEngine::GameObject>("Player");
-  auto modelComp1 = std::make_unique<AbsoluteEngine::ModelComponent>();
-  modelComp1->LoadModel("resources/app/cube/cube.obj");
-  obj1->AddComponent(std::move(modelComp1));
-  obj1->GetTransform().translate = { 0.0f, -1.1f, -15.0f };
-  
-  auto obj3 = std::make_shared<AbsoluteEngine::GameObject>("Weapon");
-  obj3->GetTransform().translate = { 1.0f, 0.0f, 0.0f };
-  obj1->AddChild(obj3); // Playerの子にする
-  
-  rootObjects_.push_back(obj1);
+  // --- エディタUIの初期化とオートロード ---
+  std::string saveDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/";
+  if (!AbsoluteEngine::SceneSerializer::Deserialize(saveDir + "scene.json", rootObjects_)) {
+      // ファイルが無い場合はデフォルトの初期配置
+      auto obj1 = std::make_shared<AbsoluteEngine::GameObject>("Player");
+      auto modelComp1 = std::make_unique<AbsoluteEngine::ModelComponent>();
+      modelComp1->LoadModel("resources/app/cube/cube.obj");
+      obj1->AddComponent(std::move(modelComp1));
+      obj1->GetTransform().translate = { 0.0f, -1.1f, -15.0f };
+      rootObjects_.push_back(obj1);
+  }
 
 #ifndef USE_IMGUI
   playMode_ = PlayMode::Play;

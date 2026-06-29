@@ -3,6 +3,12 @@
 #include <string>
 #include <map>
 #include <functional>
+#include <memory>
+
+// 基本コンポーネントのインクルード
+#include "ModelComponent.h"
+#include "ColliderComponent.h"
+#include "LightNodeComponent.h"
 
 namespace AbsoluteEngine {
 
@@ -36,7 +42,12 @@ public:
     }
 
 private:
-    ComponentFactory() = default;
+    ComponentFactory() {
+        // デフォルトの基本コンポーネントを登録
+        Register("ModelComponent", []() { return std::make_unique<ModelComponent>(); });
+        Register("ColliderComponent", []() { return std::make_unique<ColliderComponent>(); });
+        Register("LightNodeComponent", []() { return std::make_unique<LightNodeComponent>(); });
+    }
     std::map<std::string, CreatorFunc> creators_;
 };
 

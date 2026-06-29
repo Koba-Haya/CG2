@@ -847,6 +847,7 @@ void EditorUIManager::DrawInspector() {
         ImGui::Text("No LightNodeComponent attached.");
         if (ImGui::Button("Add LightNodeComponent")) {
           obj->AddComponent(std::make_unique<LightNodeComponent>());
+          SetSceneModified();
         }
       }
     }
@@ -856,23 +857,26 @@ void EditorUIManager::DrawInspector() {
       auto dissolveComp = obj->GetComponent<DissolveComponent>();
       if (dissolveComp) {
         auto& dissolve = *dissolveComp;
-        ImGui::Checkbox("Enable Dissolve", &dissolve.enable);
+        if (ImGui::Checkbox("Enable Dissolve", &dissolve.enable)) SetSceneModified();
         if (dissolve.enable) {
-          ImGui::SliderFloat("Threshold", &dissolve.threshold, 0.0f, 1.0f);
-          ImGui::SliderFloat("Edge Range", &dissolve.edgeRange, 0.0f, 0.1f);
+          if (ImGui::SliderFloat("Threshold", &dissolve.threshold, 0.0f, 1.0f)) SetSceneModified();
+          if (ImGui::SliderFloat("Edge Range", &dissolve.edgeRange, 0.0f, 0.1f)) SetSceneModified();
           float edgeCol[3] = { dissolve.edgeColor.x, dissolve.edgeColor.y, dissolve.edgeColor.z };
           if (ImGui::ColorEdit3("Edge Color", edgeCol)) {
             dissolve.edgeColor = { edgeCol[0], edgeCol[1], edgeCol[2] };
+            SetSceneModified();
           }
           float maskCol[3] = { dissolve.maskColor.x, dissolve.maskColor.y, dissolve.maskColor.z };
           if (ImGui::ColorEdit3("Mask Color", maskCol)) {
             dissolve.maskColor = { maskCol[0], maskCol[1], maskCol[2] };
+            SetSceneModified();
           }
         }
       } else {
         ImGui::Text("No DissolveComponent attached.");
         if (ImGui::Button("Add DissolveComponent")) {
           obj->AddComponent(std::make_unique<DissolveComponent>());
+          SetSceneModified();
         }
       }
     }
@@ -887,21 +891,23 @@ void EditorUIManager::DrawInspector() {
         int currentType = static_cast<int>(collider.type);
         if (ImGui::Combo("Type", &currentType, types, IM_ARRAYSIZE(types))) {
           collider.type = static_cast<ColliderComponent::Type>(currentType);
+          SetSceneModified();
         }
 
         if (collider.type != ColliderComponent::Type::None) {
-          ImGui::DragFloat3("Center Offset", &collider.centerOffset.x, 0.1f);
+          if (ImGui::DragFloat3("Center Offset", &collider.centerOffset.x, 0.1f)) SetSceneModified();
 
           if (collider.type == ColliderComponent::Type::Sphere) {
-            ImGui::DragFloat("Radius", &collider.radius, 0.1f, 0.0f);
+            if (ImGui::DragFloat("Radius", &collider.radius, 0.1f, 0.0f)) SetSceneModified();
           } else if (collider.type == ColliderComponent::Type::AABB) {
-            ImGui::DragFloat3("Size (Half Extents)", &collider.size.x, 0.1f, 0.0f);
+            if (ImGui::DragFloat3("Size (Half Extents)", &collider.size.x, 0.1f, 0.0f)) SetSceneModified();
           }
         }
       } else {
         ImGui::Text("No ColliderComponent attached.");
         if (ImGui::Button("Add ColliderComponent")) {
           obj->AddComponent(std::make_unique<ColliderComponent>());
+          SetSceneModified();
         }
       }
     }
@@ -941,6 +947,7 @@ void EditorUIManager::DrawInspector() {
         std::string btnLabel = "Remove##" + std::to_string(reinterpret_cast<uintptr_t>(comp.get()));
         if (ImGui::Button(btnLabel.c_str())) {
             componentToRemove = comp.get();
+            SetSceneModified();
         }
         // 今後はここで comp->DrawInspector() などを呼んでパラメータ編集できるようにする
       }
@@ -964,6 +971,7 @@ void EditorUIManager::DrawInspector() {
               auto comp = ComponentFactory::GetInstance().Create(name);
               if (comp) {
                 obj->AddComponent(std::move(comp));
+                SetSceneModified();
               }
             }
           }

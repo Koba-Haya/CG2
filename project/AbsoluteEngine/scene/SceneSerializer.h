@@ -10,8 +10,8 @@ namespace AbsoluteEngine {
 class SceneSerializer {
 public:
   // 現在のシーンツリーを JSON 形式で保存
-  static bool Serialize(const std::string& filepath, const std::vector<std::shared_ptr<GameObject>>& rootObjects, const RailCameraController* railCamera = nullptr);
-  static std::string SerializeToString(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const RailCameraController* railCamera = nullptr);
+  static bool Serialize(const std::string& filepath, const std::vector<std::shared_ptr<GameObject>>& rootObjects, const RailCameraController* railCamera = nullptr, bool forceFullSerialize = false);
+  static std::string SerializeToString(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const RailCameraController* railCamera = nullptr, bool forceFullSerialize = false);
 
   // JSON からシーンツリーを読み込み
   static bool Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects, RailCameraController* outRailCamera = nullptr);

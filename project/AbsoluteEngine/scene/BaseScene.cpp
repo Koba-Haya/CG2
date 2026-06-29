@@ -77,7 +77,7 @@ void BaseScene::DrawEditorUI() {
     
     if (playMode_ == PlayMode::Edit) {
         if (ImGui::Button("Play")) {
-            backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_);
+            backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, nullptr, true);
             playMode_ = PlayMode::Play;
         }
     } else if (playMode_ == PlayMode::Play) {
@@ -105,10 +105,17 @@ void BaseScene::DrawEditorUI() {
     }
     ImGui::End();
 
-    // エディタUIの描画（Hierarchy, Inspector, Gizmo）
+    // エディタUIの描画
     if (editorUIManager_ && editorCamera_) {
         auto* edCam = dynamic_cast<AbsoluteEngine::EditorCamera*>(editorCamera_.get());
         editorUIManager_->DrawUI(rootObjects_, editorCamera_->GetViewMatrix(), editorCamera_->GetProjectionMatrix(), edCam);
+
+        // オートセーブの実行
+        if (editorUIManager_->ConsumeSceneModifiedFlag()) {
+            std::string saveDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/";
+            std::filesystem::create_directories(saveDir);
+            AbsoluteEngine::SceneSerializer::Serialize(saveDir + "scene.json", rootObjects_);
+        }
     }
 #endif
 }

@@ -1,78 +1,30 @@
 {
-    "railCamera": {
-        "waypoints": [
-            {
-                "x": 0.0,
-                "y": 5.0,
-                "z": -50.0
-            },
-            {
-                "x": 0.0,
-                "y": 3.0,
-                "z": 0.0
-            },
-            {
-                "x": 20.0,
-                "y": 8.0,
-                "z": 70.0
-            },
-            {
-                "x": -15.0,
-                "y": 2.0,
-                "z": 140.0
-            },
-            {
-                "x": 0.0,
-                "y": 5.0,
-                "z": 220.0
-            }
-        ]
-    },
     "rootObjects": [
         {
             "children": [],
-            "collider": {
-                "centerOffset": {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0
-                },
-                "radius": 1.0,
-                "size": {
-                    "x": 1.0,
-                    "y": 1.0,
-                    "z": 1.0
-                },
-                "type": 1
-            },
             "components": [
                 {
-                    "type": "ColliderComponent"
-                },
-                {
+                    "color": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
+                    "coneAngleDeg": 30.0,
+                    "decay": 2.0,
+                    "distance": 10.0,
+                    "intensity": 1.0,
+                    "lightType": 1,
+                    "radius": 10.0,
                     "type": "LightNodeComponent"
                 }
             ],
-            "light": {
-                "color": {
-                    "x": 1.0,
-                    "y": 1.0,
-                    "z": 1.0
-                },
-                "coneAngleDeg": 30.0,
-                "decay": 2.0,
-                "distance": 10.0,
-                "intensity": 1.0,
-                "radius": 10.0,
-                "type": 1
-            },
             "name": "Directional Light",
             "tag": "Untagged",
             "transform": {
                 "rotate": {
-                    "x": 0.5,
-                    "y": 3.0,
-                    "z": 0.0
+                    "x": 1.0,
+                    "y": 2.5,
+                    "z": 0.05000000074505806
                 },
                 "scale": {
                     "x": 1.0,
@@ -81,141 +33,41 @@
                 },
                 "translate": {
                     "x": 0.0,
-                    "y": 0.0,
-                    "z": -10.0
+                    "y": 1.7000000476837158,
+                    "z": -20.100000381469727
                 }
             }
         },
         {
             "children": [],
-            "collider": {
-                "centerOffset": {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0
-                },
-                "radius": 1.0,
-                "size": {
-                    "x": 1.0,
-                    "y": 1.0,
-                    "z": 1.0
-                },
-                "type": 1
-            },
             "components": [
                 {
-                    "type": "ColliderComponent"
-                },
-                {
-                    "type": "LightNodeComponent"
-                }
-            ],
-            "light": {
-                "color": {
-                    "x": 1.0,
-                    "y": 1.0,
-                    "z": 1.0
-                },
-                "coneAngleDeg": 30.0,
-                "decay": 2.0,
-                "distance": 10.0,
-                "intensity": 1.0,
-                "radius": 10.0,
-                "type": 2
-            },
-            "name": "Point Light",
-            "tag": "Untagged",
-            "transform": {
-                "rotate": {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0
-                },
-                "scale": {
-                    "x": 1.0,
-                    "y": 1.0,
-                    "z": 1.0
-                },
-                "translate": {
-                    "x": 0.0,
-                    "y": 2.0,
-                    "z": -2.0
-                }
-            }
-        },
-        {
-            "children": [
-                {
-                    "children": [],
-                    "collider": {
-                        "centerOffset": {
-                            "x": 0.0,
-                            "y": 0.0,
-                            "z": 0.0
-                        },
-                        "radius": 1.0,
-                        "size": {
-                            "x": 1.0,
-                            "y": 1.0,
-                            "z": 1.0
-                        },
-                        "type": 1
-                    },
-                    "components": [
-                        {
-                            "type": "ColliderComponent"
-                        }
-                    ],
-                    "name": "Weapon",
-                    "tag": "Untagged",
-                    "transform": {
-                        "rotate": {
-                            "x": 0.0,
-                            "y": 0.0,
-                            "z": 0.0
-                        },
-                        "scale": {
-                            "x": 1.0,
-                            "y": 1.0,
-                            "z": 1.0
-                        },
-                        "translate": {
-                            "x": 1.0,
-                            "y": 0.0,
-                            "z": 0.0
-                        }
-                    }
-                }
-            ],
-            "collider": {
-                "centerOffset": {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0
-                },
-                "radius": 1.0,
-                "size": {
-                    "x": 1.0,
-                    "y": 1.0,
-                    "z": 1.0
-                },
-                "type": 1
-            },
-            "components": [
-                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/player/player.obj",
+                    "texturePath": "resources/player/player.png",
                     "type": "ModelComponent"
                 },
                 {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
                     "type": "ColliderComponent"
                 },
                 {
                     "type": "PlayerComponent"
                 }
             ],
-            "modelPath": "resources/player/player.obj",
             "name": "Player",
             "tag": "Untagged",
-            "texturePath": "resources/player/player.png",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -235,6 +87,38 @@
             }
         },
         {
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
             "transform": {
                 "rotate": {
@@ -256,25 +140,26 @@
         },
         {
             "children": [],
-            "collider": {
-                "centerOffset": {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0
-                },
-                "radius": 1.0,
-                "size": {
-                    "x": 1.0,
-                    "y": 1.0,
-                    "z": 1.0
-                },
-                "type": 1
-            },
             "components": [
                 {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
                     "type": "ModelComponent"
                 },
                 {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
                     "type": "ColliderComponent"
                 },
                 {
@@ -287,10 +172,8 @@
                     "type": "EnemyShootComponent"
                 }
             ],
-            "modelPath": "resources/cube/cube.obj",
             "name": "Enemy",
             "tag": "Untagged",
-            "texturePath": "",
             "transform": {
                 "rotate": {
                     "x": 0.0,
