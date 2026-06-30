@@ -5,8 +5,9 @@
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/DissolveComponent.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
+#include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "../actor/Bullet/BulletComponent.h"
-#include "component/enemy/EnemyComponent.h"
+#include "Enemy/EnemyComponent.h"
 #include "DebugCamera.h"
 #include "AbsoluteEngine/editor/Command.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
@@ -168,6 +169,12 @@ void DevScene::Update() {
               float rY = ((rand() % 100) / 10.0f) - 5.0f;
               float rZ = ((rand() % 200) / 10.0f) + 5.0f;
               newEnemy->GetTransform().translate = { rX, rY, rZ };
+              newEnemy->SetTag("Enemy");
+                
+              auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
+              colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+              colliderComp->radius = 2.0f;
+              newEnemy->AddComponent(std::move(colliderComp));
               
               newEnemy->AddComponent(std::make_unique<EnemyComponent>());
               rootObjects_.push_back(newEnemy);

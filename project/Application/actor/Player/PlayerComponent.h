@@ -17,6 +17,7 @@ public:
 
   void Initialize();
   void Update(float deltaTime) override;
+  void OnCollision(AbsoluteEngine::GameObject* other) override;
 
   std::string GetTypeName() const override { return "PlayerComponent"; }
 

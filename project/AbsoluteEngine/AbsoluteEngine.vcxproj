@@ -166,6 +166,7 @@
     <ClCompile Include="math\Method.cpp" />
     <ClCompile Include="math\Spline.cpp" />
     <ClCompile Include="scene\BaseScene.cpp" />
+    <ClCompile Include="scene\CollisionManager.cpp" />
     <ClCompile Include="scene\GameObject.cpp" />
     <ClCompile Include="scene\ColliderComponent.cpp" />
     <ClCompile Include="scene\LightNodeComponent.cpp" />
@@ -233,6 +234,7 @@
     <ClInclude Include="math\Method.h" />
     <ClInclude Include="math\Spline.h" />
     <ClInclude Include="scene\BaseScene.h" />
+    <ClInclude Include="scene\CollisionManager.h" />
     <ClInclude Include="scene\GameObject.h" />
     <ClInclude Include="scene\ColliderComponent.h" />
     <ClInclude Include="scene\LightNodeComponent.h" />

@@ -8,7 +8,7 @@
 #include "Renderer.h"
 #include "../actor/Player/PlayerComponent.h"
 #include "../actor/Bullet/BulletComponent.h"
-#include "../component/enemy/EnemyShootComponent.h"
+#include "../actor/Enemy/EnemyShootComponent.h"
 #include <memory>
 #include <vector>
 

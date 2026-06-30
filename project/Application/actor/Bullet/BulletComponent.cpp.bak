@@ -1,9 +1,9 @@
 #include "BulletComponent.h"
 
 #include "AbsoluteEngine/scene/BaseScene.h"
-#include "../Enemy/EnemyComponent.h"
-#include "../Enemy/BossComponent.h"
-#include "Application/actor/Player/PlayerComponent.h"
+#include "../../component/enemy/EnemyComponent.h"
+#include "../../component/enemy/BossComponent.h"
+#include "../../actor/Player/PlayerComponent.h"
 
 void BulletComponent::Initialize(const Vector3 &vel) {
   velocity_ = vel;

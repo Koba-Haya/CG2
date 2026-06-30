@@ -8,6 +8,7 @@
 #include "AbsoluteEngine/editor/EditorUIManager.h"
 #include "AbsoluteEngine/editor/EditorCamera.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
+#include "CollisionManager.h"
 #include "GameObject.h"
 #include "Input.h"
 #include "Renderer.h"
@@ -63,6 +64,8 @@ void BaseScene::UpdateEditor() {
             }
         }
         
+        AbsoluteEngine::CollisionManager::GetInstance().Update(rootObjects_);
+
         // ガベージコレクション（IsActive() == false なオブジェクトを削除）
         rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), [](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
             return !obj || !obj->IsActive();

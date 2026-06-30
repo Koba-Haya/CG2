@@ -5,6 +5,7 @@
 #include <cmath>
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
+#include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "../Bullet/BulletComponent.h"
 
 void PlayerComponent::Initialize() {
@@ -68,11 +69,17 @@ void PlayerComponent::Update(float deltaTime) {
 
       auto scene = BaseScene::GetActiveScene();
       if (scene) {
-          auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("Bullet");
+          auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("PlayerBullet");
+          bulletObj->SetTag("PlayerBullet");
           
           auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
           bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
           bulletObj->AddComponent(std::move(bulletModelComp));
+          
+          auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
+          colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+          colliderComp->radius = 0.5f;
+          bulletObj->AddComponent(std::move(colliderComp));
           
           bulletObj->GetTransform().translate = t.translate;
           
@@ -88,11 +95,18 @@ void PlayerComponent::Update(float deltaTime) {
 
 void PlayerComponent::TakeDamage(int damage) {
   hp_ -= damage;
-  if (hp_ < 0) {
-    hp_ = 0;
-  }
+  if (hp_ < 0) hp_ = 0;
 }
 
 bool PlayerComponent::IsDead() const {
   return hp_ <= 0;
+}
+
+void PlayerComponent::OnCollision(AbsoluteEngine::GameObject* other) {
+    if (IsDead()) return;
+
+    if (other->GetName().find("Enemy") != std::string::npos || other->GetTag() == "Enemy" || 
+        other->GetName().find("Boss") != std::string::npos || other->GetTag() == "Boss") {
+        TakeDamage(1);
+    }
 }

@@ -87,6 +87,7 @@
             }
         },
         {
+            "children": [],
             "components": [
                 {
                     "environmentCoefficient": 0.0,
@@ -113,13 +114,11 @@
                     "type": "EnemyComponent"
                 },
                 {
-                    "type": "StraightMoveComponent"
-                },
-                {
                     "type": "EnemyShootComponent"
                 }
             ],
-            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "name": "Enemy",
+            "tag": "Untagged",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -132,9 +131,9 @@
                     "z": 1.0
                 },
                 "translate": {
-                    "x": 1.8378509283065796,
-                    "y": 2.1828391551971436,
-                    "z": 20.0
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 40.0
                 }
             }
         },
@@ -166,9 +165,6 @@
                     "type": "EnemyComponent"
                 },
                 {
-                    "type": "StraightMoveComponent"
-                },
-                {
                     "type": "EnemyShootComponent"
                 }
             ],
@@ -186,9 +182,9 @@
                     "z": 1.0
                 },
                 "translate": {
-                    "x": -0.7803777456283569,
-                    "y": 2.1828391551971436,
-                    "z": 20.0
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 20.000001907348633
                 }
             }
         }

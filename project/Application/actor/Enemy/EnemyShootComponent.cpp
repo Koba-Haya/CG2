@@ -1,6 +1,7 @@
 #include "EnemyShootComponent.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
+#include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Bullet/BulletComponent.h"
 #include "../../actor/Player/PlayerComponent.h"
@@ -35,9 +36,16 @@ void EnemyShootComponent::Update(float deltaTime) {
             Vector3 vel = { dir.x * 20.0f, dir.y * 20.0f, dir.z * 20.0f };
             
             auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("EnemyBullet");
+            bulletObj->SetTag("EnemyBullet");
             auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
             bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
             bulletObj->AddComponent(std::move(bulletModelComp));
+            
+            auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
+            colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+            colliderComp->radius = 0.5f;
+            bulletObj->AddComponent(std::move(colliderComp));
+            
             bulletObj->GetTransform().translate = spawnPos;
             
             auto bulletComp = std::make_unique<BulletComponent>();

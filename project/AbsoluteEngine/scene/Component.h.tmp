@@ -13,7 +13,6 @@ public:
 
     virtual void Update(float deltaTime) {}
     virtual void Draw() {}
-    virtual void OnCollision(GameObject* other) {}
     
     // コンポーネントの種類名（ファクトリやシリアライズ用）
     virtual std::string GetTypeName() const = 0;

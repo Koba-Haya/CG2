@@ -18,13 +18,14 @@
 #endif
 #include "AbsoluteEngine/scene/ComponentFactory.h"
 #include "AbsoluteEngine/editor/EditorUIManager.h"
-#include "../component/enemy/StraightMoveComponent.h"
-#include "../component/enemy/EnemyComponent.h"
-#include "../component/enemy/EnemyShootComponent.h"
-#include "../component/enemy/BossComponent.h"
+#include "../actor/Enemy/StraightMoveComponent.h"
+#include "../actor/Enemy/EnemyComponent.h"
+#include "../actor/Enemy/EnemyShootComponent.h"
+#include "../actor/Enemy/BossComponent.h"
 #include "SceneIds.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
+#include "AbsoluteEngine/scene/ColliderComponent.h"
 
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
@@ -220,6 +221,13 @@ void GameScene::Update() {
       bossObj->AddComponent(std::move(bossModelComp));
       bossObj->AddComponent(std::make_unique<BossComponent>());
       bossObj->AddComponent(std::make_unique<EnemyShootComponent>());
+
+      auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
+      colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+      colliderComp->radius = 5.0f; // ボスなので大きめに
+      bossObj->AddComponent(std::move(colliderComp));
+      bossObj->SetTag("Boss");
+
       rootObjects_.push_back(bossObj);
   }
 
