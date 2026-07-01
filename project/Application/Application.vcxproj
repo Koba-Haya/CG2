@@ -184,7 +184,7 @@
     <ClCompile Include="actor\Enemy\EnemyShootComponent.cpp" />
     <ClCompile Include="actor\Enemy\StraightMoveComponent.cpp" />
     <ClCompile Include="actor\Player\PlayerComponent.cpp" />
-    <ClCompile Include="camera\RailCameraController.cpp" />
+    <ClCompile Include="camera\RailCameraComponent.cpp" />
     <ClCompile Include="GameApp.cpp" />
     <ClCompile Include="scene\ClearScene.cpp" />
     <ClCompile Include="scene\DevScene.cpp" />
@@ -204,7 +204,7 @@
     <ClInclude Include="actor\Enemy\EnemyShootComponent.h" />
     <ClInclude Include="actor\Enemy\StraightMoveComponent.h" />
     <ClInclude Include="actor\Player\PlayerComponent.h" />
-    <ClInclude Include="camera\RailCameraController.h" />
+    <ClInclude Include="camera\RailCameraComponent.h" />
     <ClInclude Include="GameApp.h" />
     <ClInclude Include="scene\ClearScene.h" />
     <ClInclude Include="scene\DevScene.h" />

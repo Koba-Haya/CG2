@@ -3,14 +3,14 @@
 #include <Windows.h>
 
 #include <filesystem>
-
+#include "../../base/EnginePath.h"
 static void TexFatal_(const std::string &msg) {
   MessageBoxA(nullptr, msg.c_str(), "Texture Fatal", MB_OK | MB_ICONERROR);
 }
 
 static std::string ResolveTexPath_(const std::string& path) {
   if (std::filesystem::exists(path)) return path;
-  std::string altPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + path;
+  std::string altPath = AbsoluteEngine::EnginePath::Resolve(path);
   if (std::filesystem::exists(altPath)) return altPath;
   return path;
 }

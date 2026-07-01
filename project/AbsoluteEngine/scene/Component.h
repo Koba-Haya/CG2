@@ -18,6 +18,9 @@ public:
     // コンポーネントの種類名（ファクトリやシリアライズ用）
     virtual std::string GetTypeName() const = 0;
 
+    // エディタ（インスペクタ）用UI描画
+    virtual void DrawInspectorUI() {}
+
     // シリアライズ（保存・復元）用インターフェース
     virtual void Serialize(nlohmann::json& j) const {}
     virtual void Deserialize(const nlohmann::json& j) {}

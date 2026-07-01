@@ -3,7 +3,7 @@
 #include "../graphics/3d/model/ModelManager.h"
 #include "../graphics/texture/TextureManager.h"
 #include "LightNodeComponent.h"
-
+#include "../base/EnginePath.h"
 // エンジン機能用インクルード
 #include "AbsoluteEngine/editor/EditorUIManager.h"
 #include "AbsoluteEngine/editor/EditorCamera.h"
@@ -48,7 +48,7 @@ AbsoluteEngine::CommandManager* BaseScene::GetCommandManager() const {
 }
 
 void BaseScene::BackupScene() {
-    backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, nullptr, true);
+    backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, true);
 }
 
 void BaseScene::RestoreScene() {
@@ -57,7 +57,7 @@ void BaseScene::RestoreScene() {
 }
 
 void BaseScene::SaveEditorScene() {
-    std::string saveDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/";
+    std::string saveDir = AbsoluteEngine::EnginePath::Resolve("resources/editor/");
     std::filesystem::create_directories(saveDir);
     AbsoluteEngine::SceneSerializer::Serialize(saveDir + "scene.json", rootObjects_);
 }

@@ -75,6 +75,9 @@
     <ClCompile Include="base\DirectXCommon.cpp">
       <Filter>engine\base</Filter>
     </ClCompile>
+    <ClCompile Include="base\EnginePath.cpp">
+      <Filter>engine\base</Filter>
+    </ClCompile>
     <ClCompile Include="base\DirectXResourceUtils.cpp">
       <Filter>engine\base</Filter>
     </ClCompile>
@@ -222,6 +225,9 @@
       <Filter>engine\audio</Filter>
     </ClInclude>
     <ClInclude Include="base\DirectXCommon.h">
+      <Filter>engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\EnginePath.h">
       <Filter>engine\base</Filter>
     </ClInclude>
     <ClInclude Include="base\DirectXResourceUtils.h">

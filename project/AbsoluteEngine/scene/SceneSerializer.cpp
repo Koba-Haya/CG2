@@ -7,7 +7,7 @@
 #include "LightNodeComponent.h"
 #include "ModelComponent.h"
 #include "DissolveComponent.h"
-#include "../../Application/camera/RailCameraController.h"
+
 
 using json = nlohmann::json;
 
@@ -162,8 +162,8 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
   return obj;
 }
 
-bool SceneSerializer::Serialize(const std::string& filepath, const std::vector<std::shared_ptr<GameObject>>& rootObjects, const RailCameraController* railCamera, bool forceFullSerialize) {
-  std::string jsonString = SerializeToString(rootObjects, railCamera, forceFullSerialize);
+bool SceneSerializer::Serialize(const std::string& filepath, const std::vector<std::shared_ptr<GameObject>>& rootObjects, bool forceFullSerialize) {
+  std::string jsonString = SerializeToString(rootObjects, forceFullSerialize);
   if (jsonString.empty()) return false;
 
   std::ofstream ofs(filepath);
@@ -172,7 +172,7 @@ bool SceneSerializer::Serialize(const std::string& filepath, const std::vector<s
   return true;
 }
 
-std::string SceneSerializer::SerializeToString(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const RailCameraController* railCamera, bool forceFullSerialize) {
+std::string SceneSerializer::SerializeToString(const std::vector<std::shared_ptr<GameObject>>& rootObjects, bool forceFullSerialize) {
   json j;
   json rootArray = json::array();
   for (const auto& obj : rootObjects) {
@@ -180,18 +180,10 @@ std::string SceneSerializer::SerializeToString(const std::vector<std::shared_ptr
   }
   j["rootObjects"] = rootArray;
 
-  if (railCamera) {
-    json waypointsArray = json::array();
-    for (const auto& pt : railCamera->GetWaypoints()) {
-      waypointsArray.push_back(Vector3ToJson(pt));
-    }
-    j["railCamera"] = { {"waypoints", waypointsArray} };
-  }
-  
   return j.dump(4);
 }
 
-bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects, RailCameraController* outRailCamera) {
+bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects) {
   std::ifstream file(filepath);
   if (!file.is_open()) return false;
 
@@ -213,17 +205,6 @@ bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::
     }
   }
 
-  if (outRailCamera && j.contains("railCamera")) {
-    const auto& rcJson = j["railCamera"];
-    if (rcJson.contains("waypoints") && rcJson["waypoints"].is_array()) {
-      std::vector<Vector3> waypoints;
-      for (const auto& ptJson : rcJson["waypoints"]) {
-        waypoints.push_back(JsonToVector3(ptJson));
-      }
-      outRailCamera->SetWaypoints(waypoints);
-    }
-  }
-
   return true;
 }
 
@@ -233,7 +214,7 @@ std::shared_ptr<GameObject> SceneSerializer::CopyGameObject(std::shared_ptr<Game
   return DeserializeGameObject(j);
 }
 
-bool SceneSerializer::DeserializeFromString(const std::string& jsonString, std::vector<std::shared_ptr<GameObject>>& outRootObjects, RailCameraController* outRailCamera) {
+bool SceneSerializer::DeserializeFromString(const std::string& jsonString, std::vector<std::shared_ptr<GameObject>>& outRootObjects) {
   if (jsonString.empty()) return false;
   try {
     json j = json::parse(jsonString);
@@ -243,17 +224,6 @@ bool SceneSerializer::DeserializeFromString(const std::string& jsonString, std::
         if (obj) {
           outRootObjects.push_back(obj);
         }
-      }
-    }
-
-    if (outRailCamera && j.contains("railCamera")) {
-      const auto& rcJson = j["railCamera"];
-      if (rcJson.contains("waypoints") && rcJson["waypoints"].is_array()) {
-        std::vector<Vector3> waypoints;
-        for (const auto& ptJson : rcJson["waypoints"]) {
-          waypoints.push_back(JsonToVector3(ptJson));
-        }
-        outRailCamera->SetWaypoints(waypoints);
       }
     }
   } catch (const std::exception& e) {

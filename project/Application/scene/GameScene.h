@@ -44,8 +44,6 @@ private:
 private:
   std::unique_ptr<GameCamera> gameCamera_;
   std::unique_ptr<DebugCamera> debugCamera_;
-  class RailCameraController* railController_ = nullptr; // 所有権は gameCamera_ が持つ
-
 
   bool isDebugCamera_ = false;
   bool showDebugRail_ = true;

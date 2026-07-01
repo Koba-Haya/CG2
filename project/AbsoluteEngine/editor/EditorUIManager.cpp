@@ -4,6 +4,7 @@
 #include "../scene/ComponentFactory.h"
 #include "EditorCamera.h"
 #include "Method.h"
+#include "../base/EnginePath.h"
 #include <filesystem>
 #include "../scene/ColliderComponent.h"
 #include "../scene/LightNodeComponent.h"
@@ -41,7 +42,7 @@ void EditorUIManager::DrawMenuBar(std::vector<std::shared_ptr<GameObject>>& root
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
       // カレントディレクトリ（実行ファイルの位置）に依存しないよう、プロジェクトフォルダへの絶対パスを指定
-      std::string saveDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/";
+      std::string saveDir = AbsoluteEngine::EnginePath::Resolve("resources/editor/");
 
       if (ImGui::MenuItem("Save Scene")) {
         std::filesystem::create_directories(saveDir);
@@ -81,7 +82,7 @@ void EditorUIManager::DrawToolbar() {
 
 void EditorUIManager::DrawAssetBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
   ImGui::Begin("Assets");
-  std::string resourcesPath = "C:/Users/haya2/source/repos/CG2/project/Application/resources";
+  std::string resourcesPath = AbsoluteEngine::EnginePath::Resolve("resources");
   
   if (std::filesystem::exists(resourcesPath)) {
     for (const auto& entry : std::filesystem::recursive_directory_iterator(resourcesPath)) {
@@ -126,7 +127,7 @@ void EditorUIManager::DrawAssetBrowser(std::vector<std::shared_ptr<GameObject>>&
 
 void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
   ImGui::Begin("Prefabs");
-  std::string prefabsPath = "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs";
+  std::string prefabsPath = AbsoluteEngine::EnginePath::Resolve("resources/prefabs");
   
   if (std::filesystem::exists(prefabsPath)) {
     for (const auto& entry : std::filesystem::recursive_directory_iterator(prefabsPath)) {
@@ -140,7 +141,7 @@ void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>
         
         if (ImGui::Button(prefabName.c_str(), ImVec2(-FLT_MIN, 30))) {
             // クリックでも配置できるようにする
-            std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/" + filename;
+            std::string fullPath = AbsoluteEngine::EnginePath::Resolve("resources/prefabs/" + filename);
             auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
             if (prefabInstance) {
                 if (commandManager_) {
@@ -563,7 +564,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
   if (ImGui::BeginDragDropTarget()) {
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
       const char* payloadPath = (const char*)payload->Data;
-      std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
+      std::string fullPath = AbsoluteEngine::EnginePath::Resolve(std::string(payloadPath));
       auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
       if (prefabInstance) {
         if (commandManager_) {
@@ -836,11 +837,13 @@ void EditorUIManager::DrawInspector() {
         }
 
         if (activated) {
-            lightBeforeInspector_ = *obj->GetComponent<LightNodeComponent>();
+            obj->GetComponent<LightNodeComponent>()->Serialize(componentStateBefore_);
         }
         if (deactivatedAfterEdit) {
             if (commandManager_) {
-                commandManager_->AddCommand(std::make_shared<LightCommand>(obj, lightBeforeInspector_, l));
+                nlohmann::json componentStateAfter;
+                l.Serialize(componentStateAfter);
+                commandManager_->AddCommand(std::make_shared<ComponentStateCommand>(obj, "LightNodeComponent", componentStateBefore_, componentStateAfter));
             }
         }
       } else {
@@ -923,7 +926,7 @@ void EditorUIManager::DrawInspector() {
       }
 
       if (ImGui::Button("Save as Prefab", ImVec2(-FLT_MIN, 30))) {
-        std::string prefabDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/";
+        std::string prefabDir = AbsoluteEngine::EnginePath::Resolve("resources/prefabs/");
         std::filesystem::create_directories(prefabDir);
         std::string filename = obj->GetName() + ".json";
         std::string filepath = prefabDir + filename;
@@ -941,6 +944,10 @@ void EditorUIManager::DrawInspector() {
       
       for (const auto& comp : obj->GetComponents()) {
         ImGui::Text("- %s", comp->GetTypeName().c_str());
+        
+        // 追加：各コンポーネントのインスペクタ用UIを描画
+        comp->DrawInspectorUI();
+
         ImGui::SameLine();
         
         // ボタンIDを一意にするためにポインタアドレスを使用
@@ -1044,7 +1051,7 @@ void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObj
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH", ImGuiDragDropFlags_AcceptBeforeDelivery)) {
       if (payload->IsDelivery()) {
         const char* payloadPath = (const char*)payload->Data;
-        std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
+        std::string fullPath = AbsoluteEngine::EnginePath::Resolve(std::string(payloadPath));
         auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
         if (prefabInstance) {
           prefabInstance->GetTransform().translate = targetPos;

@@ -6,7 +6,7 @@
 #include "ModelManager.h"
 #include "ParticleManager.h"
 #include "Input.h"
-#include "../camera/RailCameraController.h"
+#include "../camera/RailCameraComponent.h"
 #include "Spline.h"
 #include "Method.h"
 #include "GameObject.h"
@@ -59,14 +59,14 @@ void GameScene::Initialize(const SceneServices &services) {
   debugCamera_->Initialize();
   debugCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
 
-  auto railController = std::make_unique<RailCameraController>();
-  railController_ = railController.get();
-  CameraContext ctx{};
-  ctx.deltaTime = 1.0f / 60.0f;
-  gameCamera_->SetController(std::move(railController), ctx);
+  auto* cameraPtr = gameCamera_.get();
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("RailCameraComponent", [cameraPtr]() {
+      auto comp = std::make_unique<RailCameraComponent>();
+      comp->SetCamera(cameraPtr);
+      return comp;
+  });
   // コンポーネントファクトリの登録
   auto* inputPtr = services_.input;
-  auto* cameraPtr = gameCamera_.get();
   AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", [inputPtr, cameraPtr]() {
       auto comp = std::make_unique<PlayerComponent>();
       comp->Initialize();
@@ -137,6 +137,22 @@ void GameScene::Initialize(const SceneServices &services) {
       lightComp->intensity = 1.0f;
       initialDirLight->AddComponent(std::move(lightComp));
       rootObjects_.push_back(initialDirLight);
+  }
+
+  // レールカメラを探す
+  bool hasRailCamera = false;
+  for (const auto& obj : rootObjects_) {
+      if (obj && obj->GetComponent<RailCameraComponent>()) {
+          hasRailCamera = true;
+          break;
+      }
+  }
+  if (!hasRailCamera) {
+      auto railCamObj = std::make_shared<AbsoluteEngine::GameObject>("RailCamera");
+      auto rComp = std::make_unique<RailCameraComponent>();
+      rComp->SetCamera(gameCamera_.get());
+      railCamObj->AddComponent(std::move(rComp));
+      rootObjects_.push_back(railCamObj);
   }
 }
 
@@ -209,7 +225,15 @@ void GameScene::Update() {
   // ただしPlayMode時のみ。
 
   // ボスフェーズ移行
-  if (phase_ == GamePhase::InProgress && railController_->GetProgress() >= 1.0f) {
+  float railProgress = 0.0f;
+  for (const auto& obj : rootObjects_) {
+      if (auto comp = obj->GetComponent<RailCameraComponent>()) {
+          railProgress = comp->GetProgress();
+          break;
+      }
+  }
+
+  if (phase_ == GamePhase::InProgress && railProgress >= 1.0f) {
       phase_ = GamePhase::Boss;
       auto bossObj = std::make_shared<AbsoluteEngine::GameObject>("Boss");
       Vector3 eye = gameCamera_->GetEye();
@@ -272,18 +296,26 @@ void GameScene::Update() {
 
 
   // シーンの自動セーブ
-  if (railController_ && railController_->ConsumeModifiedFlag()) {
+  bool shouldSave = false;
+  for (const auto& obj : rootObjects_) {
+      if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
+          if (rComp->ConsumeModifiedFlag()) {
+              shouldSave = true;
+          }
+      }
+  }
+  if (shouldSave) {
       SaveScene();
   }
 }
 
 void GameScene::BackupScene() {
-    backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, railController_, true);
+    backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, true);
 }
 
 void GameScene::RestoreScene() {
     rootObjects_.clear();
-    AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_, railController_);
+    AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
 }
 
 void GameScene::SaveEditorScene() {
@@ -322,7 +354,14 @@ void GameScene::Draw() {
 
   // --- デバッグラインの描画 ---
   if (showDebugRail_) {
-      const auto& waypoints = railController_->GetWaypoints();
+      std::vector<Vector3> waypoints;
+      for (const auto& obj : rootObjects_) {
+          if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
+              waypoints = rComp->GetWaypoints();
+              break;
+          }
+      }
+      
       if (waypoints.size() >= 2) {
           Matrix4x4 viewMat = renderer->GetViewMatrix();
           Matrix4x4 invView = Inverse(viewMat);
@@ -371,15 +410,19 @@ void GameScene::Draw() {
 }
 
 #include "AbsoluteEngine/scene/SceneSerializer.h"
+#include "AbsoluteEngine/base/EnginePath.h"
 #include <filesystem>
 
 void GameScene::SaveScene() {
-    std::filesystem::create_directories("C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/");
-    AbsoluteEngine::SceneSerializer::Serialize(sceneFilePath_, rootObjects_, railController_);
+    std::string saveDir = AbsoluteEngine::EnginePath::Resolve("resources/editor/");
+    std::filesystem::create_directories(saveDir);
+    sceneFilePath_ = AbsoluteEngine::EnginePath::Resolve("resources/editor/scene.json");
+    AbsoluteEngine::SceneSerializer::Serialize(sceneFilePath_, rootObjects_);
 }
 
 void GameScene::LoadScene() {
-    AbsoluteEngine::SceneSerializer::Deserialize(sceneFilePath_, rootObjects_, railController_);
+    sceneFilePath_ = AbsoluteEngine::EnginePath::Resolve("resources/editor/scene.json");
+    AbsoluteEngine::SceneSerializer::Deserialize(sceneFilePath_, rootObjects_);
     if (editorUIManager_) {
         editorUIManager_->SetSelectedObject(nullptr);
     }
@@ -389,7 +432,7 @@ void GameScene::DrawEditorUI() {
     BaseScene::DrawEditorUI(); // ツールバー等の描画
 
 #ifdef USE_IMGUI
-    if (phase_ != GamePhase::GameOver && railController_) {
+    if (phase_ != GamePhase::GameOver) {
         // [REMOVED] Duplicated ImGui::Begin("Viewport##GameView") which breaks ImGui rendering
     }
 
@@ -417,9 +460,18 @@ void GameScene::DrawEditorUI() {
     ImGui::Text("Camera Eye: (%.2f, %.2f, %.2f)", eye.x, eye.y, eye.z);
     ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
     
-    if (railController_) {
-        ImGui::Text("Rail Progress: %.1f %%", railController_->GetProgress() * 100.0f);
-        railController_->DrawEditorUI(eye);
+    if (showDebugRail_) {
+        // Find component
+        RailCameraComponent* rComp = nullptr;
+        for (const auto& obj : rootObjects_) {
+            if (auto comp = obj->GetComponent<RailCameraComponent>()) {
+                rComp = comp;
+                break;
+            }
+        }
+        if (rComp) {
+            ImGui::Text("Rail Progress: %.1f %%", rComp->GetProgress() * 100.0f);
+        }
     }
 
     ImGui::Checkbox("Debug Camera Mode", &isDebugCamera_);
@@ -434,8 +486,13 @@ void GameScene::DrawEditorUI() {
         }
     }
     ImGui::Checkbox("Show Rail Debug Line", &showDebugRail_);
-    if (ImGui::Button("Reset Rail Camera") && railController_) {
-        railController_->ResetProgress();
+    if (ImGui::Button("Reset Rail Camera")) {
+        for (const auto& obj : rootObjects_) {
+            if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
+                rComp->ResetProgress();
+                break;
+            }
+        }
         CameraContext ctx{ 1.0f / 60.0f };
         gameCamera_->SetContext(ctx);
         if (services_.input) gameCamera_->Update(*services_.input);

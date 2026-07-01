@@ -6,6 +6,7 @@
 #include "../Type/Vector.h"
 #include "../Type/Transform.h"
 #include "CommandManager.h"
+#include "../../externals/nlohmann/json.hpp"
 #include "../scene/LightNodeComponent.h"
 
 #ifdef USE_IMGUI
@@ -87,7 +88,7 @@ private:
   Transform transformBeforeGizmo_;
 
   Transform transformBeforeInspector_;
-  LightNodeComponent lightBeforeInspector_;
+  nlohmann::json componentStateBefore_;
 #endif
   bool isSceneModified_ = false;
 };

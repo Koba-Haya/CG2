@@ -37,7 +37,7 @@
       <Filter>application\scene</Filter>
     </ClCompile>
     <ClCompile Include="..\main.cpp" />
-    <ClCompile Include="camera\RailCameraController.cpp" />
+    <ClCompile Include="camera\RailCameraComponent.cpp" />
     <ClCompile Include="scene\ClearScene.cpp" />
     <ClCompile Include="scene\GameOverScene.cpp" />
     <ClCompile Include="actor\Bullet\BulletComponent.cpp" />
@@ -58,7 +58,7 @@
     <ClInclude Include="scene\SceneFactory.h" />
     <ClInclude Include="scene\SceneIds.h" />
     <ClInclude Include="scene\TitleScene.h" />
-    <ClInclude Include="camera\RailCameraController.h" />
+    <ClInclude Include="camera\RailCameraComponent.h" />
     <ClInclude Include="scene\ClearScene.h" />
     <ClInclude Include="scene\GameOverScene.h" />
     <ClInclude Include="actor\Bullet\BulletComponent.h" />

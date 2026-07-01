@@ -3,9 +3,8 @@
 #include <vector>
 #include <algorithm>
 #include "../scene/GameObject.h"
-#include "../scene/LightNodeComponent.h"
 #include "../Type/Transform.h"
-#include "../../Application/camera/RailCameraController.h"
+#include "../../externals/nlohmann/json.hpp"
 
 namespace AbsoluteEngine {
 
@@ -108,62 +107,39 @@ private:
     std::vector<std::shared_ptr<GameObject>>* rootObjects_;
 };
 
-// ライト変更のコマンド
-class LightCommand : public ICommand {
+// 汎用コンポーネント状態変更のコマンド
+class ComponentStateCommand : public ICommand {
 public:
-    LightCommand(std::shared_ptr<GameObject> target, const LightNodeComponent& before, const LightNodeComponent& after)
-        : target_(target), before_(before), after_(after) {}
+    ComponentStateCommand(std::shared_ptr<GameObject> target, const std::string& componentType, const nlohmann::json& beforeState, const nlohmann::json& afterState)
+        : target_(target), componentType_(componentType), before_(beforeState), after_(afterState) {}
 
     void Execute() override {
         if (auto t = target_.lock()) {
-            if (auto comp = t->GetComponent<LightNodeComponent>()) {
-                *comp = after_;
+            for (const auto& comp : t->GetComponents()) {
+                if (comp->GetTypeName() == componentType_) {
+                    comp->Deserialize(after_);
+                    break;
+                }
             }
         }
     }
 
     void Undo() override {
         if (auto t = target_.lock()) {
-            if (auto comp = t->GetComponent<LightNodeComponent>()) {
-                *comp = before_;
+            for (const auto& comp : t->GetComponents()) {
+                if (comp->GetTypeName() == componentType_) {
+                    comp->Deserialize(before_);
+                    break;
+                }
             }
         }
     }
 
 private:
     std::weak_ptr<GameObject> target_;
-    LightNodeComponent before_;
-    LightNodeComponent after_;
-};
-
-// レールカメラのポイント変更コマンド
-class RailCameraCommand : public ICommand {
-public:
-    // RailCameraControllerのポインタを直接保持すると破棄された際に危険だが、
-    // エディタのライフサイクル上は基本的に生きている前提とする。
-    RailCameraCommand(class RailCameraController* target, const std::vector<Vector3>& before, const std::vector<Vector3>& after)
-        : target_(target), before_(before), after_(after) {}
-
-    void Execute() override {
-        if (target_) {
-            target_->SetWaypoints(after_);
-            // 変更フラグは立てないか、立てるか？
-            // 履歴操作時も変更フラグを立ててオートセーブさせるのが自然。
-            target_->SetModifiedFlag(); 
-        }
-    }
-
-    void Undo() override {
-        if (target_) {
-            target_->SetWaypoints(before_);
-            target_->SetModifiedFlag();
-        }
-    }
-
-private:
-    class RailCameraController* target_;
-    std::vector<Vector3> before_;
-    std::vector<Vector3> after_;
+    std::string componentType_;
+    nlohmann::json before_;
+    nlohmann::json after_;
 };
 
 } // namespace AbsoluteEngine

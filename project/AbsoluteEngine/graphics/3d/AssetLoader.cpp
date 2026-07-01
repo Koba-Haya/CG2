@@ -3,7 +3,7 @@
 #include <cassert>
 #include <filesystem>
 #include <Windows.h>
-
+#include "../../base/EnginePath.h"
 static std::string ToLower_(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return (char)std::tolower(c); });
@@ -19,7 +19,7 @@ static std::string GetExtLower_(const std::string &filename) {
 
 std::string ResolvePath_(const std::string& path) {
   if (std::filesystem::exists(path)) return path;
-  std::string altPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + path;
+  std::string altPath = AbsoluteEngine::EnginePath::Resolve(path);
   if (std::filesystem::exists(altPath)) return altPath;
   return path;
 }
