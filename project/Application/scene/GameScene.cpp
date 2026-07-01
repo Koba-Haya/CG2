@@ -23,6 +23,7 @@
 #include "../actor/Enemy/EnemyShootComponent.h"
 #include "../actor/Enemy/BossComponent.h"
 #include "SceneIds.h"
+#include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
@@ -271,16 +272,22 @@ void GameScene::Update() {
 
 
   // シーンの自動セーブ
-  bool shouldSave = false;
-  if (editorUIManager_ && editorUIManager_->ConsumeSceneModifiedFlag()) {
-      shouldSave = true;
-  }
   if (railController_ && railController_->ConsumeModifiedFlag()) {
-      shouldSave = true;
-  }
-  if (shouldSave) {
       SaveScene();
   }
+}
+
+void GameScene::BackupScene() {
+    backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, railController_, true);
+}
+
+void GameScene::RestoreScene() {
+    rootObjects_.clear();
+    AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_, railController_);
+}
+
+void GameScene::SaveEditorScene() {
+    SaveScene();
 }
 
 void GameScene::Draw() {

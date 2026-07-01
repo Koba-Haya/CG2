@@ -40,6 +40,7 @@ public:
         isModified_ = false;
         return flag;
     }
+    void SetModifiedFlag() { isModified_ = true; }
 
     void SetLookAhead(float offset) { lookAheadOffset_ = offset; }
 
@@ -56,4 +57,6 @@ private:
     int selectedPointIndex_ = -1;
     bool isGizmoUsing_ = false;
     bool isModified_ = false;
+
+    std::vector<Vector3> waypointsBeforeEdit_;
 };

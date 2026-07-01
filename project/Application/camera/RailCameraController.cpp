@@ -8,6 +8,9 @@
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include "../../externals/ImGuizmo/ImGuizmo.h"
+#include "../../AbsoluteEngine/scene/BaseScene.h"
+#include "../../AbsoluteEngine/editor/CommandManager.h"
+#include "../../AbsoluteEngine/editor/Command.h"
 #endif
 
 RailCameraController::RailCameraController() {
@@ -52,24 +55,45 @@ void RailCameraController::Update(GameCamera& camera, const CameraContext& ctx) 
 }
 
 void RailCameraController::AddWaypoint(const Vector3& pos) {
+    auto before = waypoints_;
     waypoints_.push_back(pos);
     isModified_ = true;
+    auto after = waypoints_;
+#ifdef USE_IMGUI
+    if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
+        cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::RailCameraCommand>(this, before, after));
+    }
+#endif
 }
 
 void RailCameraController::InsertWaypoint(size_t index, const Vector3& pos) {
     if (index <= waypoints_.size()) {
+        auto before = waypoints_;
         waypoints_.insert(waypoints_.begin() + index, pos);
         isModified_ = true;
+        auto after = waypoints_;
+#ifdef USE_IMGUI
+        if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
+            cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::RailCameraCommand>(this, before, after));
+        }
+#endif
     }
 }
 
 void RailCameraController::RemoveWaypoint(size_t index) {
     if (index < waypoints_.size() && waypoints_.size() > 3) {
+        auto before = waypoints_;
         waypoints_.erase(waypoints_.begin() + index);
         if (selectedPointIndex_ >= static_cast<int>(waypoints_.size())) {
             selectedPointIndex_ = static_cast<int>(waypoints_.size()) - 1;
         }
         isModified_ = true;
+        auto after = waypoints_;
+#ifdef USE_IMGUI
+        if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
+            cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::RailCameraCommand>(this, before, after));
+        }
+#endif
     }
 }
 
@@ -118,6 +142,14 @@ void RailCameraController::DrawEditorUI(const Vector3& cameraPos) {
             waypoints_[selectedPointIndex_] = { p[0], p[1], p[2] };
             isModified_ = true;
         }
+        if (ImGui::IsItemActivated()) {
+            waypointsBeforeEdit_ = waypoints_;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
+                cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::RailCameraCommand>(this, waypointsBeforeEdit_, waypoints_));
+            }
+        }
     }
 
     ImGui::End();
@@ -145,6 +177,10 @@ void RailCameraController::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x
             objectMatrix
         );
 
+        if (!wasGizmoUsing && isGizmoUsing_) {
+            waypointsBeforeEdit_ = waypoints_;
+        }
+
         if (isGizmoUsing_) {
             float matrixTranslation[3], matrixRotation[3], matrixScale[3];
             ImGuizmo::DecomposeMatrixToComponents(objectMatrix, matrixTranslation, matrixRotation, matrixScale);
@@ -159,6 +195,9 @@ void RailCameraController::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x
 
         if (wasGizmoUsing && !isGizmoUsing_) {
             isModified_ = true;
+            if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
+                cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::RailCameraCommand>(this, waypointsBeforeEdit_, waypoints_));
+            }
         }
     }
 #endif

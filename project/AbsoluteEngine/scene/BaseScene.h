@@ -10,6 +10,7 @@ namespace AbsoluteEngine {
     class GameObject;
     class EditorUIManager;
     class EditorCamera;
+    class CommandManager;
 }
 
 class SceneManager;
@@ -41,6 +42,13 @@ public:
 
   // アクティブシーンへのグローバルアクセス
   static BaseScene* GetActiveScene() { return activeScene_; }
+
+  AbsoluteEngine::CommandManager* GetCommandManager() const;
+
+protected:
+  virtual void BackupScene();
+  virtual void RestoreScene();
+  virtual void SaveEditorScene();
 
 protected:
   void RequestSceneChange(const std::string &sceneId);

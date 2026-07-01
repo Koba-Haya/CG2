@@ -5,6 +5,7 @@
 #include "../scene/GameObject.h"
 #include "../scene/LightNodeComponent.h"
 #include "../Type/Transform.h"
+#include "../../Application/camera/RailCameraController.h"
 
 namespace AbsoluteEngine {
 
@@ -133,6 +134,36 @@ private:
     std::weak_ptr<GameObject> target_;
     LightNodeComponent before_;
     LightNodeComponent after_;
+};
+
+// レールカメラのポイント変更コマンド
+class RailCameraCommand : public ICommand {
+public:
+    // RailCameraControllerのポインタを直接保持すると破棄された際に危険だが、
+    // エディタのライフサイクル上は基本的に生きている前提とする。
+    RailCameraCommand(class RailCameraController* target, const std::vector<Vector3>& before, const std::vector<Vector3>& after)
+        : target_(target), before_(before), after_(after) {}
+
+    void Execute() override {
+        if (target_) {
+            target_->SetWaypoints(after_);
+            // 変更フラグは立てないか、立てるか？
+            // 履歴操作時も変更フラグを立ててオートセーブさせるのが自然。
+            target_->SetModifiedFlag(); 
+        }
+    }
+
+    void Undo() override {
+        if (target_) {
+            target_->SetWaypoints(before_);
+            target_->SetModifiedFlag();
+        }
+    }
+
+private:
+    class RailCameraController* target_;
+    std::vector<Vector3> before_;
+    std::vector<Vector3> after_;
 };
 
 } // namespace AbsoluteEngine

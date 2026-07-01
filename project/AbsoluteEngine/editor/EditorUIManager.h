@@ -41,6 +41,8 @@ public:
   }
   void SetSceneModified() { isSceneModified_ = true; }
 
+  CommandManager* GetCommandManager() const { return commandManager_.get(); }
+
 private:
 #ifdef USE_IMGUI
   void DrawMenuBar(std::vector<std::shared_ptr<GameObject>>& rootObjects);

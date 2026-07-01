@@ -40,6 +40,28 @@ void BaseScene::RequestSceneChange(const std::string &sceneId) {
   }
 }
 
+AbsoluteEngine::CommandManager* BaseScene::GetCommandManager() const {
+#ifdef USE_IMGUI
+    if (editorUIManager_) return editorUIManager_->GetCommandManager();
+#endif
+    return nullptr;
+}
+
+void BaseScene::BackupScene() {
+    backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, nullptr, true);
+}
+
+void BaseScene::RestoreScene() {
+    rootObjects_.clear();
+    AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
+}
+
+void BaseScene::SaveEditorScene() {
+    std::string saveDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/";
+    std::filesystem::create_directories(saveDir);
+    AbsoluteEngine::SceneSerializer::Serialize(saveDir + "scene.json", rootObjects_);
+}
+
 void BaseScene::UpdateEditor() {
 #ifdef USE_IMGUI
     // ドラッグ＆ドロップ中はカメラの操作をブロックする
@@ -80,7 +102,7 @@ void BaseScene::DrawEditorUI() {
     
     if (playMode_ == PlayMode::Edit) {
         if (ImGui::Button("Play")) {
-            backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, nullptr, true);
+            BackupScene();
             playMode_ = PlayMode::Play;
         }
     } else if (playMode_ == PlayMode::Play) {
@@ -89,8 +111,7 @@ void BaseScene::DrawEditorUI() {
         }
         ImGui::SameLine();
         if (ImGui::Button("Stop")) {
-            rootObjects_.clear();
-            AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
+            RestoreScene();
             if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
             playMode_ = PlayMode::Edit;
         }
@@ -100,8 +121,7 @@ void BaseScene::DrawEditorUI() {
         }
         ImGui::SameLine();
         if (ImGui::Button("■ Stop")) {
-            rootObjects_.clear();
-            AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
+            RestoreScene();
             if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
             playMode_ = PlayMode::Edit;
         }
@@ -115,9 +135,7 @@ void BaseScene::DrawEditorUI() {
 
         // オートセーブの実行
         if (editorUIManager_->ConsumeSceneModifiedFlag()) {
-            std::string saveDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/";
-            std::filesystem::create_directories(saveDir);
-            AbsoluteEngine::SceneSerializer::Serialize(saveDir + "scene.json", rootObjects_);
+            SaveEditorScene();
         }
     }
 #endif
