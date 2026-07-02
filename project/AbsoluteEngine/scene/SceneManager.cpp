@@ -29,6 +29,7 @@ void SceneManager::SetNextSceneById_(const std::string &sceneId) {
   assert(factory_ && "SceneManager: factory is null. Call SetFactory().");
   next_ = factory_->Create(sceneId, services_);
   assert(next_ && "SceneManager: factory returned null. Unknown sceneId?");
+  next_->SetSceneId(sceneId);
 }
 
 void SceneManager::ApplySceneChangeIfNeeded() {
@@ -61,6 +62,12 @@ void SceneManager::Update() {
 void SceneManager::Draw() {
   if (current_) {
     current_->Draw();
+  }
+}
+
+void SceneManager::DrawEditorUI() {
+  if (current_) {
+    current_->DrawEditorUI();
   }
 }
 

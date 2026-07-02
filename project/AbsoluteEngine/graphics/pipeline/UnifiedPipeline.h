@@ -1,4 +1,4 @@
-// UnifiedPipeline.h (省略なし)
+﻿// UnifiedPipeline.h (省略なし)
 
 #pragma once
 #include "BlendMode.h"

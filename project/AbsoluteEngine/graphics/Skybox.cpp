@@ -1,6 +1,6 @@
 #include "Skybox.h"
 #include "Renderer.h"
-#include "TextureManager.h"
+#include "../resources/AssetManager.h"
 #include "TextureResource.h"
 #include <d3d12.h>
 #include <cassert>
@@ -43,7 +43,7 @@ bool Skybox::Initialize(const std::string &texturePath) {
   *transformMapped_ = TransformCB{};
 
   // 4. テクスチャ
-  texture_ = TextureManager::GetInstance()->Load(texturePath);
+  texture_ = AbsoluteEngine::AssetManager::GetInstance()->Load<TextureResource>(texturePath);
 
   return true;
 }

@@ -1,8 +1,12 @@
-#include "Player/Player.h"
+#include "PlayerComponent.h"
 #include "Input.h"
 #include "GameCamera.h"
 #include <algorithm>
 #include <cmath>
+#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ModelComponent.h"
+#include "AbsoluteEngine/scene/ColliderComponent.h"
+#include "../Bullet/BulletComponent.h"
 
 void PlayerComponent::Initialize() {
   localPos_ = { 0.0f, -1.0f }; // 初期位置：少し下側
@@ -57,15 +61,52 @@ void PlayerComponent::Update(float deltaTime) {
   float pitch = std::atan2(-forward.y, xzLen);
   
   t.rotate = { pitch, yaw, 0.0f };
+
+  // 弾の発射（スペースキー）
+  if (shootCooldown_ > 0.0f) shootCooldown_ -= deltaTime;
+  if (input_->PressKey(DIK_SPACE) && shootCooldown_ <= 0.0f) {
+      shootCooldown_ = 0.25f; // 連射速度を適正化
+
+      auto scene = BaseScene::GetActiveScene();
+      if (scene) {
+          auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("PlayerBullet");
+          bulletObj->SetTag("PlayerBullet");
+          
+          auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+          bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
+          bulletObj->AddComponent(std::move(bulletModelComp));
+          
+          auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
+          colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+          colliderComp->radius = 0.5f;
+          bulletObj->AddComponent(std::move(colliderComp));
+          
+          bulletObj->GetTransform().translate = t.translate;
+          
+          Vector3 vel = { forward.x * 35.0f, forward.y * 35.0f, forward.z * 35.0f }; // 弾速を適正化
+          auto bulletComp = std::make_unique<BulletComponent>();
+          bulletComp->Initialize(vel);
+          bulletObj->AddComponent(std::move(bulletComp));
+          
+          scene->AddRootObject(bulletObj);
+      }
+  }
 }
 
 void PlayerComponent::TakeDamage(int damage) {
   hp_ -= damage;
-  if (hp_ < 0) {
-    hp_ = 0;
-  }
+  if (hp_ < 0) hp_ = 0;
 }
 
 bool PlayerComponent::IsDead() const {
   return hp_ <= 0;
+}
+
+void PlayerComponent::OnCollision(AbsoluteEngine::GameObject* other) {
+    if (IsDead()) return;
+
+    if (other->GetName().find("Enemy") != std::string::npos || other->GetTag() == "Enemy" || 
+        other->GetName().find("Boss") != std::string::npos || other->GetTag() == "Boss") {
+        TakeDamage(1);
+    }
 }

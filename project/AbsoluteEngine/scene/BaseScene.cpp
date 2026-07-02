@@ -3,21 +3,26 @@
 #include "../graphics/3d/model/ModelManager.h"
 #include "../graphics/texture/TextureManager.h"
 #include "LightNodeComponent.h"
-
+#include "../base/EnginePath.h"
 // エンジン機能用インクルード
 #include "AbsoluteEngine/editor/EditorUIManager.h"
 #include "AbsoluteEngine/editor/EditorCamera.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
+#include "CollisionManager.h"
 #include "GameObject.h"
 #include "Input.h"
 #include "Renderer.h"
+#include <filesystem>
 
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
 
+BaseScene* BaseScene::activeScene_ = nullptr;
+
 void BaseScene::Initialize(const SceneServices &services) {
     services_ = services;
+    activeScene_ = this;
 
     // カメラの初期化（ゲーム中も使用するためマクロ外で生成）
     editorCamera_ = std::make_unique<AbsoluteEngine::EditorCamera>();
@@ -36,6 +41,44 @@ void BaseScene::RequestSceneChange(const std::string &sceneId) {
   }
 }
 
+AbsoluteEngine::CommandManager* BaseScene::GetCommandManager() const {
+#ifdef USE_IMGUI
+    if (editorUIManager_) return editorUIManager_->GetCommandManager();
+#endif
+    return nullptr;
+}
+
+void BaseScene::BackupScene() {
+    backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, true);
+}
+
+void BaseScene::RestoreScene() {
+    rootObjects_.clear();
+    AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
+}
+
+std::string BaseScene::GetSceneFilePath() const {
+    if (sceneId_.empty()) return AbsoluteEngine::EnginePath::Resolve("resources/editor/scenes/scene.json");
+    return AbsoluteEngine::EnginePath::Resolve("resources/editor/scenes/" + sceneId_ + ".json");
+}
+
+bool BaseScene::LoadEditorScene() {
+    std::string filePath = GetSceneFilePath();
+    if (!std::filesystem::exists(filePath)) {
+        // ファイルがない場合は空の状態（または派生先で初期化された状態）で保存して新規作成する
+        SaveEditorScene();
+        return false;
+    }
+    AbsoluteEngine::SceneSerializer::Deserialize(filePath, rootObjects_);
+    return true;
+}
+
+void BaseScene::SaveEditorScene() {
+    std::string saveDir = AbsoluteEngine::EnginePath::Resolve("resources/editor/scenes/");
+    std::filesystem::create_directories(saveDir);
+    AbsoluteEngine::SceneSerializer::Serialize(GetSceneFilePath(), rootObjects_);
+}
+
 void BaseScene::UpdateEditor() {
 #ifdef USE_IMGUI
     // ドラッグ＆ドロップ中はカメラの操作をブロックする
@@ -50,11 +93,22 @@ void BaseScene::UpdateEditor() {
     // プレイモード中のオブジェクトの更新
     if (playMode_ == PlayMode::Play) {
         const float deltaTime = 1.0f / 60.0f; // 共通のdeltaTimeを使う想定
-        for (auto& obj : rootObjects_) {
-            if (obj) {
+        
+        // 追加されたオブジェクトでループが壊れないようインデックスで回す
+        size_t count = rootObjects_.size();
+        for (size_t i = 0; i < count; ++i) {
+            auto obj = rootObjects_[i];
+            if (obj && obj->IsActive()) {
                 obj->Update(deltaTime);
             }
         }
+        
+        AbsoluteEngine::CollisionManager::GetInstance().Update(rootObjects_);
+
+        // ガベージコレクション（IsActive() == false なオブジェクトを削除）
+        rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), [](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
+            return !obj || !obj->IsActive();
+        }), rootObjects_.end());
     }
 }
 
@@ -65,7 +119,7 @@ void BaseScene::DrawEditorUI() {
     
     if (playMode_ == PlayMode::Edit) {
         if (ImGui::Button("Play")) {
-            backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_);
+            BackupScene();
             playMode_ = PlayMode::Play;
         }
     } else if (playMode_ == PlayMode::Play) {
@@ -74,8 +128,7 @@ void BaseScene::DrawEditorUI() {
         }
         ImGui::SameLine();
         if (ImGui::Button("Stop")) {
-            rootObjects_.clear();
-            AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
+            RestoreScene();
             if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
             playMode_ = PlayMode::Edit;
         }
@@ -85,18 +138,22 @@ void BaseScene::DrawEditorUI() {
         }
         ImGui::SameLine();
         if (ImGui::Button("■ Stop")) {
-            rootObjects_.clear();
-            AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
+            RestoreScene();
             if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
             playMode_ = PlayMode::Edit;
         }
     }
     ImGui::End();
 
-    // エディタUIの描画（Hierarchy, Inspector, Gizmo）
+    // エディタUIの描画
     if (editorUIManager_ && editorCamera_) {
         auto* edCam = dynamic_cast<AbsoluteEngine::EditorCamera*>(editorCamera_.get());
         editorUIManager_->DrawUI(rootObjects_, editorCamera_->GetViewMatrix(), editorCamera_->GetProjectionMatrix(), edCam);
+
+        // オートセーブの実行
+        if (editorUIManager_->ConsumeSceneModifiedFlag()) {
+            SaveEditorScene();
+        }
     }
 #endif
 }

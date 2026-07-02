@@ -120,6 +120,7 @@
     <ClCompile Include="..\externals\ImGuizmo\ImGuizmo.cpp" />
     <ClCompile Include="audio\Audio.cpp" />
     <ClCompile Include="base\DirectXCommon.cpp" />
+    <ClCompile Include="base\EnginePath.cpp" />
     <ClCompile Include="base\DirectXResourceUtils.cpp" />
     <ClCompile Include="base\FrameWork.cpp" />
     <ClCompile Include="base\ImGuiManager.cpp" />
@@ -166,6 +167,7 @@
     <ClCompile Include="math\Method.cpp" />
     <ClCompile Include="math\Spline.cpp" />
     <ClCompile Include="scene\BaseScene.cpp" />
+    <ClCompile Include="scene\CollisionManager.cpp" />
     <ClCompile Include="scene\GameObject.cpp" />
     <ClCompile Include="scene\ColliderComponent.cpp" />
     <ClCompile Include="scene\LightNodeComponent.cpp" />
@@ -173,11 +175,14 @@
     <ClCompile Include="scene\DissolveComponent.cpp" />
     <ClCompile Include="scene\SceneManager.cpp" />
     <ClCompile Include="scene\SceneSerializer.cpp" />
+    <ClCompile Include="resources\AssetManager.cpp" />
+    <ClCompile Include="scene\RigidbodyComponent.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\externals\ImGuizmo\ImGuizmo.h" />
     <ClInclude Include="audio\Audio.h" />
     <ClInclude Include="base\DirectXCommon.h" />
+    <ClInclude Include="base\EnginePath.h" />
     <ClInclude Include="base\DirectXResourceUtils.h" />
     <ClInclude Include="base\FrameWork.h" />
     <ClInclude Include="base\ImGuiManager.h" />
@@ -233,6 +238,7 @@
     <ClInclude Include="math\Method.h" />
     <ClInclude Include="math\Spline.h" />
     <ClInclude Include="scene\BaseScene.h" />
+    <ClInclude Include="scene\CollisionManager.h" />
     <ClInclude Include="scene\GameObject.h" />
     <ClInclude Include="scene\ColliderComponent.h" />
     <ClInclude Include="scene\LightNodeComponent.h" />
@@ -246,6 +252,8 @@
     <ClInclude Include="Type\Matrix.h" />
     <ClInclude Include="Type\Transform.h" />
     <ClInclude Include="Type\Vector.h" />
+    <ClInclude Include="resources\AssetManager.h" />
+    <ClInclude Include="scene\RigidbodyComponent.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

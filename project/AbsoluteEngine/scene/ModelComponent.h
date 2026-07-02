@@ -13,6 +13,25 @@ public:
 
     std::string GetTypeName() const override { return "ModelComponent"; }
 
+    void Serialize(nlohmann::json& j) const override {
+        j["modelPath"] = modelPath_;
+        j["texturePath"] = texturePath_;
+        j["environmentCoefficient"] = environmentCoefficient_;
+    }
+    void Deserialize(const nlohmann::json& j) override {
+        if (j.contains("modelPath")) {
+            std::string path = j["modelPath"].get<std::string>();
+            if (!path.empty() && path != "/") LoadModel(path);
+        }
+        if (j.contains("texturePath")) {
+            std::string path = j["texturePath"].get<std::string>();
+            if (!path.empty() && path != "/") LoadTexture(path);
+        }
+        if (j.contains("environmentCoefficient")) {
+            SetEnvironmentCoefficient(j["environmentCoefficient"].get<float>());
+        }
+    }
+
     void LoadModel(const std::string& path);
     void LoadTexture(const std::string& path);
 

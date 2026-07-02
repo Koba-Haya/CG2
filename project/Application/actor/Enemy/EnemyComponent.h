@@ -12,6 +12,7 @@ public:
     std::string GetTypeName() const override { return "EnemyComponent"; }
 
     bool IsActive() const { return isActive_; }
+    void OnCollision(AbsoluteEngine::GameObject* other) override;
     void OnHit(); // 弾が当たった時の処理
     bool IsDead() const { return isDead_; }
 

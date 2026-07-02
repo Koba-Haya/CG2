@@ -4,11 +4,13 @@
 #include "../scene/ComponentFactory.h"
 #include "EditorCamera.h"
 #include "Method.h"
+#include "../base/EnginePath.h"
 #include <filesystem>
 #include "../scene/ColliderComponent.h"
 #include "../scene/LightNodeComponent.h"
 #include "../scene/ModelComponent.h"
 #include "../scene/DissolveComponent.h"
+#include "../graphics/Renderer.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include "../../externals/ImGuizmo/ImGuizmo.h"
@@ -30,7 +32,7 @@ void EditorUIManager::DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjec
   DrawPrefabsBrowser(rootObjects);
   DrawHierarchy(rootObjects);
   DrawInspector();
-  DrawGizmo(rootObjects, viewMatrix, projectionMatrix);
+  DrawViewport(rootObjects, viewMatrix, projectionMatrix);
   HandleShortcuts(rootObjects, camera);
 #endif
 }
@@ -40,7 +42,7 @@ void EditorUIManager::DrawMenuBar(std::vector<std::shared_ptr<GameObject>>& root
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
       // カレントディレクトリ（実行ファイルの位置）に依存しないよう、プロジェクトフォルダへの絶対パスを指定
-      std::string saveDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/";
+      std::string saveDir = AbsoluteEngine::EnginePath::Resolve("resources/editor/");
 
       if (ImGui::MenuItem("Save Scene")) {
         std::filesystem::create_directories(saveDir);
@@ -80,7 +82,7 @@ void EditorUIManager::DrawToolbar() {
 
 void EditorUIManager::DrawAssetBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
   ImGui::Begin("Assets");
-  std::string resourcesPath = "C:/Users/haya2/source/repos/CG2/project/Application/resources";
+  std::string resourcesPath = AbsoluteEngine::EnginePath::Resolve("resources");
   
   if (std::filesystem::exists(resourcesPath)) {
     for (const auto& entry : std::filesystem::recursive_directory_iterator(resourcesPath)) {
@@ -125,7 +127,7 @@ void EditorUIManager::DrawAssetBrowser(std::vector<std::shared_ptr<GameObject>>&
 
 void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
   ImGui::Begin("Prefabs");
-  std::string prefabsPath = "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs";
+  std::string prefabsPath = AbsoluteEngine::EnginePath::Resolve("resources/prefabs");
   
   if (std::filesystem::exists(prefabsPath)) {
     for (const auto& entry : std::filesystem::recursive_directory_iterator(prefabsPath)) {
@@ -139,7 +141,7 @@ void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>
         
         if (ImGui::Button(prefabName.c_str(), ImVec2(-FLT_MIN, 30))) {
             // クリックでも配置できるようにする
-            std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/" + filename;
+            std::string fullPath = AbsoluteEngine::EnginePath::Resolve("resources/prefabs/" + filename);
             auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
             if (prefabInstance) {
                 if (commandManager_) {
@@ -227,13 +229,27 @@ void EditorUIManager::HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& 
   }
 }
 
-void EditorUIManager::DrawGizmo(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+void EditorUIManager::DrawViewport(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
   // ImGuizmoの設定
   ImGuizmo::SetOrthographic(false);
   ImGuizmo::BeginFrame();
 
   // "Viewport##GameView" ウィンドウ
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::Begin("Viewport##GameView");
+  ImGui::PopStyleVar();
+
+  ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+  if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
+  if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
+
+  auto* renderer = Renderer::GetInstance();
+  D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = renderer->GetPostProcessTextureSrv();
+  if (srvHandle.ptr != 0) {
+      ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
+  }
+
+  HandleViewportDragDrop(rootObjects, viewMatrix, projectionMatrix);
 
   // Viewportウィンドウ内でのマウスピッキング処理（BeginとEndの間で行うことでHoveredが正しくとれる）
   HandleMousePicking(rootObjects, viewMatrix, projectionMatrix);
@@ -548,7 +564,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
   if (ImGui::BeginDragDropTarget()) {
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
       const char* payloadPath = (const char*)payload->Data;
-      std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
+      std::string fullPath = AbsoluteEngine::EnginePath::Resolve(std::string(payloadPath));
       auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
       if (prefabInstance) {
         if (commandManager_) {
@@ -821,17 +837,20 @@ void EditorUIManager::DrawInspector() {
         }
 
         if (activated) {
-            lightBeforeInspector_ = *obj->GetComponent<LightNodeComponent>();
+            obj->GetComponent<LightNodeComponent>()->Serialize(componentStateBefore_);
         }
         if (deactivatedAfterEdit) {
             if (commandManager_) {
-                commandManager_->AddCommand(std::make_shared<LightCommand>(obj, lightBeforeInspector_, l));
+                nlohmann::json componentStateAfter;
+                l.Serialize(componentStateAfter);
+                commandManager_->AddCommand(std::make_shared<ComponentStateCommand>(obj, "LightNodeComponent", componentStateBefore_, componentStateAfter));
             }
         }
       } else {
         ImGui::Text("No LightNodeComponent attached.");
         if (ImGui::Button("Add LightNodeComponent")) {
           obj->AddComponent(std::make_unique<LightNodeComponent>());
+          SetSceneModified();
         }
       }
     }
@@ -841,23 +860,26 @@ void EditorUIManager::DrawInspector() {
       auto dissolveComp = obj->GetComponent<DissolveComponent>();
       if (dissolveComp) {
         auto& dissolve = *dissolveComp;
-        ImGui::Checkbox("Enable Dissolve", &dissolve.enable);
+        if (ImGui::Checkbox("Enable Dissolve", &dissolve.enable)) SetSceneModified();
         if (dissolve.enable) {
-          ImGui::SliderFloat("Threshold", &dissolve.threshold, 0.0f, 1.0f);
-          ImGui::SliderFloat("Edge Range", &dissolve.edgeRange, 0.0f, 0.1f);
+          if (ImGui::SliderFloat("Threshold", &dissolve.threshold, 0.0f, 1.0f)) SetSceneModified();
+          if (ImGui::SliderFloat("Edge Range", &dissolve.edgeRange, 0.0f, 0.1f)) SetSceneModified();
           float edgeCol[3] = { dissolve.edgeColor.x, dissolve.edgeColor.y, dissolve.edgeColor.z };
           if (ImGui::ColorEdit3("Edge Color", edgeCol)) {
             dissolve.edgeColor = { edgeCol[0], edgeCol[1], edgeCol[2] };
+            SetSceneModified();
           }
           float maskCol[3] = { dissolve.maskColor.x, dissolve.maskColor.y, dissolve.maskColor.z };
           if (ImGui::ColorEdit3("Mask Color", maskCol)) {
             dissolve.maskColor = { maskCol[0], maskCol[1], maskCol[2] };
+            SetSceneModified();
           }
         }
       } else {
         ImGui::Text("No DissolveComponent attached.");
         if (ImGui::Button("Add DissolveComponent")) {
           obj->AddComponent(std::make_unique<DissolveComponent>());
+          SetSceneModified();
         }
       }
     }
@@ -872,21 +894,23 @@ void EditorUIManager::DrawInspector() {
         int currentType = static_cast<int>(collider.type);
         if (ImGui::Combo("Type", &currentType, types, IM_ARRAYSIZE(types))) {
           collider.type = static_cast<ColliderComponent::Type>(currentType);
+          SetSceneModified();
         }
 
         if (collider.type != ColliderComponent::Type::None) {
-          ImGui::DragFloat3("Center Offset", &collider.centerOffset.x, 0.1f);
+          if (ImGui::DragFloat3("Center Offset", &collider.centerOffset.x, 0.1f)) SetSceneModified();
 
           if (collider.type == ColliderComponent::Type::Sphere) {
-            ImGui::DragFloat("Radius", &collider.radius, 0.1f, 0.0f);
+            if (ImGui::DragFloat("Radius", &collider.radius, 0.1f, 0.0f)) SetSceneModified();
           } else if (collider.type == ColliderComponent::Type::AABB) {
-            ImGui::DragFloat3("Size (Half Extents)", &collider.size.x, 0.1f, 0.0f);
+            if (ImGui::DragFloat3("Size (Half Extents)", &collider.size.x, 0.1f, 0.0f)) SetSceneModified();
           }
         }
       } else {
         ImGui::Text("No ColliderComponent attached.");
         if (ImGui::Button("Add ColliderComponent")) {
           obj->AddComponent(std::make_unique<ColliderComponent>());
+          SetSceneModified();
         }
       }
     }
@@ -902,7 +926,7 @@ void EditorUIManager::DrawInspector() {
       }
 
       if (ImGui::Button("Save as Prefab", ImVec2(-FLT_MIN, 30))) {
-        std::string prefabDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/";
+        std::string prefabDir = AbsoluteEngine::EnginePath::Resolve("resources/prefabs/");
         std::filesystem::create_directories(prefabDir);
         std::string filename = obj->GetName() + ".json";
         std::string filepath = prefabDir + filename;
@@ -920,12 +944,17 @@ void EditorUIManager::DrawInspector() {
       
       for (const auto& comp : obj->GetComponents()) {
         ImGui::Text("- %s", comp->GetTypeName().c_str());
+        
+        // 追加：各コンポーネントのインスペクタ用UIを描画
+        comp->DrawInspectorUI();
+
         ImGui::SameLine();
         
         // ボタンIDを一意にするためにポインタアドレスを使用
         std::string btnLabel = "Remove##" + std::to_string(reinterpret_cast<uintptr_t>(comp.get()));
         if (ImGui::Button(btnLabel.c_str())) {
             componentToRemove = comp.get();
+            SetSceneModified();
         }
         // 今後はここで comp->DrawInspector() などを呼んでパラメータ編集できるようにする
       }
@@ -949,6 +978,7 @@ void EditorUIManager::DrawInspector() {
               auto comp = ComponentFactory::GetInstance().Create(name);
               if (comp) {
                 obj->AddComponent(std::move(comp));
+                SetSceneModified();
               }
             }
           }
@@ -1021,7 +1051,7 @@ void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObj
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH", ImGuiDragDropFlags_AcceptBeforeDelivery)) {
       if (payload->IsDelivery()) {
         const char* payloadPath = (const char*)payload->Data;
-        std::string fullPath = "C:/Users/haya2/source/repos/CG2/project/Application/" + std::string(payloadPath);
+        std::string fullPath = AbsoluteEngine::EnginePath::Resolve(std::string(payloadPath));
         auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
         if (prefabInstance) {
           prefabInstance->GetTransform().translate = targetPos;
@@ -1057,7 +1087,55 @@ void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObj
     }
     ImGui::EndDragDropTarget();
   }
-#endif
 }
+
+void EditorUIManager::DrawPostProcessSettings() {
+    ImGui::Begin("Post Process Settings");
+    
+    if (ImGui::RadioButton("Normal", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Normal))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Normal);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Grayscale", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Grayscale);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Sepia", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Sepia);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Vignette", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Vignette);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("BoxFilter", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::BoxFilter);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("GaussianFilter", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::GaussianFilter))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::GaussianFilter);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("LuminanceOutline", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("DepthOutline", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("RadialBlur", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::RadialBlur))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::RadialBlur);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Dissolve", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Dissolve))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Dissolve);
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Random", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Random))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Random);
+
+    auto* renderer = Renderer::GetInstance();
+    if (postProcessMode_ == static_cast<int>(Renderer::PostProcessMode::Vignette)) {
+        ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
+        ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
+        renderer->SetVignetteParam(vignetteScale_, vignettePow_);
+    } else if (postProcessMode_ == static_cast<int>(Renderer::PostProcessMode::BoxFilter)) {
+        ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
+        renderer->SetBoxFilterParam(boxFilterK_);
+    } else if (postProcessMode_ == static_cast<int>(Renderer::PostProcessMode::GaussianFilter)) {
+        ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
+        ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
+        renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1, 1});
+    } else if (postProcessMode_ == static_cast<int>(Renderer::PostProcessMode::Dissolve)) {
+        ImGui::SliderFloat("Threshold", &dissolveThreshold_, 0.0f, 1.0f);
+        ImGui::ColorEdit3("Edge Color", &dissolveEdgeColor_.x);
+        ImGui::SliderFloat("Edge Range", &dissolveEdgeRange_, 0.01f, 0.5f);
+        renderer->SetDissolveParam(dissolveThreshold_, dissolveEdgeRange_, dissolveEdgeColor_, {1, 1, 1});
+    }
+    
+    ImGui::End();
+}
+
+#endif
 
 } // namespace AbsoluteEngine

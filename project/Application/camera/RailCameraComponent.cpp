@@ -1,16 +1,20 @@
 #define NOMINMAX
-#include "RailCameraController.h"
+#include "RailCameraComponent.h"
 #include "GameCamera.h"
 #include "Method.h"
+#include "Spline.h"
 #include <algorithm>
 #include <string>
 
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include "../../externals/ImGuizmo/ImGuizmo.h"
+#include "../../AbsoluteEngine/scene/BaseScene.h"
+#include "../../AbsoluteEngine/editor/CommandManager.h"
+#include "../../AbsoluteEngine/editor/Command.h"
 #endif
 
-RailCameraController::RailCameraController() {
+RailCameraComponent::RailCameraComponent() {
     waypoints_ = {
         { 0.0f,  5.0f, -50.0f}, // P0: スタート（少し手前から）
         { 0.0f,  3.0f,   0.0f}, // P1: 序盤の直進エリア
@@ -22,11 +26,12 @@ RailCameraController::RailCameraController() {
     lookAheadOffset_ = 0.02f;
 }
 
-void RailCameraController::Update(GameCamera& camera, const CameraContext& ctx) {
+void RailCameraComponent::Update(float deltaTime) {
+    if (!camera_) return;
     if (waypoints_.size() < 2) return;
 
     // 進捗の更新
-    progress_ += speed_ * ctx.deltaTime;
+    progress_ += speed_ * deltaTime;
     if (progress_ > 1.0f) progress_ = 1.0f;
 
     // 現在地点の計算
@@ -46,36 +51,101 @@ void RailCameraController::Update(GameCamera& camera, const CameraContext& ctx) 
     }
 
     // カメラの設定
-    camera.SetEye(currentPos);
-    camera.SetTarget(targetPos);
-    camera.SetUp({ 0.0f, 1.0f, 0.0f });
+    camera_->SetEye(currentPos);
+    camera_->SetTarget(targetPos);
+    camera_->SetUp({ 0.0f, 1.0f, 0.0f });
 }
 
-void RailCameraController::AddWaypoint(const Vector3& pos) {
-    waypoints_.push_back(pos);
-    isModified_ = true;
+void RailCameraComponent::Serialize(nlohmann::json& j) const {
+    nlohmann::json waypointsArray = nlohmann::json::array();
+    for (const auto& pt : waypoints_) {
+        waypointsArray.push_back({ {"x", pt.x}, {"y", pt.y}, {"z", pt.z} });
+    }
+    j["waypoints"] = waypointsArray;
 }
 
-void RailCameraController::InsertWaypoint(size_t index, const Vector3& pos) {
-    if (index <= waypoints_.size()) {
-        waypoints_.insert(waypoints_.begin() + index, pos);
-        isModified_ = true;
+void RailCameraComponent::Deserialize(const nlohmann::json& j) {
+    if (j.contains("waypoints") && j["waypoints"].is_array()) {
+        waypoints_.clear();
+        for (const auto& ptJson : j["waypoints"]) {
+            waypoints_.push_back({
+                ptJson.value("x", 0.0f),
+                ptJson.value("y", 0.0f),
+                ptJson.value("z", 0.0f)
+            });
+        }
     }
 }
 
-void RailCameraController::RemoveWaypoint(size_t index) {
+void RailCameraComponent::AddWaypoint(const Vector3& pos) {
+    nlohmann::json beforeState;
+    Serialize(beforeState);
+
+    waypoints_.push_back(pos);
+    isModified_ = true;
+
+    nlohmann::json afterState;
+    Serialize(afterState);
+
+#ifdef USE_IMGUI
+    if (owner_) {
+        if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
+            cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::ComponentStateCommand>(
+                owner_->shared_from_this(), GetTypeName(), beforeState, afterState));
+        }
+    }
+#endif
+}
+
+void RailCameraComponent::InsertWaypoint(size_t index, const Vector3& pos) {
+    if (index <= waypoints_.size()) {
+        nlohmann::json beforeState;
+        Serialize(beforeState);
+
+        waypoints_.insert(waypoints_.begin() + index, pos);
+        isModified_ = true;
+
+        nlohmann::json afterState;
+        Serialize(afterState);
+
+#ifdef USE_IMGUI
+        if (owner_) {
+            if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
+                cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::ComponentStateCommand>(
+                    owner_->shared_from_this(), GetTypeName(), beforeState, afterState));
+            }
+        }
+#endif
+    }
+}
+
+void RailCameraComponent::RemoveWaypoint(size_t index) {
     if (index < waypoints_.size() && waypoints_.size() > 3) {
+        nlohmann::json beforeState;
+        Serialize(beforeState);
+
         waypoints_.erase(waypoints_.begin() + index);
         if (selectedPointIndex_ >= static_cast<int>(waypoints_.size())) {
             selectedPointIndex_ = static_cast<int>(waypoints_.size()) - 1;
         }
         isModified_ = true;
+
+        nlohmann::json afterState;
+        Serialize(afterState);
+
+#ifdef USE_IMGUI
+        if (owner_) {
+            if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
+                cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::ComponentStateCommand>(
+                    owner_->shared_from_this(), GetTypeName(), beforeState, afterState));
+            }
+        }
+#endif
     }
 }
 
-void RailCameraController::DrawEditorUI(const Vector3& cameraPos) {
+void RailCameraComponent::DrawInspectorUI() {
 #ifdef USE_IMGUI
-    ImGui::Begin("Rail Camera Editor");
     ImGui::Text("Waypoints: %d", static_cast<int>(waypoints_.size()));
 
     if (ImGui::Button("Add Point")) {
@@ -94,11 +164,10 @@ void RailCameraController::DrawEditorUI(const Vector3& cameraPos) {
             selectedPointIndex_ = i;
         }
 
-        // ポイント単位の右クリックメニュー
         if (ImGui::BeginPopupContextItem(("PointContextMenu" + std::to_string(i)).c_str(), ImGuiPopupFlags_MouseButtonRight)) {
             if (ImGui::MenuItem("Insert After")) {
                 Vector3 newPos = waypoints_[i];
-                newPos.z += 5.0f; // 適当なオフセット
+                newPos.z += 5.0f;
                 InsertWaypoint(i + 1, newPos);
             }
             if (ImGui::MenuItem("Delete")) {
@@ -118,20 +187,37 @@ void RailCameraController::DrawEditorUI(const Vector3& cameraPos) {
             waypoints_[selectedPointIndex_] = { p[0], p[1], p[2] };
             isModified_ = true;
         }
+        if (ImGui::IsItemActivated()) {
+            waypointsBeforeEdit_ = waypoints_;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            if (owner_) {
+                if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
+                    nlohmann::json beforeState, afterState;
+                    auto tmp = waypoints_;
+                    waypoints_ = waypointsBeforeEdit_;
+                    Serialize(beforeState);
+                    waypoints_ = tmp;
+                    Serialize(afterState);
+
+                    cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::ComponentStateCommand>(
+                        owner_->shared_from_this(), GetTypeName(), beforeState, afterState));
+                }
+            }
+        }
     }
 
-    ImGui::End();
+
 #endif
 }
 
-void RailCameraController::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY) {
+void RailCameraComponent::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY) {
 #ifdef USE_IMGUI
     if (selectedPointIndex_ >= 0 && selectedPointIndex_ < static_cast<int>(waypoints_.size())) {
         ImGuizmo::SetOrthographic(false);
         ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
         ImGuizmo::SetRect(windowPosX, windowPosY, windowSizeX, windowSizeY);
 
-        // Transform行列の作成 (位置のみ)
         Matrix4x4 pointTransform = MakeTranslateMatrix(waypoints_[selectedPointIndex_]);
         float objectMatrix[16];
         memcpy(objectMatrix, &pointTransform.m[0][0], sizeof(float) * 16);
@@ -144,6 +230,10 @@ void RailCameraController::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x
             ImGuizmo::WORLD, 
             objectMatrix
         );
+
+        if (!wasGizmoUsing && isGizmoUsing_) {
+            waypointsBeforeEdit_ = waypoints_;
+        }
 
         if (isGizmoUsing_) {
             float matrixTranslation[3], matrixRotation[3], matrixScale[3];
@@ -159,12 +249,25 @@ void RailCameraController::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x
 
         if (wasGizmoUsing && !isGizmoUsing_) {
             isModified_ = true;
+            if (owner_) {
+                if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
+                    nlohmann::json beforeState, afterState;
+                    auto tmp = waypoints_;
+                    waypoints_ = waypointsBeforeEdit_;
+                    Serialize(beforeState);
+                    waypoints_ = tmp;
+                    Serialize(afterState);
+
+                    cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::ComponentStateCommand>(
+                        owner_->shared_from_this(), GetTypeName(), beforeState, afterState));
+                }
+            }
         }
     }
 #endif
 }
 
-void RailCameraController::HandleMousePicking(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY) {
+void RailCameraComponent::HandleMousePicking(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY) {
 #ifdef USE_IMGUI
     if (!ImGui::IsWindowHovered() || ImGuizmo::IsOver() || isGizmoUsing_) return;
 
@@ -187,7 +290,7 @@ void RailCameraController::HandleMousePicking(const Matrix4x4& viewMatrix, const
 
         float closestDist = -1.0f;
         int hitIndex = -1;
-        float pointRadius = 2.0f; // ピッキング用の判定半径
+        float pointRadius = 2.0f; 
 
         for (int i = 0; i < static_cast<int>(waypoints_.size()); ++i) {
             Vector3 m = { nearPos.x - waypoints_[i].x, nearPos.y - waypoints_[i].y, nearPos.z - waypoints_[i].z };

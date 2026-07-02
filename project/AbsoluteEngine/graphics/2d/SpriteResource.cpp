@@ -1,6 +1,6 @@
 #include "SpriteResource.h"
 #include "Renderer.h"
-#include "TextureManager.h"
+#include "../../resources/AssetManager.h"
 #include "TextureResource.h"
 #include <cassert>
 #include <d3d12.h>
@@ -18,7 +18,7 @@ SpriteResource::~SpriteResource() = default;
 bool SpriteResource::Initialize(const std::string &texturePath) {
   auto *renderer = Renderer::GetInstance();
 
-  pImpl_->texture = TextureManager::GetInstance()->Load(texturePath);
+  pImpl_->texture = AbsoluteEngine::AssetManager::GetInstance()->Load<TextureResource>(texturePath);
   if (!pImpl_->texture)
     return false;
 

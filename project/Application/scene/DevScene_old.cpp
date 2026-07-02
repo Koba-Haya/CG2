@@ -5,11 +5,8 @@
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/DissolveComponent.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
-#include "AbsoluteEngine/scene/ColliderComponent.h"
-#include "AbsoluteEngine/scene/CollisionManager.h"
-#include "AbsoluteEngine/resources/AssetManager.h"
-#include "../actor/Bullet/BulletComponent.h"
-#include "Enemy/EnemyComponent.h"
+#include "Bullet/Bullet.h"
+#include "component/enemy/EnemyComponent.h"
 #include "DebugCamera.h"
 #include "AbsoluteEngine/editor/Command.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
@@ -41,6 +38,31 @@
 #include <random>
 #include "AbsoluteEngine/scene/ComponentFactory.h"
 
+// 繝・せ繝育畑繧ｳ繝ｳ繝昴・繝阪Φ繝・class SpinComponent : public AbsoluteEngine::IComponent {
+public:
+    void Update(float deltaTime) override {
+        if (owner_) {
+            auto& t = owner_->GetTransform();
+            t.rotate.y += 2.0f * deltaTime;
+        }
+    }
+    std::string GetTypeName() const override { return "SpinComponent"; }
+};
+
+class MoveComponent : public AbsoluteEngine::IComponent {
+public:
+    void Update(float deltaTime) override {
+        if (owner_) {
+            auto& t = owner_->GetTransform();
+            t.translate.x += std::sin(frame_ * 0.05f) * 0.05f;
+            frame_ += 1.0f;
+        }
+    }
+    std::string GetTypeName() const override { return "MoveComponent"; }
+private:
+    float frame_ = 0.0f;
+};
+
 static void FatalBoxAndTerminate_(const std::string &msg) {
   MessageBoxA(nullptr, msg.c_str(), "Fatal", MB_OK | MB_ICONERROR);
   std::terminate();
@@ -60,15 +82,24 @@ void DevScene::Initialize(const SceneServices &services) {
 
   accelerationField_.area.max = {1.0f, 1.0f, 1.0f};
 
-  // --- エディタUIの処理オートロード ---
-  if (!LoadEditorScene()) {
-      // ファイルが無い場合はデフォルトの初期配置
-      auto obj1 = std::make_shared<AbsoluteEngine::GameObject>("Player");
-      auto modelComp1 = std::make_unique<AbsoluteEngine::ModelComponent>();
-      modelComp1->LoadModel("resources/app/cube/cube.obj");
-      obj1->AddComponent(std::move(modelComp1));
-      obj1->GetTransform().translate = { 0.0f, -1.1f, -15.0f };
-      rootObjects_.push_back(obj1);
+  // --- 繧ｵ繝ｳ繝励Ν繧ｳ繝ｳ繝昴・繝阪Φ繝医・逋ｻ骭ｲ ---
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
+
+  // --- 繧ｨ繝・ぅ繧ｿUI縺ｮ蛻晄悄蛹悶→繝・せ繝医が繝悶ず繧ｧ繧ｯ繝郁ｿｽ蜉 ---
+
+  
+  auto obj1 = std::make_shared<AbsoluteEngine::GameObject>("Player");
+  auto modelComp1 = std::make_unique<AbsoluteEngine::ModelComponent>();
+  modelComp1->LoadModel("resources/app/cube/cube.obj");
+  obj1->AddComponent(std::move(modelComp1));
+  obj1->GetTransform().translate = { 0.0f, -1.1f, -15.0f };
+  
+  auto obj3 = std::make_shared<AbsoluteEngine::GameObject>("Weapon");
+  obj3->GetTransform().translate = { 1.0f, 0.0f, 0.0f };
+  obj1->AddChild(obj3); // Player縺ｮ蟄舌↓縺吶ｋ
+  
+  rootObjects_.push_back(obj1);
       
       // 初期状態を保存しておく
       SaveEditorScene();
@@ -90,7 +121,7 @@ void DevScene::Update() {
   const float deltaTime = 1.0f / 60.0f;
   time_ += deltaTime;
 
-  // カメラシェイク更新
+  // 繧ｫ繝｡繝ｩ繧ｷ繧ｧ繧､繧ｯ譖ｴ譁ｰ
   if (cameraShakeTimer_ < cameraShakeDuration_) {
       cameraShakeTimer_ += deltaTime;
       float t = 1.0f - (cameraShakeTimer_ / cameraShakeDuration_);
@@ -103,19 +134,19 @@ void DevScene::Update() {
       cameraShakeOffset_ = {0.0f, 0.0f, 0.0f};
   }
 
-  // 画面歪み更新
+  // 逕ｻ髱｢豁ｪ縺ｿ譖ｴ譁ｰ
   if (hitDistortionTimer_ < hitDistortionDuration_) {
       hitDistortionTimer_ += deltaTime;
       float t = 1.0f - (hitDistortionTimer_ / hitDistortionDuration_);
-      Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, hitDistortionIntensity_ * t);
-      Renderer::GetInstance()->SetPostProcessMode(Renderer::PostProcessMode::RadialBlur);
+      radialBlurWidth_ = hitDistortionIntensity_ * t;
+      postProcessMode_ = Renderer::PostProcessMode::RadialBlur;
   } else if (hitDistortionDuration_ > 0.0f) {
-      Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, 0.0f);
-      Renderer::GetInstance()->SetPostProcessMode(Renderer::PostProcessMode::Normal);
+      radialBlurWidth_ = 0.0f;
+      postProcessMode_ = Renderer::PostProcessMode::Normal;
       hitDistortionDuration_ = 0.0f;
   }
 
-  // --- エネミースポーン処理 ---
+  // --- 繧ｨ繝阪Α繝ｼ繧ｹ繝昴・繝ｳ蜃ｦ逅・---
   if (playMode_ == PlayMode::Play) {
       int enemyCount = 0;
       for (const auto& obj : rootObjects_) {
@@ -128,8 +159,7 @@ void DevScene::Update() {
           enemySpawnTimer_ += deltaTime;
           if (enemySpawnTimer_ >= enemySpawnInterval_) {
               enemySpawnTimer_ = 0.0f;
-              // ランダムな次回スポーン間隔（1.0〜3.0秒）
-              enemySpawnInterval_ = 1.0f + static_cast<float>(rand() % 200) / 100.0f;
+              // 繝ｩ繝ｳ繝€繝縺ｪ谺｡蝗槭せ繝昴・繝ｳ髢馴囈・・.0縲・.0遘抵ｼ・              enemySpawnInterval_ = 1.0f + static_cast<float>(rand() % 200) / 100.0f;
 
               auto newEnemy = std::make_shared<AbsoluteEngine::GameObject>("Enemy");
               newEnemy->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
@@ -138,17 +168,11 @@ void DevScene::Update() {
               modelComp->LoadTexture("resources/app/cube/white100x100.png");
               newEnemy->AddComponent(std::move(modelComp));
               
-              // ランダムな出現位置 (X: -15〜15, Y: -5〜5, Z: 5〜25)
+              // 繝ｩ繝ｳ繝€繝縺ｪ蜃ｺ迴ｾ菴咲ｽｮ (X: -15縲・5, Y: -5縲・, Z: 5縲・5)
               float rX = ((rand() % 300) / 10.0f) - 15.0f;
               float rY = ((rand() % 100) / 10.0f) - 5.0f;
               float rZ = ((rand() % 200) / 10.0f) + 5.0f;
               newEnemy->GetTransform().translate = { rX, rY, rZ };
-              newEnemy->SetTag("Enemy");
-                
-              auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-              colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-              colliderComp->radius = 2.0f;
-              newEnemy->AddComponent(std::move(colliderComp));
               
               newEnemy->AddComponent(std::make_unique<EnemyComponent>());
               rootObjects_.push_back(newEnemy);
@@ -162,7 +186,7 @@ void DevScene::Update() {
       float moveX = 0.0f;
       float moveY = 0.0f;
 
-      // キーボード (矢印キーのみ)
+      // 繧ｭ繝ｼ繝懊・繝・(遏｢蜊ｰ繧ｭ繝ｼ縺ｮ縺ｿ)
       if (services_.input->PressKey(DIK_UP)) {
           moveY -= 1.0f;
       }
@@ -176,16 +200,16 @@ void DevScene::Update() {
           moveX += 1.0f;
       }
 
-      // ゲームパッド対応 (左スティック)
+      // 繧ｲ繝ｼ繝繝代ャ繝牙ｯｾ蠢・(蟾ｦ繧ｹ繝・ぅ繝・け)
       if (services_.input->IsGamepadConnected()) {
           auto pad = services_.input->GetGamepad();
           float padX = pad.lx / 32767.0f;
-          float padY = -pad.ly / 32767.0f; // Y軸は上がプラスなので反転
+          float padY = -pad.ly / 32767.0f; // Y霆ｸ縺ｯ荳翫′繝励Λ繧ｹ縺ｪ縺ｮ縺ｧ蜿崎ｻ｢
           if (std::abs(padX) > 0.2f) moveX = padX;
           if (std::abs(padY) > 0.2f) moveY = padY;
       }
 
-      // 速度の正規化
+      // 騾溷ｺｦ縺ｮ豁｣隕丞喧
       float length = std::sqrt(moveX * moveX + moveY * moveY);
       if (length > 1.0f) {
           moveX /= length;
@@ -195,19 +219,18 @@ void DevScene::Update() {
       reticlePos_.x += moveX * reticleSpeed_ * deltaTime;
       reticlePos_.y += moveY * reticleSpeed_ * deltaTime;
 
-      // 画面内にクランプ (仮で1280x720)
+      // 逕ｻ髱｢蜀・↓繧ｯ繝ｩ繝ｳ繝・(莉ｮ縺ｧ1280x720)
       reticlePos_.x = std::clamp(reticlePos_.x, 0.0f, 1280.0f);
       reticlePos_.y = std::clamp(reticlePos_.y, 0.0f, 720.0f);
 
-      // --- スナップエイムと即着弾(ヒットスキャン)の実装 ---
+      // --- 繧ｹ繝翫ャ繝励お繧､繝縺ｨ蜊ｳ逹€蠑ｾ(繝偵ャ繝医せ繧ｭ繝｣繝ｳ)縺ｮ螳溯｣・---
       if (editorCamera_) {
           Matrix4x4 viewProj = Multiply(editorCamera_->GetViewMatrix(), editorCamera_->GetProjectionMatrix());
           
           Vector3 bestEnemyPos = {0,0,0};
           bool enemyFound = false;
           bool isSnapped = false;
-          float minDistSq = 150.0f * 150.0f; // スナップ判定半径の二乗
-          Vector2 bestEnemyScreen;
+          float minDistSq = 150.0f * 150.0f; // 繧ｹ繝翫ャ繝怜愛螳壼濠蠕・・莠御ｹ・          Vector2 bestEnemyScreen;
 
           for(const auto& obj : rootObjects_) {
               if (obj && obj->GetName() == "Enemy") {
@@ -258,7 +281,7 @@ void DevScene::Update() {
               }
           }
 
-          // --- 発射入力判定と弾の生成 ---
+          // --- 逋ｺ蟆・・蜉帛愛螳壹→蠑ｾ縺ｮ逕滓・ ---
           fireTimer_ += deltaTime;
           bool firePressed = services_.input->PressKey(DIK_SPACE);
           if (services_.input->IsGamepadConnected()) {
@@ -273,18 +296,15 @@ void DevScene::Update() {
               if (isSnapped) {
                   targetPos = bestEnemyPos;
               } else {
-                  // レティクル方向へ飛ばす（ScreenPointToRay相当）
-                  Matrix4x4 viewMat = editorCamera_->GetViewMatrix();
+                  // 繝ｬ繝・ぅ繧ｯ繝ｫ譁ｹ蜷代∈鬟帙・縺呻ｼ・creenPointToRay逶ｸ蠖難ｼ・                  Matrix4x4 viewMat = editorCamera_->GetViewMatrix();
                   Matrix4x4 projMat = editorCamera_->GetProjectionMatrix();
                   float ndcX = (reticlePos_.x / 1280.0f) * 2.0f - 1.0f;
                   float ndcY = 1.0f - (reticlePos_.y / 720.0f) * 2.0f;
                   Matrix4x4 invViewProj = Inverse(Multiply(viewMat, projMat));
                   
-                  // FarClip面上の点を計算
-                  Vector3 rayFar = TransformPoint({ndcX, ndcY, 1.0f}, invViewProj);
+                  // FarClip髱｢荳翫・轤ｹ繧定ｨ育ｮ・                  Vector3 rayFar = TransformPoint({ndcX, ndcY, 1.0f}, invViewProj);
                   
-                  // カメラ位置の取得（viewMatの逆行列の平行移動成分）
-                  Matrix4x4 invView = Inverse(viewMat);
+                  // 繧ｫ繝｡繝ｩ菴咲ｽｮ縺ｮ蜿門ｾ暦ｼ・iewMat縺ｮ騾・｡悟・縺ｮ蟷ｳ陦檎ｧｻ蜍墓・蛻・ｼ・                  Matrix4x4 invView = Inverse(viewMat);
                   Vector3 rayOrigin = { invView.m[3][0], invView.m[3][1], invView.m[3][2] };
                   
                   Vector3 dir = { rayFar.x - rayOrigin.x, rayFar.y - rayOrigin.y, rayFar.z - rayOrigin.z };
@@ -294,8 +314,7 @@ void DevScene::Update() {
                   targetPos = { rayOrigin.x + dir.x * 100.0f, rayOrigin.y + dir.y * 100.0f, rayOrigin.z + dir.z * 100.0f };
               }
 
-              // 発射位置（Playerの位置）
-              Vector3 spawnPos = {0,0,0};
+              // 逋ｺ蟆・ｽ咲ｽｮ・・layer縺ｮ菴咲ｽｮ・・              Vector3 spawnPos = {0,0,0};
               for(const auto& obj : rootObjects_) {
                   if (obj && obj->GetName() == "Player") {
                       spawnPos = obj->GetTransform().translate;
@@ -303,7 +322,7 @@ void DevScene::Update() {
                   }
               }
 
-              // 弾の生成
+              // 蠑ｾ縺ｮ逕滓・
               auto bullet = std::make_shared<AbsoluteEngine::GameObject>("Bullet");
               auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
               modelComp->LoadModel("resources/app/sphere/sphere.obj");
@@ -311,11 +330,9 @@ void DevScene::Update() {
               bullet->GetTransform().translate = spawnPos;
               bullet->GetTransform().scale = {0.2f, 0.2f, 0.2f};
 
-              // 速度計算
-              Vector3 diff = { targetPos.x - spawnPos.x, targetPos.y - spawnPos.y, targetPos.z - spawnPos.z };
+              // 騾溷ｺｦ險育ｮ・              Vector3 diff = { targetPos.x - spawnPos.x, targetPos.y - spawnPos.y, targetPos.z - spawnPos.z };
               float dLen = std::sqrt(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
-              float speed = 50.0f; // 弾速
-              Vector3 velocity = { (diff.x/dLen)*speed, (diff.y/dLen)*speed, (diff.z/dLen)*speed };
+              float speed = 50.0f; // 蠑ｾ騾・              Vector3 velocity = { (diff.x/dLen)*speed, (diff.y/dLen)*speed, (diff.z/dLen)*speed };
 
               auto comp = std::make_unique<BulletComponent>();
               comp->Initialize(velocity);
@@ -328,13 +345,41 @@ void DevScene::Update() {
       reticleSprite_.SetPosition({reticlePos_.x - reticleSize_.x / 2.0f, reticlePos_.y - reticleSize_.y / 2.0f, 0.0f});
   }
 
-  // BaseSceneのエディタ機能（カメラ、オブジェクトの更新）
-  UpdateEditor();
+  // BaseScene縺ｮ繧ｨ繝・ぅ繧ｿ讖溯・・医き繝｡繝ｩ縲√が繝悶ず繧ｧ繧ｯ繝医・譖ｴ譁ｰ・・  UpdateEditor();
 
 #ifdef USE_IMGUI
-  // --- 左パネル：ライト設定（UIから削除し、インスペクター側で管理） ---
+  // --- 繧ｲ繝ｼ繝繝薙Η繝ｼ繝昴・繝医え繧｣繝ｳ繝峨え ---
+  // 繧ｪ繝輔せ繧ｯ繝ｪ繝ｼ繝ｳ繝ｬ繝ｳ繝€繝ｪ繝ｳ繧ｰ縺ｮ邨先棡繧・ImGui 繧ｦ繧｣繝ｳ繝峨え蜀・↓陦ｨ遉ｺ縺吶ｋ
+  // 繧ｦ繧｣繝ｳ繝峨え繧偵ラ繝・く繝ｳ繧ｰ縺励※荳ｭ螟ｮ縺ｫ驟咲ｽｮ縺吶ｋ縺薙→縺ｧ繧ｲ繝ｼ繝逕ｻ髱｢縺ｫ縺ｪ繧・  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::Begin("Viewport##GameView");
+  ImGui::PopStyleVar();
+  // if (postProcessTexture_) { 縺ｮ繝√ぉ繝・け繧貞､悶☆縲√ｂ縺励￥縺ｯRenderer縺ｫ繝・け繧ｹ繝√Ε縺後≠繧九°遒ｺ隱阪☆繧九′
+  // 莉雁屓縺ｯRenderer蜀・Κ縺ｧ蟶ｸ縺ｫ菴懊ｉ繧後ｋ蜑肴署
+  {
+    ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+    if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
+    if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = Renderer::GetInstance()->GetPostProcessTextureSrv();
+    ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
+    
+    // Viewport縺ｸ縺ｮ繝峨Λ繝・げ・・ラ繝ｭ繝・・蜿嶺ｻ假ｼ育判蜒上∈縺ｮ繝峨Ο繝・・・・    if (editorUIManager_) {
+        Matrix4x4 viewMat, projMat;
+        if (editorCamera_) {
+            viewMat = editorCamera_->GetViewMatrix();
+            projMat = editorCamera_->GetProjectionMatrix();
+        } else {
+            viewMat = Renderer::GetInstance()->GetViewMatrix();
+            projMat = Renderer::GetInstance()->GetProjectionMatrix();
+        }
+        editorUIManager_->HandleViewportDragDrop(rootObjects_, viewMat, projMat);
+    }
+  }
 
-  // --- 右パネル：エフェクトテスト ---
+  ImGui::End();
+
+  // --- 蟾ｦ繝代ロ繝ｫ・壹Λ繧､繝郁ｨｭ螳夲ｼシI縺九ｉ蜑企勁縺励€√う繝ｳ繧ｹ繝壹け繧ｿ繝ｼ蛛ｴ縺ｧ邂｡逅・ｼ・---
+
+  // --- 蜿ｳ繝代ロ繝ｫ・壹お繝輔ぉ繧ｯ繝医ユ繧ｹ繝・---
   ImGui::Begin("Effect Test##RightPanel");
   ImGui::Text("Click to spawn effects:");
   
@@ -353,7 +398,7 @@ void DevScene::Update() {
   }
   ImGui::End();
 
-  // --- 下パネル：オブジェクト・エフェクト設定 ---
+  // --- 荳九ヱ繝阪Ν・壹が繝悶ず繧ｧ繧ｯ繝医・繧ｨ繝輔ぉ繧ｯ繝郁ｨｭ螳・---
   ImGui::Begin("Objects##BottomPanel");
   ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
   ImGui::Separator();
@@ -384,19 +429,66 @@ void DevScene::Update() {
   }
   ImGui::End();
 
+  // --- 繝昴せ繝医・繝ｭ繧ｻ繧ｹ繧ｿ繝・---
+  ImGui::Begin("PostProcess##Panel");
+  ImGui::SeparatorText("PostProcess Settings");
+  
+  int ppMode = static_cast<int>(postProcessMode_);
+  const char* postProcessItems[] = {
+      "Normal", "Grayscale", "Sepia", "Vignette", "BoxFilter", 
+      "GaussianFilter", "LuminanceOutline", "DepthOutline", "RadialBlur", "Dissolve", "Random", "HSV"
+  };
+  
+  if (ImGui::Combo("Effect Mode", &ppMode, postProcessItems, IM_ARRAYSIZE(postProcessItems))) {
+      postProcessMode_ = static_cast<Renderer::PostProcessMode>(ppMode);
+  }
 
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+
+  if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
+      ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
+      ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
+      ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter) {
+      ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
+      ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::RadialBlur) {
+      ImGui::SliderFloat2("Center", &radialBlurCenter_.x, 0.0f, 1.0f);
+      ImGui::SliderFloat("Blur Width", &radialBlurWidth_, 0.0f, 0.1f);
+  } else if (postProcessMode_ == Renderer::PostProcessMode::Dissolve) {
+      ImGui::SliderFloat("Threshold", &dissolveThreshold_, 0.0f, 1.0f);
+      ImGui::SliderFloat("Edge Range", &dissolveEdgeRange_, 0.0f, 0.1f);
+      ImGui::ColorEdit3("Edge Color", &dissolveEdgeColor_.x);
+      ImGui::ColorEdit3("Mask Color", &dissolveMaskColor_.x);
+  }
+  // else if (postProcessMode_ == Renderer::PostProcessMode::HSV) {
+  //     ImGui::SliderFloat("Hue", &hsvHue_, -1.0f, 1.0f);
+  //     ImGui::SliderFloat("Saturation", &hsvSaturation_, -1.0f, 1.0f);
+  //     ImGui::SliderFloat("Value", &hsvValue_, -1.0f, 1.0f);
+  // }
+
+  // 繝ｬ繝ｳ繝€繝ｩ繝ｼ縺ｫ繝昴せ繝医お繝輔ぉ繧ｯ繝医・繝代Λ繝｡繝ｼ繧ｿ繧呈ｸ｡縺・  Renderer::GetInstance()->SetVignetteParam(vignetteScale_, vignettePow_);
+  Renderer::GetInstance()->SetBoxFilterParam(boxFilterK_);
+  Renderer::GetInstance()->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
+  Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, radialBlurWidth_);
+  Renderer::GetInstance()->SetDissolveParam(dissolveThreshold_, dissolveEdgeRange_, dissolveEdgeColor_, dissolveMaskColor_);
   Renderer::GetInstance()->SetRandomParam(time_);
+  // Renderer::GetInstance()->SetHSVParam(hsvHue_, hsvSaturation_, hsvValue_);
+  
+  ImGui::End();
 
   // --- ツールバー・エディタUIの描画はGameApp側のSceneManager::DrawEditorUI()で行うため削除 ---
 
 #endif
 
-  // --- 弾の寿命チェックと敵の当たり判定 ---
+  // --- 蠑ｾ縺ｮ蟇ｿ蜻ｽ繝√ぉ繝・け縺ｨ謨ｵ縺ｮ蠖薙◆繧雁愛螳・---
   for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
       auto& obj = *it;
       if (obj && obj->GetName() == "Bullet") {
-          // 寿命(Active状態)の確認
-          bool isActive = true;
+          // 蟇ｿ蜻ｽ(Active迥ｶ諷・縺ｮ遒ｺ隱・          bool isActive = true;
           for (const auto& comp : obj->GetComponents()) {
               if (comp->GetTypeName() == "BulletComponent") {
                   auto bulletComp = static_cast<BulletComponent*>(comp.get());
@@ -412,8 +504,7 @@ void DevScene::Update() {
               continue;
           }
 
-          // すべての生きた敵と当たり判定
-          bool hit = false;
+          // 縺吶∋縺ｦ縺ｮ逕溘″縺滓雰縺ｨ蠖薙◆繧雁愛螳・          bool hit = false;
           Vector3 bPos = obj->GetTransform().translate;
           float hitRadius = 1.5f;
 
@@ -437,18 +528,15 @@ void DevScene::Update() {
                   if (distSq < hitRadius * hitRadius) {
                       hit = true;
                       
-                      // ヒットエフェクトの発生
-                      SpawnHitEffect(targetEnemyPos);
+                      // 繝偵ャ繝医お繝輔ぉ繧ｯ繝医・逋ｺ逕・                      SpawnHitEffect(targetEnemyPos);
                       auto device = Renderer::GetInstance()->GetDX()->GetDevice();
                       EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_.get(), targetEnemyPos));
 
-                      // カメラシェイク開始
-                      cameraShakeDuration_ = 0.3f;
+                      // 繧ｫ繝｡繝ｩ繧ｷ繧ｧ繧､繧ｯ髢句ｧ・                      cameraShakeDuration_ = 0.3f;
                       cameraShakeTimer_ = 0.0f;
                       cameraShakeIntensity_ = 0.2f;
 
-                      // ヒット時の歪み開始
-                      hitDistortionDuration_ = 0.2f;
+                      // 繝偵ャ繝域凾縺ｮ豁ｪ縺ｿ髢句ｧ・                      hitDistortionDuration_ = 0.2f;
                       hitDistortionTimer_ = 0.0f;
                       hitDistortionIntensity_ = 0.05f;
                       
@@ -458,7 +546,7 @@ void DevScene::Update() {
                       Vector3 screenPos = TransformPoint(targetEnemyPos, viewProj);
                       radialBlurCenter_ = { screenPos.x * 0.5f + 0.5f, -screenPos.y * 0.5f + 0.5f };
 
-                      // 爆発の光（ポイントライト）の生成
+                      // 辷・匱縺ｮ蜈会ｼ医・繧､繝ｳ繝医Λ繧､繝茨ｼ峨・逕滓・
                       auto lightObj = std::make_shared<AbsoluteEngine::GameObject>("ExplosionLight");
                       lightObj->GetTransform().translate = targetEnemyPos;
                       auto lightNodeComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
@@ -473,7 +561,7 @@ void DevScene::Update() {
                       lightObj->AddComponent(std::move(lightComp));
                       newObjects.push_back(lightObj);
 
-                      // 敵をディゾルブ消滅させる
+                      // 謨ｵ繧偵ョ繧｣繧ｾ繝ｫ繝匁ｶ域ｻ・＆縺帙ｋ
                       for (const auto& comp : eObj->GetComponents()) {
                           if (comp->GetTypeName() == "EnemyComponent") {
                               static_cast<EnemyComponent*>(comp.get())->OnHit();
@@ -481,8 +569,7 @@ void DevScene::Update() {
                           }
                       }
                       
-                      break; // 1つの弾は1体の敵にしか当たらない
-                  }
+                      break; // 1縺､縺ｮ蠑ｾ縺ｯ1菴薙・謨ｵ縺ｫ縺励°蠖薙◆繧峨↑縺・                  }
               }
           }
 
@@ -494,7 +581,7 @@ void DevScene::Update() {
       ++it;
   }
 
-  // ディゾルブ完了のEnemyや寿命切れのライト削除
+  // 繝・ぅ繧ｾ繝ｫ繝門ｮ御ｺ・・Enemy繧・ｯｿ蜻ｽ蛻・ｌ縺ｮ繝ｩ繧､繝亥炎髯､
   for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
       auto& obj = *it;
       bool shouldDelete = false;
@@ -525,12 +612,12 @@ void DevScene::Update() {
       }
   }
 
-  // 新規オブジェクトの追加
+  // 譁ｰ隕上が繝悶ず繧ｧ繧ｯ繝医・霑ｽ蜉
   rootObjects_.insert(rootObjects_.end(), newObjects.begin(), newObjects.end());
 
   EffectManager::GetInstance()->Update(deltaTime, editorCamera_.get());
 
-  // ゲームロジックは PlayMode の時のみ更新する
+  // 繧ｲ繝ｼ繝繝ｭ繧ｸ繝・け縺ｯ PlayMode 縺ｮ譎ゅ・縺ｿ譖ｴ譁ｰ縺吶ｋ
   if (playMode_ == PlayMode::Play) {
 
 
@@ -551,7 +638,7 @@ void DevScene::Draw() {
   auto* renderer = Renderer::GetInstance();
   renderer->BeginRenderScene();
 
-  // --- カメラ・ライト設定（オフスクリーンパス前に確定させる） ---
+  // --- 繧ｫ繝｡繝ｩ繝ｻ繝ｩ繧､繝郁ｨｭ螳夲ｼ医が繝輔せ繧ｯ繝ｪ繝ｼ繝ｳ繝代せ蜑阪↓遒ｺ螳壹＆縺帙ｋ・・---
   if (editorCamera_) {
     if (auto edCam = dynamic_cast<AbsoluteEngine::EditorCamera*>(editorCamera_.get())) {
         edCam->SetShakeOffset(cameraShakeOffset_);
@@ -560,10 +647,11 @@ void DevScene::Draw() {
     renderer->SetCamera(*editorCamera_);
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
-  // --- ライトの適用 ---
+  renderer->SetVignetteParam(vignetteScale_, vignettePow_);
+  // --- 繝ｩ繧､繝医・驕ｩ逕ｨ ---
   ApplyEditorLightsToRenderer(renderer);
 
-  // --- エディタ上で配置したオブジェクト群の描画 ---
+  // --- 繧ｨ繝・ぅ繧ｿ荳翫〒驟咲ｽｮ縺励◆繧ｪ繝悶ず繧ｧ繧ｯ繝育ｾ､縺ｮ謠冗判 ---
   for (auto& obj : rootObjects_) {
     obj->Draw();
   }
@@ -571,47 +659,48 @@ void DevScene::Draw() {
   renderer->RenderPrimitives();
   skybox_.Draw();
 
-  // 新しいエフェクトマネージャによる描画
+  // 譁ｰ縺励＞繧ｨ繝輔ぉ繧ｯ繝医・繝阪・繧ｸ繝｣縺ｫ繧医ｋ謠冗判
   EffectManager::GetInstance()->Draw();
 
-  // パーティクルの描画
+  // 繝代・繝・ぅ繧ｯ繝ｫ縺ｮ謠冗判
   ParticleManager::GetInstance()->Draw(static_cast<BlendMode>(particleBlendMode_ + 1));
 
-  // --- レティクルの描画 ---
+  // --- 繝ｬ繝・ぅ繧ｯ繝ｫ縺ｮ謠冗判 ---
   reticleSprite_.Draw();
 
-  // --- ポストプロセスの適用 ---
+  // --- 繝昴せ繝医・繝ｭ繧ｻ繧ｹ縺ｮ驕ｩ逕ｨ ---
   Matrix4x4 projInverse;
   if (editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
-  renderer->EndRenderScene(projInverse);
+
+  renderer->EndRenderScene(postProcessMode_, projInverse);
 }
 
 void DevScene::InitLogging_() {
-  // 古いログ機能は削除されました。今後はLoggerクラスを使用します。
-}
+  // 蜿､縺・Ο繧ｰ讖溯・縺ｯ蜑企勁縺輔ｌ縺ｾ縺励◆縲ゆｻ雁ｾ後・Logger繧ｯ繝ｩ繧クラス繧剃ｽｿ逕ｨ縺励∪縺吶€・}
 
 void DevScene::InitResources_() {
-  auto *am = AbsoluteEngine::AssetManager::GetInstance();
+  auto *mm = ModelManager::GetInstance();
+  auto *tm = TextureManager::GetInstance();
   auto *dx = Renderer::GetInstance()->GetDX();
 
-  resSphere_ = am->Load<ModelResource>("resources/app/sphere/sphere.obj");
-  resTerrain_ = am->Load<ModelResource>("resources/app/terrain/terrain.obj");
-  resCube_ = am->Load<ModelResource>("resources/app/cube/cube.obj");
-  resAnimCube_ = am->Load<ModelResource>("resources/app/AnimatedCube/AnimatedCube.gltf");
+  resSphere_ = mm->Load("resources/app/sphere/sphere.obj");
+  resTerrain_ = mm->Load("resources/app/terrain/terrain.obj");
+  resCube_ = mm->Load("resources/app/cube/cube.obj");
+  resAnimCube_ = mm->Load("resources/app/AnimatedCube/AnimatedCube.gltf");
   animCubeAnim_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/AnimatedCube", "AnimatedCube.gltf");
-  resEffect_ = am->Load<ModelResource>("resources/app/particle/particle.obj");
+  resEffect_ = mm->Load("resources/app/particle/particle.obj");
 
   modelSphere_.Initialize({resSphere_, {1, 1, 1, 1}, 0});
     modelTerrain_.Initialize({resTerrain_, {1, 1, 1, 1}, 0});
   modelAnimCube_.Initialize({resAnimCube_, {1, 1, 1, 1}, 1});
   if (animCubeAnim_) modelAnimCube_.PlayAnimation(animCubeAnim_, true);
 
-  resSimpleSkin_ = am->Load<ModelResource>("resources/app/simpleSkin/simpleSkin.gltf");
+  resSimpleSkin_ = mm->Load("resources/app/simpleSkin/simpleSkin.gltf");
   animSimpleSkin_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/simpleSkin", "simpleSkin.gltf");
   modelSimpleSkin_.Initialize({resSimpleSkin_, {1, 1, 1, 1}, 1});
   if (animSimpleSkin_) modelSimpleSkin_.PlayAnimation(animSimpleSkin_, true);
 
-  resHuman_ = am->Load<ModelResource>("resources/app/human/walk.gltf");
+  resHuman_ = mm->Load("resources/app/human/walk.gltf");
   animHuman_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/human", "walk.gltf");
   modelHuman_.Initialize({resHuman_, {1, 1, 1, 1}, 1});
   if (animHuman_) modelHuman_.PlayAnimation(animHuman_, true);
@@ -619,20 +708,20 @@ void DevScene::InitResources_() {
   sprite_.Initialize({"resources/app/plane/uvChecker.png", {640, 360}, {1, 1, 1, 1}});
   skybox_.Initialize("resources/app/dds/dds.dds");
 
-  // --- 照準（レティクル）の初期化 ---
-  texReticle_ = am->Load<TextureResource>("resources/Reticle/reticle.png");
+  // --- エディタUIの処理オートロード ---
+  if (!LoadEditorScene()) {
   Sprite::CreateInfo reticleInfo;
   reticleInfo.texturePath = "resources/Reticle/reticle.png";
   reticleInfo.size = reticleSize_;
-  reticleInfo.color = {1.0f, 1.0f, 1.0f, 1.0f}; // 白色
+  reticleInfo.color = {1.0f, 1.0f, 1.0f, 1.0f}; // 逋ｽ濶ｲ
   reticleSprite_.Initialize(reticleInfo);
 
-  texRing_ = am->Load<TextureResource>("resources/app/textures/gradationLine.png");
+  texRing_ = tm->Load("resources/app/textures/gradationLine.png");
 
-  texNoise0_ = am->Load<TextureResource>("resources/noise/noise0.png");
+  texNoise0_ = tm->Load("resources/noise/noise0.png");
   Renderer::GetInstance()->SetDissolveMaskTexture(texNoise0_);
 
-  texCylinder_ = am->Load<TextureResource>("resources/app/textures/gradationLine.png");
+  texCylinder_ = tm->Load("resources/app/textures/gradationLine.png");
 
   ParticleManager::GetInstance()->CreateParticleGroup(particleGroupName_, "resources/app/particle/circle.png", kParticleCount_);
   ParticleManager::GetInstance()->CreateParticleGroup("explosion", "resources/explosion/explosion.png", 100);
@@ -641,11 +730,10 @@ void DevScene::InitResources_() {
   p.emitRate = 10.0f;
   particleEmitter_.Initialize(ParticleManager::GetInstance(), p);
 
-  // --- ライトの初期設定 ---
-  // 最初からシーンに配置しておくライトを rootObjects_ に追加する
+  // --- 繝ｩ繧､繝医・蛻晄悄險ｭ螳・---
+  // 譛蛻昴°繧峨す繝ｼ繝ｳ縺ｫ驟咲ｽｮ縺励※縺翫￥繝ｩ繧､繝医ｒ rootObjects_ 縺ｫ霑ｽ蜉縺吶ｋ
   auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
-  initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f }; // 適当な方向
-  auto dirLightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
+  initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f }; // 驕ｩ蠖薙↑譁ｹ蜷・  auto dirLightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
   dirLightComp->type = AbsoluteEngine::LightNodeComponent::Type::Directional;
   dirLightComp->color = { 1.0f, 1.0f, 1.0f };
   dirLightComp->intensity = 1.0f;
@@ -662,7 +750,7 @@ void DevScene::InitResources_() {
   initialPointLight->AddComponent(std::move(pointLightComp));
   rootObjects_.push_back(initialPointLight);
 
-  // オフスクリーンテスト初期化
+  // 繧ｪ繝輔せ繧ｯ繝ｪ繝ｼ繝ｳ繝・せ繝亥・譛溷喧
   Renderer::GetInstance()->InitializePostProcess(1280, 720);
 }
 
@@ -676,13 +764,12 @@ void DevScene::InitCamera_() {
 }
 
 void DevScene::SpawnHitEffect(const Vector3 &pos) {
-  // 爆発の画像（explosion.png）を使ったパーティクルをランダムな方向へ大きく拡散
+  // 辷・匱縺ｮ逕ｻ蜒擾ｼ・xplosion.png・峨ｒ菴ｿ縺｣縺溘ヱ繝ｼ繝・ぅ繧ｯ繝ｫ繧偵Λ繝ｳ繝繝縺ｪ譁ｹ蜷代∈螟ｧ縺阪￥諡｡謨｣
   for (int i = 0; i < 30; ++i) {
       float rX = ((rand() % 200) / 100.0f) - 1.0f;
       float rY = ((rand() % 200) / 100.0f) - 1.0f;
       float rZ = ((rand() % 200) / 100.0f) - 1.0f;
-      // 速度と大きさを中間に調整（飛び散りすぎないように）
-      Vector3 vel = {rX * 1.5f, rY * 1.5f, rZ * 1.5f};
+      // 騾溷ｺｦ縺ｨ螟ｧ縺阪＆繧剃ｸｭ髢薙↓隱ｿ謨ｴ・磯｣帙・謨｣繧翫☆縺弱↑縺・ｈ縺・↓・・      Vector3 vel = {rX * 1.5f, rY * 1.5f, rZ * 1.5f};
       ParticleManager::GetInstance()->Emit(
           "explosion", pos, vel,
           Vector3{1.5f, 1.5f, 1.5f}, Vector3{0, 0, 0}, 0.7f, Vector4{1, 1, 1, 1});

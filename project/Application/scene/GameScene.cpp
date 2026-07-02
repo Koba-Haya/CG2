@@ -6,7 +6,7 @@
 #include "ModelManager.h"
 #include "ParticleManager.h"
 #include "Input.h"
-#include "../camera/RailCameraController.h"
+#include "../camera/RailCameraComponent.h"
 #include "Spline.h"
 #include "Method.h"
 #include "GameObject.h"
@@ -18,50 +18,27 @@
 #endif
 #include "AbsoluteEngine/scene/ComponentFactory.h"
 #include "AbsoluteEngine/editor/EditorUIManager.h"
-#include "../component/enemy/StraightMoveComponent.h"
-#include "../component/enemy/EnemyComponent.h"
-#include "../component/enemy/EnemyShootComponent.h"
-#include "../component/enemy/BossComponent.h"
+#include "../actor/Enemy/StraightMoveComponent.h"
+#include "../actor/Enemy/EnemyComponent.h"
+#include "../actor/Enemy/EnemyShootComponent.h"
+#include "../actor/Enemy/BossComponent.h"
 #include "SceneIds.h"
+#include "AbsoluteEngine/resources/AssetManager.h"
+#include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
-
-// テスト用コンポーネント
-class SpinComponent : public AbsoluteEngine::IComponent {
-public:
-    void Update(float deltaTime) override {
-        if (owner_) {
-            auto& t = owner_->GetTransform();
-            t.rotate.y += 2.0f * deltaTime;
-        }
-    }
-    std::string GetTypeName() const override { return "SpinComponent"; }
-};
-
-class MoveComponent : public AbsoluteEngine::IComponent {
-public:
-    void Update(float deltaTime) override {
-        if (owner_) {
-            auto& t = owner_->GetTransform();
-            t.translate.x += std::sin(frame_ * 0.05f) * 0.05f;
-            frame_ += 1.0f;
-        }
-    }
-    std::string GetTypeName() const override { return "MoveComponent"; }
-private:
-    float frame_ = 0.0f;
-};
+#include "AbsoluteEngine/scene/ColliderComponent.h"
 
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
 
-  auto* mm = ModelManager::GetInstance();
+  auto* am = AbsoluteEngine::AssetManager::GetInstance();
 
   // リソースのロード
-  resPlayer_ = mm->Load("resources/app/player/player.obj"); // 追加された自機モデル
-  resBullet_ = mm->Load("resources/app/bullet/bullet.obj"); // 追加された弾モデル
-  resEnemy_  = mm->Load("resources/app/cube/cube.obj"); // 敵モデル
-  resEffect_ = mm->Load("resources/app/particle/particle.obj");
+  resPlayer_ = am->Load<ModelResource>("resources/app/player/player.obj"); // 追加された自機モデル
+  resBullet_ = am->Load<ModelResource>("resources/app/bullet/bullet.obj"); // 追加された弾モデル
+  resEnemy_  = am->Load<ModelResource>("resources/app/cube/cube.obj"); // 敵モデル
+  resEffect_ = am->Load<ModelResource>("resources/app/particle/particle.obj");
 
   if (!resBullet_) {
       // 万一 bullet.obj が読み込めない場合は、確実に存在する enemy (cube.obj) を仮割り当てする
@@ -83,31 +60,27 @@ void GameScene::Initialize(const SceneServices &services) {
   debugCamera_->Initialize();
   debugCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
 
-  auto railController = std::make_unique<RailCameraController>();
-  railController_ = railController.get();
-  CameraContext ctx{};
-  ctx.deltaTime = 1.0f / 60.0f;
-  gameCamera_->SetController(std::move(railController), ctx);
+  auto* cameraPtr = gameCamera_.get();
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("RailCameraComponent", []() {
+      auto comp = std::make_unique<RailCameraComponent>();
+      // cameraPtrはここではなくInitialize等で設定する
+      return comp;
+  });
   // コンポーネントファクトリの登録
   auto* inputPtr = services_.input;
-  auto* cameraPtr = gameCamera_.get();
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", [inputPtr, cameraPtr]() {
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", []() {
       auto comp = std::make_unique<PlayerComponent>();
       comp->Initialize();
-      comp->SetInput(inputPtr);
-      comp->SetCamera(cameraPtr);
       return comp;
   });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BulletComponent", []() { return std::make_unique<BulletComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BossComponent", []() { return std::make_unique<BossComponent>(); });
 
   // オートロード：保存されたシーンを読み込む
-  LoadScene();
+  LoadEditorScene();
 
   // シーン開始直後の初期視点がワープしないように1度更新して位置を確定させる
   gameCamera_->Update(*services_.input);
@@ -144,18 +117,7 @@ void GameScene::Initialize(const SceneServices &services) {
       playerComp->SetCamera(gameCamera_.get());
   }
 
-  auto* dx = Renderer::GetInstance()->GetDX();
-  renderTexture_ = std::make_unique<RenderTexture>();
-  renderTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
-
-  depthTexture_ = std::make_unique<DepthTexture>();
-  depthTexture_->Initialize(dx, 1280, 720);
-
-  postProcessTexture_ = std::make_unique<RenderTexture>();
-  postProcessTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
-
-  gaussianTempTexture_ = std::make_unique<RenderTexture>();
-  gaussianTempTexture_->Initialize(dx, 1280, 720, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, {0.1f, 0.25f, 0.5f, 1.0f});
+  Renderer::GetInstance()->InitializePostProcess(1280, 720);
 
   // デフォルトのライトを探す
   bool hasLight = false;
@@ -174,6 +136,23 @@ void GameScene::Initialize(const SceneServices &services) {
       lightComp->intensity = 1.0f;
       initialDirLight->AddComponent(std::move(lightComp));
       rootObjects_.push_back(initialDirLight);
+  }
+
+  // レールカメラを探す
+  bool hasRailCamera = false;
+  for (const auto& obj : rootObjects_) {
+      if (obj && obj->GetComponent<RailCameraComponent>()) {
+          obj->GetComponent<RailCameraComponent>()->SetCamera(gameCamera_.get());
+          hasRailCamera = true;
+          break;
+      }
+  }
+  if (!hasRailCamera) {
+      auto railCamObj = std::make_shared<AbsoluteEngine::GameObject>("RailCamera");
+      auto rComp = std::make_unique<RailCameraComponent>();
+      rComp->SetCamera(gameCamera_.get());
+      railCamObj->AddComponent(std::move(rComp));
+      rootObjects_.push_back(railCamObj);
   }
 }
 
@@ -246,7 +225,15 @@ void GameScene::Update() {
   // ただしPlayMode時のみ。
 
   // ボスフェーズ移行
-  if (phase_ == GamePhase::InProgress && railController_->GetProgress() >= 1.0f) {
+  float railProgress = 0.0f;
+  for (const auto& obj : rootObjects_) {
+      if (auto comp = obj->GetComponent<RailCameraComponent>()) {
+          railProgress = comp->GetProgress();
+          break;
+      }
+  }
+
+  if (phase_ == GamePhase::InProgress && railProgress >= 1.0f) {
       phase_ = GamePhase::Boss;
       auto bossObj = std::make_shared<AbsoluteEngine::GameObject>("Boss");
       Vector3 eye = gameCamera_->GetEye();
@@ -259,221 +246,38 @@ void GameScene::Update() {
       bossObj->AddComponent(std::move(bossModelComp));
       bossObj->AddComponent(std::make_unique<BossComponent>());
       bossObj->AddComponent(std::make_unique<EnemyShootComponent>());
+
+      auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
+      colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+      colliderComp->radius = 5.0f; // ボスなので大きめに
+      bossObj->AddComponent(std::move(colliderComp));
+      bossObj->SetTag("Boss");
+
       rootObjects_.push_back(bossObj);
   }
 
-  // 弾の発射（スペースキー）
-  if (shootCooldown_ > 0.0f) shootCooldown_ -= deltaTime;
-  if (services_.input->PressKey(DIK_SPACE) && shootCooldown_ <= 0.0f && resBullet_ && playerObj_) {
-      shootCooldown_ = 0.25f; // 連射速度を適正化（光線化を防ぎ1発ずつの独立感を強調）
-      auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("Bullet");
-      auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-      bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
-      bulletObj->AddComponent(std::move(bulletModelComp));
-      bulletObj->GetTransform().translate = playerObj_->GetTransform().translate;
-      Vector3 forward = gameCamera_->GetForward();
-      Vector3 vel = { forward.x * 35.0f, forward.y * 35.0f, forward.z * 35.0f }; // 弾速を適正化
-      auto bulletComp = std::make_unique<BulletComponent>();
-      bulletComp->Initialize(vel);
-      bulletObj->AddComponent(std::move(bulletComp));
-      bulletObjs_.push_back(bulletObj);
-      rootObjects_.push_back(bulletObj);
-  }
-
-  // 弾の更新（コンポーネント化されたためrootObjects_経由で呼ばれるが、削除管理はこちらで行う）
-  // 消えた弾を削除
-  bulletObjs_.erase(std::remove_if(bulletObjs_.begin(), bulletObjs_.end(), [&](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
-      if (!obj) return true;
-      bool isActive = false;
-      for (const auto& comp : obj->GetComponents()) {
-          if (comp->GetTypeName() == "BulletComponent") {
-              auto* bComp = dynamic_cast<BulletComponent*>(comp.get());
-              if (bComp) isActive = bComp->IsActive();
-              break;
-          }
-      }
-      if (!isActive) {
-          rootObjects_.erase(std::remove(rootObjects_.begin(), rootObjects_.end(), obj), rootObjects_.end());
-          return true;
-      }
-      return false;
-  }), bulletObjs_.end());
-
-  // --- 敵からの弾の発射処理 ---
-  for (auto& obj : rootObjects_) {
-      if (!obj) continue;
-      
-      for (const auto& comp : obj->GetComponents()) {
-          if (comp->GetTypeName() == "EnemyShootComponent") {
-              auto* shootComp = dynamic_cast<EnemyShootComponent*>(comp.get());
-              if (shootComp && shootComp->WantToShoot() && playerObj_) {
-                  Vector3 spawnPos = obj->GetTransform().translate;
-                  Vector3 targetPos = playerObj_->GetTransform().translate;
-                  
-                  Vector3 diff = { targetPos.x - spawnPos.x, targetPos.y - spawnPos.y, targetPos.z - spawnPos.z };
-                  Vector3 dir = Normalize(diff);
-                  Vector3 vel = { dir.x * 20.0f, dir.y * 20.0f, dir.z * 20.0f }; // 弾速
-                  
-                  auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("EnemyBullet");
-                  auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-                  bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
-                  bulletObj->AddComponent(std::move(bulletModelComp));
-                  bulletObj->GetTransform().translate = spawnPos;
-                  auto bulletComp = std::make_unique<BulletComponent>();
-                  bulletComp->Initialize(vel);
-                  bulletObj->AddComponent(std::move(bulletComp));
-                  enemyBulletObjs_.push_back(bulletObj);
-                  rootObjects_.push_back(bulletObj);
-                  
-                  shootComp->ClearShootFlag();
-              }
-              break;
-          }
-      }
-  }
-
-  // 敵の弾の更新（削除管理）
-  enemyBulletObjs_.erase(std::remove_if(enemyBulletObjs_.begin(), enemyBulletObjs_.end(), [&](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
-      if (!obj) return true;
-      bool isActive = false;
-      for (const auto& comp : obj->GetComponents()) {
-          if (comp->GetTypeName() == "BulletComponent") {
-              auto* bComp = dynamic_cast<BulletComponent*>(comp.get());
-              if (bComp) isActive = bComp->IsActive();
-              break;
-          }
-      }
-      if (!isActive) {
-          rootObjects_.erase(std::remove(rootObjects_.begin(), rootObjects_.end(), obj), rootObjects_.end());
-          return true;
-      }
-      return false;
-  }), enemyBulletObjs_.end());
-
-  // --- 当たり判定（弾 vs 敵 GameObject） ---
-  for (auto& bulletObj : bulletObjs_) {
-      if (!bulletObj) continue;
-      BulletComponent* bComp = nullptr;
-      for (const auto& comp : bulletObj->GetComponents()) {
-          if (comp->GetTypeName() == "BulletComponent") {
-              bComp = dynamic_cast<BulletComponent*>(comp.get());
-              break;
-          }
-      }
-      if (!bComp || !bComp->IsActive()) continue;
-
-      for (auto& obj : rootObjects_) {
-          if (!obj || obj == bulletObj || obj == playerObj_) continue;
-          
-          EnemyComponent* enemyComp = nullptr;
-          BossComponent* bossComp = nullptr;
-          for (const auto& comp : obj->GetComponents()) {
-              if (comp->GetTypeName() == "EnemyComponent") {
-                  enemyComp = dynamic_cast<EnemyComponent*>(comp.get());
-              } else if (comp->GetTypeName() == "BossComponent") {
-                  bossComp = dynamic_cast<BossComponent*>(comp.get());
-              }
-          }
-
-          bool isHit = false;
-          if (enemyComp && enemyComp->IsActive()) {
-              Vector3 objPos = obj->GetTransform().translate;
-              Vector3 bulletPos = bulletObj->GetTransform().translate;
-              Vector3 diff = { bulletPos.x - objPos.x, bulletPos.y - objPos.y, bulletPos.z - objPos.z };
-              float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-              float rSum = bComp->GetCollisionRadius() + enemyComp->GetCollisionRadius();
-              if (distSq <= rSum * rSum) {
-                  SpawnHitEffect(objPos);
-                  enemyComp->OnHit();
-                  isHit = true;
-              }
-          } else if (bossComp && bossComp->IsActive()) {
-              Vector3 objPos = obj->GetTransform().translate;
-              Vector3 bulletPos = bulletObj->GetTransform().translate;
-              Vector3 diff = { bulletPos.x - objPos.x, bulletPos.y - objPos.y, bulletPos.z - objPos.z };
-              float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-              float rSum = bComp->GetCollisionRadius() + bossComp->GetCollisionRadius();
-              if (distSq <= rSum * rSum) {
-                  SpawnHitEffect(objPos);
-                  bossComp->TakeDamage(1);
-                  isHit = true;
-                  if (!bossComp->IsActive()) {
-                      phase_ = GamePhase::Clear;
-                      RequestSceneChange(SceneId::Clear);
-                      isTransitioning = true;
-                  }
-              }
-          }
-
-          if (isHit) {
-              bComp->Deactivate();
-              break;
-          }
-      }
-  }
-
-  // 撃破された（IsActive() == false）EnemyComponentまたはBossComponentを持つGameObjectをシーンから削除
-  rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), [](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
-      if (!obj) return true;
-      for (const auto& comp : obj->GetComponents()) {
-          if (comp->GetTypeName() == "EnemyComponent") {
-              auto* enemyComp = dynamic_cast<EnemyComponent*>(comp.get());
-              if (enemyComp && !enemyComp->IsActive()) return true;
-          } else if (comp->GetTypeName() == "BossComponent") {
-              auto* bossComp = dynamic_cast<BossComponent*>(comp.get());
-              if (bossComp && !bossComp->IsActive()) return true;
-          }
-      }
-      return false;
-  }), rootObjects_.end());
-
-  // --- 当たり判定（敵の弾 vs プレイヤー） ---
+  // --- プレイヤーとボスの生存チェック（シーン遷移用） ---
   if (playerObj_) {
-      PlayerComponent* pComp = nullptr;
-      for (const auto& comp : playerObj_->GetComponents()) {
-          if (comp->GetTypeName() == "PlayerComponent") {
-              pComp = dynamic_cast<PlayerComponent*>(comp.get());
+      auto pComp = playerObj_->GetComponent<PlayerComponent>();
+      if (pComp && pComp->IsDead()) {
+          phase_ = GamePhase::GameOver;
+          RequestSceneChange(SceneId::GameOver);
+          isTransitioning = true;
+      }
+  }
+
+  if (phase_ == GamePhase::Boss) {
+      bool bossAlive = false;
+      for (auto& obj : rootObjects_) {
+          if (obj && obj->GetComponent<BossComponent>()) {
+              bossAlive = true;
               break;
           }
       }
-
-      if (pComp) {
-          for (auto& bulletObj : enemyBulletObjs_) {
-              if (!bulletObj) continue;
-              BulletComponent* bComp = nullptr;
-              for (const auto& comp : bulletObj->GetComponents()) {
-                  if (comp->GetTypeName() == "BulletComponent") {
-                      bComp = dynamic_cast<BulletComponent*>(comp.get());
-                      break;
-                  }
-              }
-              if (!bComp || !bComp->IsActive()) continue;
-
-              Vector3 bulletPos = bulletObj->GetTransform().translate;
-              Vector3 playerPos = playerObj_->GetTransform().translate;
-              
-              Vector3 diff = {
-                  bulletPos.x - playerPos.x,
-                  bulletPos.y - playerPos.y,
-                  bulletPos.z - playerPos.z
-              };
-              float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-              
-              float playerRadius = 1.0f; // プレイヤーの当たり判定（仮）
-              float rSum = bComp->GetCollisionRadius() + playerRadius;
-
-              if (distSq <= rSum * rSum) {
-                  // 被弾！
-                  SpawnHitEffect(playerPos);
-                  bComp->Deactivate();
-                  pComp->TakeDamage(1);
-                  if (pComp->IsDead()) {
-                      phase_ = GamePhase::GameOver;
-                      RequestSceneChange(SceneId::GameOver);
-                      isTransitioning = true;
-                  }
-              }
-          }
+      if (!bossAlive) {
+          phase_ = GamePhase::Clear;
+          RequestSceneChange(SceneId::Clear);
+          isTransitioning = true;
       }
   }
 
@@ -490,161 +294,34 @@ void GameScene::Update() {
   hitEffects_.erase(std::remove_if(hitEffects_.begin(), hitEffects_.end(), [](const HitEffect& e) { return !e.isActive; }), hitEffects_.end());
   } // end of if (playMode_ == PlayMode::Play)
 
-#ifdef USE_IMGUI
-    // --- ゲームビューポートウィンドウ ---
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::Begin("Viewport##GameView");
-  ImGui::PopStyleVar();
-  if (!isTransitioning && postProcessTexture_) {
-    ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-    if (viewportSize.x < 1.0f) viewportSize.x = 1.0f;
-    if (viewportSize.y < 1.0f) viewportSize.y = 1.0f;
-    D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = postProcessTexture_->GetSrvGpuHandle();
-    ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
-    
-    Matrix4x4 viewMat, projMat;
-    if (playMode_ == PlayMode::Edit && editorCamera_) {
-        viewMat = editorCamera_->GetViewMatrix();
-        projMat = editorCamera_->GetProjectionMatrix();
-    } else if (isDebugCamera_ && debugCamera_) {
-        viewMat = debugCamera_->GetViewMatrix();
-        projMat = debugCamera_->GetProjectionMatrix();
-    } else if (gameCamera_) {
-        viewMat = gameCamera_->GetViewMatrix();
-        projMat = gameCamera_->GetProjectionMatrix();
-    } else {
-        viewMat = Renderer::GetInstance()->GetViewMatrix();
-        projMat = Renderer::GetInstance()->GetProjectionMatrix();
-    }
-
-    if (editorUIManager_) {
-        editorUIManager_->HandleViewportDragDrop(rootObjects_, viewMat, projMat);
-    }
-
-    if (railController_) {
-        ImVec2 windowPos = ImGui::GetWindowPos();
-        ImVec2 windowSize = ImGui::GetWindowSize();
-        railController_->HandleMousePicking(viewMat, projMat, windowPos.x, windowPos.y, windowSize.x, windowSize.y);
-        railController_->DrawGizmo(viewMat, projMat, windowPos.x, windowPos.y, windowSize.x, windowSize.y);
-    }
-  }
-  ImGui::End();
-
-    DrawEditorUI();
-
-    ImGui::Begin("GameScene Controls##LeftPanel");
-  ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-  ImGui::Separator();
-  
-  ImGui::SeparatorText("Bullet Controls & Info");
-  ImGui::Text("Active Bullets: %d", (int)bulletObjs_.size());
-  if (!bulletObjs_.empty() && bulletObjs_[0]) {
-      const auto& pos = bulletObjs_[0]->GetTransform().translate;
-      ImGui::Text("Bullet[0] Pos: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
-  }
-  
-  int hp = 0;
-  int maxHp = 0;
-  if (playerObj_) {
-      for (const auto& comp : playerObj_->GetComponents()) {
-          if (comp->GetTypeName() == "PlayerComponent") {
-              if (auto* pComp = dynamic_cast<PlayerComponent*>(comp.get())) {
-                  hp = pComp->GetHp();
-                  maxHp = pComp->GetMaxHp();
-              }
-          }
-      }
-  }
-  ImGui::Text("Player HP: %d / %d", hp, maxHp);
-  
-  ImGui::SeparatorText("Camera Controls");
-  Vector3 eye = gameCamera_->GetEye();
-  Vector3 target = gameCamera_->GetTarget();
-  ImGui::Text("Camera Eye: (%.2f, %.2f, %.2f)", eye.x, eye.y, eye.z);
-  ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
-  ImGui::Text("Rail Progress: %.1f %%", railController_->GetProgress() * 100.0f);
-  
-  // レールカメラのUI描画
-  if (railController_) {
-      railController_->DrawEditorUI(eye);
-  }
-
-  ImGui::Checkbox("Debug Camera Mode", &isDebugCamera_);
-  if (isDebugCamera_) {
-      Vector3 camPos = debugCamera_->GetTranslate();
-      if (ImGui::DragFloat3("Debug Camera Pos", &camPos.x, 0.1f)) {
-          debugCamera_->SetTranslate(camPos);
-      }
-      Vector3 camRot = debugCamera_->GetRotation();
-      if (ImGui::DragFloat3("Debug Camera Rot", &camRot.x, 0.05f)) {
-          debugCamera_->SetRotation(camRot);
-      }
-  }
-  ImGui::Checkbox("Show Rail Debug Line", &showDebugRail_);
-  if (ImGui::Button("Reset Rail Camera")) {
-      railController_->ResetProgress();
-      CameraContext ctx{ 1.0f / 60.0f };
-      gameCamera_->SetContext(ctx);
-      gameCamera_->Update(*services_.input);
-  }
-
-  ImGui::SeparatorText("Post Process");
-  int mode = static_cast<int>(postProcessMode_);
-  if (ImGui::RadioButton("Normal", &mode, static_cast<int>(Renderer::PostProcessMode::Normal))) postProcessMode_ = Renderer::PostProcessMode::Normal;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Grayscale", &mode, static_cast<int>(Renderer::PostProcessMode::Grayscale))) postProcessMode_ = Renderer::PostProcessMode::Grayscale;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Sepia", &mode, static_cast<int>(Renderer::PostProcessMode::Sepia))) postProcessMode_ = Renderer::PostProcessMode::Sepia;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Vignette", &mode, static_cast<int>(Renderer::PostProcessMode::Vignette))) postProcessMode_ = Renderer::PostProcessMode::Vignette;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("BoxFilter", &mode, static_cast<int>(Renderer::PostProcessMode::BoxFilter))) postProcessMode_ = Renderer::PostProcessMode::BoxFilter;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("GaussianFilter", &mode, static_cast<int>(Renderer::PostProcessMode::GaussianFilter))) postProcessMode_ = Renderer::PostProcessMode::GaussianFilter;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("LuminanceOutline", &mode, static_cast<int>(Renderer::PostProcessMode::LuminanceBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::LuminanceBasedOutline;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("DepthOutline", &mode, static_cast<int>(Renderer::PostProcessMode::DepthBasedOutline))) postProcessMode_ = Renderer::PostProcessMode::DepthBasedOutline;
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Random", &mode, static_cast<int>(Renderer::PostProcessMode::Random))) postProcessMode_ = Renderer::PostProcessMode::Random;
-
-  if (postProcessMode_ == Renderer::PostProcessMode::Vignette) {
-      ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
-      ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::BoxFilter) {
-      ImGui::SliderInt("BoxFilter K", &boxFilterK_, 1, 10);
-  } else if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter) {
-      ImGui::SliderInt("GaussianFilter K", &gaussianFilterK_, 1, 10);
-      ImGui::SliderFloat("GaussianFilter Sigma", &gaussianFilterSigma_, 0.1f, 10.0f);
-  }
-
-  ImGui::End();
-#endif
 
   // シーンの自動セーブ
   bool shouldSave = false;
-  if (editorUIManager_ && editorUIManager_->ConsumeSceneModifiedFlag()) {
-      shouldSave = true;
-  }
-  if (railController_ && railController_->ConsumeModifiedFlag()) {
-      shouldSave = true;
+  for (const auto& obj : rootObjects_) {
+      if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
+          if (rComp->ConsumeModifiedFlag()) {
+              shouldSave = true;
+          }
+      }
   }
   if (shouldSave) {
-      SaveScene();
+      SaveEditorScene();
   }
 }
 
+void GameScene::BackupScene() {
+    backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, true);
+}
+
+void GameScene::RestoreScene() {
+    rootObjects_.clear();
+    AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
+}
+
+
 void GameScene::Draw() {
-  auto* renderer = Renderer::GetInstance();
-  auto* dx = renderer->GetDX();
-
-  if (renderTexture_ && depthTexture_) {
-    dx->SetRenderTargetWithDepth(renderTexture_.get(), depthTexture_.get());
-    float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
-    dx->GetCommandList()->ClearRenderTargetView(renderTexture_->GetRtvHandle(), clearColor, 0, nullptr);
-
-    dx->GetCommandList()->ClearDepthStencilView(depthTexture_->GetDsvHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-  }
+  auto *renderer = Renderer::GetInstance();
+  renderer->BeginRenderScene();
 
   if (playMode_ == PlayMode::Edit) {
       if (editorCamera_) renderer->SetCamera(*editorCamera_);
@@ -654,9 +331,6 @@ void GameScene::Draw() {
       renderer->SetCamera(*gameCamera_);
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
-  renderer->SetVignetteParam(vignetteScale_, vignettePow_);
-  renderer->SetBoxFilterParam(boxFilterK_);
-  renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
   renderer->SetRandomParam(time_);
 
   // --- ライトの適用 ---
@@ -677,7 +351,14 @@ void GameScene::Draw() {
 
   // --- デバッグラインの描画 ---
   if (showDebugRail_) {
-      const auto& waypoints = railController_->GetWaypoints();
+      std::vector<Vector3> waypoints;
+      for (const auto& obj : rootObjects_) {
+          if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
+              waypoints = rComp->GetWaypoints();
+              break;
+          }
+      }
+      
       if (waypoints.size() >= 2) {
           Matrix4x4 viewMat = renderer->GetViewMatrix();
           Matrix4x4 invView = Inverse(viewMat);
@@ -717,51 +398,86 @@ void GameScene::Draw() {
   renderer->RenderPrimitives();
   renderer->DrawGPUParticles();
 
-  if (renderTexture_ && depthTexture_) {
-      dx->FinishRenderingWithDepth(renderTexture_.get(), depthTexture_.get());
-  }
+  Matrix4x4 projInverse;
+  if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
+  else if (isDebugCamera_) projInverse = Inverse(debugCamera_->GetProjectionMatrix());
+  else projInverse = Inverse(gameCamera_->GetProjectionMatrix());
 
-  if (renderTexture_ && postProcessTexture_) {
-    if (postProcessMode_ == Renderer::PostProcessMode::GaussianFilter && gaussianTempTexture_) {
-      // パス1: 横方向
-      dx->SetRenderTarget(gaussianTempTexture_.get());
-      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {1.0f, 0.0f});
-      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-      dx->FinishRendering(gaussianTempTexture_.get());
-
-      // パス2: 縦方向
-      dx->SetRenderTarget(postProcessTexture_.get());
-      renderer->SetGaussianFilterParam(gaussianFilterK_, gaussianFilterSigma_, {0.0f, 1.0f});
-      renderer->DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), postProcessMode_);
-      dx->FinishRendering(postProcessTexture_.get());
-    } else if (postProcessMode_ == Renderer::PostProcessMode::DepthBasedOutline) {
-      dx->SetRenderTarget(postProcessTexture_.get());
-      Matrix4x4 projInverse;
-      if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
-      else if (isDebugCamera_) projInverse = Inverse(debugCamera_->GetProjectionMatrix());
-      else projInverse = Inverse(gameCamera_->GetProjectionMatrix());
-      renderer->SetDepthBasedOutlineParam(projInverse);
-      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_, depthTexture_->GetSrvGpuHandle());
-      dx->FinishRendering(postProcessTexture_.get());
-    } else {
-      dx->SetRenderTarget(postProcessTexture_.get());
-      renderer->DrawFullscreen(renderTexture_->GetSrvGpuHandle(), postProcessMode_);
-      dx->FinishRendering(postProcessTexture_.get());
-    }
-  }
+  renderer->EndRenderScene(projInverse);
 }
 
-#include "AbsoluteEngine/scene/SceneSerializer.h"
-#include <filesystem>
 
-void GameScene::SaveScene() {
-    std::filesystem::create_directories("C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/");
-    AbsoluteEngine::SceneSerializer::Serialize(sceneFilePath_, rootObjects_, railController_);
-}
 
-void GameScene::LoadScene() {
-    AbsoluteEngine::SceneSerializer::Deserialize(sceneFilePath_, rootObjects_, railController_);
-    if (editorUIManager_) {
-        editorUIManager_->SetSelectedObject(nullptr);
+void GameScene::DrawEditorUI() {
+    BaseScene::DrawEditorUI(); // ツールバー等の描画
+
+#ifdef USE_IMGUI
+    if (phase_ != GamePhase::GameOver) {
+        // [REMOVED] Duplicated ImGui::Begin("Viewport##GameView") which breaks ImGui rendering
     }
+
+    ImGui::Begin("GameScene Controls##LeftPanel");
+    ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+    ImGui::Separator();
+    
+    int hp = 0;
+    int maxHp = 0;
+    if (playerObj_) {
+        for (const auto& comp : playerObj_->GetComponents()) {
+            if (comp->GetTypeName() == "PlayerComponent") {
+                if (auto* pComp = dynamic_cast<PlayerComponent*>(comp.get())) {
+                    hp = pComp->GetHp();
+                    maxHp = pComp->GetMaxHp();
+                }
+            }
+        }
+    }
+    ImGui::Text("Player HP: %d / %d", hp, maxHp);
+    
+    ImGui::SeparatorText("Camera Controls");
+    Vector3 eye = gameCamera_->GetEye();
+    Vector3 target = gameCamera_->GetTarget();
+    ImGui::Text("Camera Eye: (%.2f, %.2f, %.2f)", eye.x, eye.y, eye.z);
+    ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
+    
+    if (showDebugRail_) {
+        // Find component
+        RailCameraComponent* rComp = nullptr;
+        for (const auto& obj : rootObjects_) {
+            if (auto comp = obj->GetComponent<RailCameraComponent>()) {
+                rComp = comp;
+                break;
+            }
+        }
+        if (rComp) {
+            ImGui::Text("Rail Progress: %.1f %%", rComp->GetProgress() * 100.0f);
+        }
+    }
+
+    ImGui::Checkbox("Debug Camera Mode", &isDebugCamera_);
+    if (isDebugCamera_) {
+        Vector3 camPos = debugCamera_->GetTranslate();
+        if (ImGui::DragFloat3("Debug Camera Pos", &camPos.x, 0.1f)) {
+            debugCamera_->SetTranslate(camPos);
+        }
+        Vector3 camRot = debugCamera_->GetRotation();
+        if (ImGui::DragFloat3("Debug Camera Rot", &camRot.x, 0.05f)) {
+            debugCamera_->SetRotation(camRot);
+        }
+    }
+    ImGui::Checkbox("Show Rail Debug Line", &showDebugRail_);
+    if (ImGui::Button("Reset Rail Camera")) {
+        for (const auto& obj : rootObjects_) {
+            if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
+                rComp->ResetProgress();
+                break;
+            }
+        }
+        CameraContext ctx{ 1.0f / 60.0f };
+        gameCamera_->SetContext(ctx);
+        if (services_.input) gameCamera_->Update(*services_.input);
+    }
+
+    ImGui::End();
+#endif
 }

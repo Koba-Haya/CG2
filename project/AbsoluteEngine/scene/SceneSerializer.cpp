@@ -7,7 +7,7 @@
 #include "LightNodeComponent.h"
 #include "ModelComponent.h"
 #include "DissolveComponent.h"
-#include "../../Application/camera/RailCameraController.h"
+
 
 using json = nlohmann::json;
 
@@ -36,16 +36,24 @@ static json SerializeGameObject(const std::shared_ptr<GameObject>& obj, bool for
       {"rotate", Vector3ToJson(t.rotate)},
       {"scale", Vector3ToJson(t.scale)}
     };
+
+    // プレハブのインスタンスでもコンポーネントの追加・変更（オーバーライド）を保存する
+    json componentsJson = json::array();
+    for (const auto& comp : obj->GetComponents()) {
+      json cJson;
+      cJson["type"] = comp->GetTypeName();
+      comp->Serialize(cJson);
+      componentsJson.push_back(cJson);
+    }
+    if (!componentsJson.empty()) {
+      j["components"] = componentsJson;
+    }
+    
     return j;
   }
 
   j["name"] = obj->GetName();
   j["tag"] = obj->GetTag();
-  auto modelComp = obj->GetComponent<ModelComponent>();
-  if (modelComp) {
-    j["modelPath"] = modelComp->GetModelPath();
-    j["texturePath"] = modelComp->GetTexturePath();
-  }
   
   const Transform& t = obj->GetTransform();
   j["transform"] = {
@@ -54,35 +62,11 @@ static json SerializeGameObject(const std::shared_ptr<GameObject>& obj, bool for
     {"scale", Vector3ToJson(t.scale)}
   };
 
-  auto colliderComp = obj->GetComponent<ColliderComponent>();
-  if (colliderComp) {
-    const ColliderComponent& c = *colliderComp;
-    j["collider"] = {
-      {"type", static_cast<int>(c.type)},
-      {"centerOffset", Vector3ToJson(c.centerOffset)},
-      {"radius", c.radius},
-      {"size", Vector3ToJson(c.size)}
-    };
-  }
-
-  auto lightComp = obj->GetComponent<LightNodeComponent>();
-  if (lightComp && lightComp->type != LightNodeComponent::Type::None) {
-    const LightNodeComponent& l = *lightComp;
-    j["light"] = {
-      {"type", static_cast<int>(l.type)},
-      {"color", Vector3ToJson(l.color)},
-      {"intensity", l.intensity},
-      {"radius", l.radius},
-      {"decay", l.decay},
-      {"distance", l.distance},
-      {"coneAngleDeg", l.coneAngleDeg}
-    };
-  }
-
   json componentsJson = json::array();
   for (const auto& comp : obj->GetComponents()) {
     json cJson;
     cJson["type"] = comp->GetTypeName();
+    comp->Serialize(cJson);
     componentsJson.push_back(cJson);
   }
   j["components"] = componentsJson;
@@ -109,6 +93,33 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
         t.rotate = JsonToVector3(tJson["rotate"]);
         t.scale = JsonToVector3(tJson["scale"]);
       }
+      
+      // シーンファイル側のコンポーネント（オーバーライド）で上書きまたは追加
+      if (j.contains("components") && j["components"].is_array()) {
+        for (const auto& cJson : j["components"]) {
+          std::string typeName = cJson.value("type", "");
+          
+          // 既にプレハブ由来で持っているコンポーネントか探す
+          IComponent* existingComp = nullptr;
+          for (const auto& comp : obj->GetComponents()) {
+              if (comp->GetTypeName() == typeName) {
+                  existingComp = comp.get();
+                  break;
+              }
+          }
+          
+          if (existingComp) {
+              existingComp->Deserialize(cJson); // 既存なら設定を上書き（オーバーライド）
+          } else {
+              auto comp = ComponentFactory::GetInstance().Create(typeName);
+              if (comp) {
+                  comp->Deserialize(cJson);
+                  obj->AddComponent(std::move(comp)); // 無ければ追加
+              }
+          }
+        }
+      }
+      
       return obj;
     } else {
       std::cerr << "Failed to load prefab: " << prefabPath << std::endl;
@@ -120,15 +131,6 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
   std::shared_ptr<GameObject> obj = std::make_shared<GameObject>(j.value("name", "GameObject"));
   obj->SetTag(j.value("tag", "Untagged"));
 
-  std::string modelPath = j.value("modelPath", "");
-  std::string texturePath = j.value("texturePath", "");
-  if (!modelPath.empty() || !texturePath.empty()) {
-    auto modelComp = std::make_unique<ModelComponent>();
-    if (!modelPath.empty()) modelComp->LoadModel(modelPath);
-    if (!texturePath.empty()) modelComp->LoadTexture(texturePath);
-    obj->AddComponent(std::move(modelComp));
-  }
-
   if (j.contains("transform")) {
     const auto& tJson = j["transform"];
     Transform& t = obj->GetTransform();
@@ -137,34 +139,12 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
     t.scale = JsonToVector3(tJson["scale"]);
   }
 
-  if (j.contains("collider")) {
-    const auto& cJson = j["collider"];
-    auto colliderComp = std::make_unique<ColliderComponent>();
-    colliderComp->type = static_cast<ColliderComponent::Type>(cJson.value("type", 1));
-    if (cJson.contains("centerOffset")) colliderComp->centerOffset = JsonToVector3(cJson["centerOffset"]);
-    colliderComp->radius = cJson.value("radius", 1.0f);
-    if (cJson.contains("size")) colliderComp->size = JsonToVector3(cJson["size"]);
-    obj->AddComponent(std::move(colliderComp));
-  }
-
-  if (j.contains("light")) {
-    const auto& lJson = j["light"];
-    auto lightComp = std::make_unique<LightNodeComponent>();
-    lightComp->type = static_cast<LightNodeComponent::Type>(lJson.value("type", 0));
-    if (lJson.contains("color")) lightComp->color = JsonToVector3(lJson["color"]);
-    lightComp->intensity = lJson.value("intensity", 1.0f);
-    lightComp->radius = lJson.value("radius", 10.0f);
-    lightComp->decay = lJson.value("decay", 2.0f);
-    lightComp->distance = lJson.value("distance", 10.0f);
-    lightComp->coneAngleDeg = lJson.value("coneAngleDeg", 30.0f);
-    obj->AddComponent(std::move(lightComp));
-  }
-
   if (j.contains("components") && j["components"].is_array()) {
     for (const auto& cJson : j["components"]) {
       std::string typeName = cJson.value("type", "");
       auto comp = ComponentFactory::GetInstance().Create(typeName);
       if (comp) {
+        comp->Deserialize(cJson);
         obj->AddComponent(std::move(comp));
       }
     }
@@ -182,50 +162,28 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
   return obj;
 }
 
-bool SceneSerializer::Serialize(const std::string& filepath, const std::vector<std::shared_ptr<GameObject>>& rootObjects, const RailCameraController* railCamera) {
-  json j;
-  json rootArray = json::array();
-  for (const auto& obj : rootObjects) {
-    rootArray.push_back(SerializeGameObject(obj));
-  }
-  j["rootObjects"] = rootArray;
+bool SceneSerializer::Serialize(const std::string& filepath, const std::vector<std::shared_ptr<GameObject>>& rootObjects, bool forceFullSerialize) {
+  std::string jsonString = SerializeToString(rootObjects, forceFullSerialize);
+  if (jsonString.empty()) return false;
 
-  if (railCamera) {
-    json waypointsArray = json::array();
-    for (const auto& pt : railCamera->GetWaypoints()) {
-      waypointsArray.push_back(Vector3ToJson(pt));
-    }
-    j["railCamera"] = { {"waypoints", waypointsArray} };
-  }
-
-  std::ofstream file(filepath);
-  if (file.is_open()) {
-    file << j.dump(4); // 4スペースインデントで出力
-    return true;
-  }
-  return false;
+  std::ofstream ofs(filepath);
+  if (!ofs.is_open()) return false;
+  ofs << jsonString;
+  return true;
 }
 
-std::string SceneSerializer::SerializeToString(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const RailCameraController* railCamera) {
+std::string SceneSerializer::SerializeToString(const std::vector<std::shared_ptr<GameObject>>& rootObjects, bool forceFullSerialize) {
   json j;
   json rootArray = json::array();
   for (const auto& obj : rootObjects) {
-    rootArray.push_back(SerializeGameObject(obj));
+    rootArray.push_back(SerializeGameObject(obj, forceFullSerialize));
   }
   j["rootObjects"] = rootArray;
 
-  if (railCamera) {
-    json waypointsArray = json::array();
-    for (const auto& pt : railCamera->GetWaypoints()) {
-      waypointsArray.push_back(Vector3ToJson(pt));
-    }
-    j["railCamera"] = { {"waypoints", waypointsArray} };
-  }
-  
   return j.dump(4);
 }
 
-bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects, RailCameraController* outRailCamera) {
+bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects) {
   std::ifstream file(filepath);
   if (!file.is_open()) return false;
 
@@ -247,17 +205,6 @@ bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::
     }
   }
 
-  if (outRailCamera && j.contains("railCamera")) {
-    const auto& rcJson = j["railCamera"];
-    if (rcJson.contains("waypoints") && rcJson["waypoints"].is_array()) {
-      std::vector<Vector3> waypoints;
-      for (const auto& ptJson : rcJson["waypoints"]) {
-        waypoints.push_back(JsonToVector3(ptJson));
-      }
-      outRailCamera->SetWaypoints(waypoints);
-    }
-  }
-
   return true;
 }
 
@@ -267,7 +214,7 @@ std::shared_ptr<GameObject> SceneSerializer::CopyGameObject(std::shared_ptr<Game
   return DeserializeGameObject(j);
 }
 
-bool SceneSerializer::DeserializeFromString(const std::string& jsonString, std::vector<std::shared_ptr<GameObject>>& outRootObjects, RailCameraController* outRailCamera) {
+bool SceneSerializer::DeserializeFromString(const std::string& jsonString, std::vector<std::shared_ptr<GameObject>>& outRootObjects) {
   if (jsonString.empty()) return false;
   try {
     json j = json::parse(jsonString);
@@ -277,17 +224,6 @@ bool SceneSerializer::DeserializeFromString(const std::string& jsonString, std::
         if (obj) {
           outRootObjects.push_back(obj);
         }
-      }
-    }
-
-    if (outRailCamera && j.contains("railCamera")) {
-      const auto& rcJson = j["railCamera"];
-      if (rcJson.contains("waypoints") && rcJson["waypoints"].is_array()) {
-        std::vector<Vector3> waypoints;
-        for (const auto& ptJson : rcJson["waypoints"]) {
-          waypoints.push_back(JsonToVector3(ptJson));
-        }
-        outRailCamera->SetWaypoints(waypoints);
       }
     }
   } catch (const std::exception& e) {

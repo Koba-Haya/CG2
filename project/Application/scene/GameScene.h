@@ -6,10 +6,9 @@
 #include "ModelInstance.h"
 #include "ModelResource.h"
 #include "Renderer.h"
-#include "graphics/texture/RenderTexture.h"
-#include "graphics/texture/DepthTexture.h"
-#include "../actor/Player/Player.h"
-#include "../actor/Bullet/Bullet.h"
+#include "../actor/Player/PlayerComponent.h"
+#include "../actor/Bullet/BulletComponent.h"
+#include "../actor/Enemy/EnemyShootComponent.h"
 #include <memory>
 #include <vector>
 
@@ -29,9 +28,13 @@ public:
   void Finalize() override;
   void Update() override;
   void Draw() override;
+  void DrawEditorUI() override;
 
-  void SaveScene();
-  void LoadScene();
+
+
+protected:
+  void BackupScene() override;
+  void RestoreScene() override;
 
 private:
   void SpawnHitEffect(const Vector3 &pos);
@@ -39,18 +42,6 @@ private:
 private:
   std::unique_ptr<GameCamera> gameCamera_;
   std::unique_ptr<DebugCamera> debugCamera_;
-  std::unique_ptr<RenderTexture> renderTexture_;
-  std::unique_ptr<DepthTexture> depthTexture_;
-  std::unique_ptr<RenderTexture> postProcessTexture_;
-  std::unique_ptr<RenderTexture> gaussianTempTexture_;
-  Renderer::PostProcessMode postProcessMode_ = Renderer::PostProcessMode::Normal;
-  float vignetteScale_ = 16.0f;
-  float vignettePow_ = 0.8f;
-  int32_t boxFilterK_ = 1;
-  int32_t gaussianFilterK_ = 1;
-  float gaussianFilterSigma_ = 1.0f;
-  class RailCameraController* railController_ = nullptr; // 所有権は gameCamera_ が持つ
-
 
   bool isDebugCamera_ = false;
   bool showDebugRail_ = true;
@@ -61,8 +52,6 @@ private:
 
   // アクター関連
   std::shared_ptr<AbsoluteEngine::GameObject> playerObj_;
-  std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> bulletObjs_;
-  std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> enemyBulletObjs_;
 
   // リソース
   std::shared_ptr<ModelResource> resPlayer_;
@@ -85,8 +74,9 @@ private:
   };
   std::vector<HitEffect> hitEffects_;
 
-  float shootCooldown_ = 0.0f;
+  float spawnTimer_ = 0.0f;
+  
   float time_ = 0.0f;
 
   GamePhase phase_ = GamePhase::InProgress;
-};
+};

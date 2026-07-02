@@ -10,6 +10,7 @@ public:
 
   void Initialize(const Vector3 &vel);
   void Update(float deltaTime) override;
+  void OnCollision(AbsoluteEngine::GameObject* other) override;
   
   std::string GetTypeName() const override { return "BulletComponent"; }
 

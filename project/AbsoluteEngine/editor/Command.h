@@ -3,8 +3,8 @@
 #include <vector>
 #include <algorithm>
 #include "../scene/GameObject.h"
-#include "../scene/LightNodeComponent.h"
 #include "../Type/Transform.h"
+#include "../../externals/nlohmann/json.hpp"
 
 namespace AbsoluteEngine {
 
@@ -107,32 +107,39 @@ private:
     std::vector<std::shared_ptr<GameObject>>* rootObjects_;
 };
 
-// ライト変更のコマンド
-class LightCommand : public ICommand {
+// 汎用コンポーネント状態変更のコマンド
+class ComponentStateCommand : public ICommand {
 public:
-    LightCommand(std::shared_ptr<GameObject> target, const LightNodeComponent& before, const LightNodeComponent& after)
-        : target_(target), before_(before), after_(after) {}
+    ComponentStateCommand(std::shared_ptr<GameObject> target, const std::string& componentType, const nlohmann::json& beforeState, const nlohmann::json& afterState)
+        : target_(target), componentType_(componentType), before_(beforeState), after_(afterState) {}
 
     void Execute() override {
         if (auto t = target_.lock()) {
-            if (auto comp = t->GetComponent<LightNodeComponent>()) {
-                *comp = after_;
+            for (const auto& comp : t->GetComponents()) {
+                if (comp->GetTypeName() == componentType_) {
+                    comp->Deserialize(after_);
+                    break;
+                }
             }
         }
     }
 
     void Undo() override {
         if (auto t = target_.lock()) {
-            if (auto comp = t->GetComponent<LightNodeComponent>()) {
-                *comp = before_;
+            for (const auto& comp : t->GetComponents()) {
+                if (comp->GetTypeName() == componentType_) {
+                    comp->Deserialize(before_);
+                    break;
+                }
             }
         }
     }
 
 private:
     std::weak_ptr<GameObject> target_;
-    LightNodeComponent before_;
-    LightNodeComponent after_;
+    std::string componentType_;
+    nlohmann::json before_;
+    nlohmann::json after_;
 };
 
 } // namespace AbsoluteEngine

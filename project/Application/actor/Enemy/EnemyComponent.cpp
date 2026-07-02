@@ -17,6 +17,13 @@ void EnemyComponent::Update(float deltaTime) {
             dissolve.edgeRange = 0.05f;
             dissolve.edgeColor = {1.0f, 0.0f, 0.0f}; // 赤色のエッジ
             dissolve.maskColor = {1.0f, 0.0f, 0.0f}; 
+            
+            if (t >= 1.0f) {
+                owner_->Destroy();
+            }
+        } else {
+            // DissolveComponentがない場合は即時消滅
+            owner_->Destroy();
         }
     }
 }
@@ -26,5 +33,14 @@ void EnemyComponent::OnHit() {
         isDead_ = true;
         isActive_ = false;
         dissolveTimer_ = 0.0f;
+    }
+}
+
+void EnemyComponent::OnCollision(AbsoluteEngine::GameObject* other) {
+    if (!isActive_ || isDead_) return;
+    
+    // 自機弾に当たったらダメージ
+    if (other->GetName().find("PlayerBullet") != std::string::npos || other->GetTag() == "PlayerBullet") {
+        OnHit();
     }
 }

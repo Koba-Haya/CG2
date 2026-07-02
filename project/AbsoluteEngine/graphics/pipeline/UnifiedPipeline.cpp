@@ -218,9 +218,9 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
 
   D3D12_STATIC_SAMPLER_DESC samp{};
   samp.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-  samp.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-  samp.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-  samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+  samp.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+  samp.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+  samp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
   samp.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
   samp.MaxLOD = D3D12_FLOAT32_MAX;
   samp.ShaderRegister = 0;

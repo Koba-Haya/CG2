@@ -178,14 +178,13 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="actor\Bullet\Bullet.cpp" />
-    <ClCompile Include="actor\Enemy\Enemy.cpp" />
-    <ClCompile Include="actor\Player\Player.cpp" />
-    <ClCompile Include="camera\RailCameraController.cpp" />
-    <ClCompile Include="component\enemy\BossComponent.cpp" />
-    <ClCompile Include="component\enemy\EnemyComponent.cpp" />
-    <ClCompile Include="component\enemy\EnemyShootComponent.cpp" />
-    <ClCompile Include="component\enemy\StraightMoveComponent.cpp" />
+    <ClCompile Include="actor\Bullet\BulletComponent.cpp" />
+    <ClCompile Include="actor\Enemy\BossComponent.cpp" />
+    <ClCompile Include="actor\Enemy\EnemyComponent.cpp" />
+    <ClCompile Include="actor\Enemy\EnemyShootComponent.cpp" />
+    <ClCompile Include="actor\Enemy\StraightMoveComponent.cpp" />
+    <ClCompile Include="actor\Player\PlayerComponent.cpp" />
+    <ClCompile Include="camera\RailCameraComponent.cpp" />
     <ClCompile Include="GameApp.cpp" />
     <ClCompile Include="scene\ClearScene.cpp" />
     <ClCompile Include="scene\DevScene.cpp" />
@@ -199,14 +198,13 @@
     <UpToDateCheckInput Include="resources\**\*.*" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="actor\Bullet\Bullet.h" />
-    <ClInclude Include="actor\Enemy\Enemy.h" />
-    <ClInclude Include="actor\Player\Player.h" />
-    <ClInclude Include="camera\RailCameraController.h" />
-    <ClInclude Include="component\enemy\BossComponent.h" />
-    <ClInclude Include="component\enemy\EnemyComponent.h" />
-    <ClInclude Include="component\enemy\EnemyShootComponent.h" />
-    <ClInclude Include="component\enemy\StraightMoveComponent.h" />
+    <ClInclude Include="actor\Bullet\BulletComponent.h" />
+    <ClInclude Include="actor\Enemy\BossComponent.h" />
+    <ClInclude Include="actor\Enemy\EnemyComponent.h" />
+    <ClInclude Include="actor\Enemy\EnemyShootComponent.h" />
+    <ClInclude Include="actor\Enemy\StraightMoveComponent.h" />
+    <ClInclude Include="actor\Player\PlayerComponent.h" />
+    <ClInclude Include="camera\RailCameraComponent.h" />
     <ClInclude Include="GameApp.h" />
     <ClInclude Include="scene\ClearScene.h" />
     <ClInclude Include="scene\DevScene.h" />

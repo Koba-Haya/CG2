@@ -2,13 +2,12 @@
 #include "GameObject.h"
 #include "Transform.h"
 #include "DissolveComponent.h"
-#include "../graphics/3d/model/ModelManager.h"
-#include "../graphics/texture/TextureManager.h"
+#include "../../resources/AssetManager.h"
 
 namespace AbsoluteEngine {
 
 void ModelComponent::LoadModel(const std::string& path) {
-    auto res = ModelManager::GetInstance()->Load(path);
+    auto res = AssetManager::GetInstance()->Load<ModelResource>(path);
     if (!res) return;
 
     modelPath_ = path;
@@ -28,7 +27,7 @@ void ModelComponent::LoadModel(const std::string& path) {
 void ModelComponent::LoadTexture(const std::string& path) {
     texturePath_ = path;
     if (modelInstance_) {
-        auto tex = TextureManager::GetInstance()->Load(path);
+        auto tex = AssetManager::GetInstance()->Load<TextureResource>(path);
         if (tex) {
             modelInstance_->SetOverrideTexture(tex);
         }

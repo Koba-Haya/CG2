@@ -12,6 +12,7 @@ public:
     std::string GetTypeName() const override { return "BossComponent"; }
 
     bool IsActive() const { return isActive_; }
+    void OnCollision(AbsoluteEngine::GameObject* other) override;
     void TakeDamage(int damage);
 
     float GetCollisionRadius() const { return radius_; }
@@ -22,6 +23,6 @@ public:
 private:
     bool isActive_ = true;
     float radius_ = 5.0f; // ボスなので当たり判定を大きめに
-    int hp_ = 20;         // ボスのHP
-    int maxHp_ = 20;
+    int hp_ = 10;         // ボスのHP
+    int maxHp_ = 10;
 };

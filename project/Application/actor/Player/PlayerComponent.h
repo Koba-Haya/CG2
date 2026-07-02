@@ -17,6 +17,7 @@ public:
 
   void Initialize();
   void Update(float deltaTime) override;
+  void OnCollision(AbsoluteEngine::GameObject* other) override;
 
   std::string GetTypeName() const override { return "PlayerComponent"; }
 
@@ -35,4 +36,5 @@ private:
 
   int hp_ = 5;
   int maxHp_ = 5;
+  float shootCooldown_ = 0.0f;
 };
