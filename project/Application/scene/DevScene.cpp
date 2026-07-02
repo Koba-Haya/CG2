@@ -6,6 +6,8 @@
 #include "AbsoluteEngine/scene/DissolveComponent.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
+#include "AbsoluteEngine/scene/CollisionManager.h"
+#include "AbsoluteEngine/resources/AssetManager.h"
 #include "../actor/Bullet/BulletComponent.h"
 #include "Enemy/EnemyComponent.h"
 #include "DebugCamera.h"
@@ -39,32 +41,6 @@
 #include <random>
 #include "AbsoluteEngine/scene/ComponentFactory.h"
 
-// テスト用コンポーネント
-class SpinComponent : public AbsoluteEngine::IComponent {
-public:
-    void Update(float deltaTime) override {
-        if (owner_) {
-            auto& t = owner_->GetTransform();
-            t.rotate.y += 2.0f * deltaTime;
-        }
-    }
-    std::string GetTypeName() const override { return "SpinComponent"; }
-};
-
-class MoveComponent : public AbsoluteEngine::IComponent {
-public:
-    void Update(float deltaTime) override {
-        if (owner_) {
-            auto& t = owner_->GetTransform();
-            t.translate.x += std::sin(frame_ * 0.05f) * 0.05f;
-            frame_ += 1.0f;
-        }
-    }
-    std::string GetTypeName() const override { return "MoveComponent"; }
-private:
-    float frame_ = 0.0f;
-};
-
 static void FatalBoxAndTerminate_(const std::string &msg) {
   MessageBoxA(nullptr, msg.c_str(), "Fatal", MB_OK | MB_ICONERROR);
   std::terminate();
@@ -84,13 +60,8 @@ void DevScene::Initialize(const SceneServices &services) {
 
   accelerationField_.area.max = {1.0f, 1.0f, 1.0f};
 
-  // --- サンプルコンポーネントの登録 ---
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("SpinComponent", []() { return std::make_unique<SpinComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("MoveComponent", []() { return std::make_unique<MoveComponent>(); });
-
-  // --- エディタUIの初期化とオートロード ---
-  std::string saveDir = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/";
-  if (!AbsoluteEngine::SceneSerializer::Deserialize(saveDir + "scene.json", rootObjects_)) {
+  // --- エディタUIの処理オートロード ---
+  if (!LoadEditorScene()) {
       // ファイルが無い場合はデフォルトの初期配置
       auto obj1 = std::make_shared<AbsoluteEngine::GameObject>("Player");
       auto modelComp1 = std::make_unique<AbsoluteEngine::ModelComponent>();
@@ -98,6 +69,9 @@ void DevScene::Initialize(const SceneServices &services) {
       obj1->AddComponent(std::move(modelComp1));
       obj1->GetTransform().translate = { 0.0f, -1.1f, -15.0f };
       rootObjects_.push_back(obj1);
+      
+      // 初期状態を保存しておく
+      SaveEditorScene();
   }
 
 #ifndef USE_IMGUI
@@ -413,8 +387,7 @@ void DevScene::Update() {
 
   Renderer::GetInstance()->SetRandomParam(time_);
 
-  // --- ツールバー・エディタUIの描画（BaseScene側で行う） ---
-  DrawEditorUI();
+  // --- ツールバー・エディタUIの描画はGameApp側のSceneManager::DrawEditorUI()で行うため削除 ---
 
 #endif
 
@@ -618,28 +591,27 @@ void DevScene::InitLogging_() {
 }
 
 void DevScene::InitResources_() {
-  auto *mm = ModelManager::GetInstance();
-  auto *tm = TextureManager::GetInstance();
+  auto *am = AbsoluteEngine::AssetManager::GetInstance();
   auto *dx = Renderer::GetInstance()->GetDX();
 
-  resSphere_ = mm->Load("resources/app/sphere/sphere.obj");
-  resTerrain_ = mm->Load("resources/app/terrain/terrain.obj");
-  resCube_ = mm->Load("resources/app/cube/cube.obj");
-  resAnimCube_ = mm->Load("resources/app/AnimatedCube/AnimatedCube.gltf");
+  resSphere_ = am->Load<ModelResource>("resources/app/sphere/sphere.obj");
+  resTerrain_ = am->Load<ModelResource>("resources/app/terrain/terrain.obj");
+  resCube_ = am->Load<ModelResource>("resources/app/cube/cube.obj");
+  resAnimCube_ = am->Load<ModelResource>("resources/app/AnimatedCube/AnimatedCube.gltf");
   animCubeAnim_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/AnimatedCube", "AnimatedCube.gltf");
-  resEffect_ = mm->Load("resources/app/particle/particle.obj");
+  resEffect_ = am->Load<ModelResource>("resources/app/particle/particle.obj");
 
   modelSphere_.Initialize({resSphere_, {1, 1, 1, 1}, 0});
     modelTerrain_.Initialize({resTerrain_, {1, 1, 1, 1}, 0});
   modelAnimCube_.Initialize({resAnimCube_, {1, 1, 1, 1}, 1});
   if (animCubeAnim_) modelAnimCube_.PlayAnimation(animCubeAnim_, true);
 
-  resSimpleSkin_ = mm->Load("resources/app/simpleSkin/simpleSkin.gltf");
+  resSimpleSkin_ = am->Load<ModelResource>("resources/app/simpleSkin/simpleSkin.gltf");
   animSimpleSkin_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/simpleSkin", "simpleSkin.gltf");
   modelSimpleSkin_.Initialize({resSimpleSkin_, {1, 1, 1, 1}, 1});
   if (animSimpleSkin_) modelSimpleSkin_.PlayAnimation(animSimpleSkin_, true);
 
-  resHuman_ = mm->Load("resources/app/human/walk.gltf");
+  resHuman_ = am->Load<ModelResource>("resources/app/human/walk.gltf");
   animHuman_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/human", "walk.gltf");
   modelHuman_.Initialize({resHuman_, {1, 1, 1, 1}, 1});
   if (animHuman_) modelHuman_.PlayAnimation(animHuman_, true);
@@ -648,19 +620,19 @@ void DevScene::InitResources_() {
   skybox_.Initialize("resources/app/dds/dds.dds");
 
   // --- 照準（レティクル）の初期化 ---
-  texReticle_ = tm->Load("resources/Reticle/reticle.png");
+  texReticle_ = am->Load<TextureResource>("resources/Reticle/reticle.png");
   Sprite::CreateInfo reticleInfo;
   reticleInfo.texturePath = "resources/Reticle/reticle.png";
   reticleInfo.size = reticleSize_;
   reticleInfo.color = {1.0f, 1.0f, 1.0f, 1.0f}; // 白色
   reticleSprite_.Initialize(reticleInfo);
 
-  texRing_ = tm->Load("resources/app/textures/gradationLine.png");
+  texRing_ = am->Load<TextureResource>("resources/app/textures/gradationLine.png");
 
-  texNoise0_ = tm->Load("resources/noise/noise0.png");
+  texNoise0_ = am->Load<TextureResource>("resources/noise/noise0.png");
   Renderer::GetInstance()->SetDissolveMaskTexture(texNoise0_);
 
-  texCylinder_ = tm->Load("resources/app/textures/gradationLine.png");
+  texCylinder_ = am->Load<TextureResource>("resources/app/textures/gradationLine.png");
 
   ParticleManager::GetInstance()->CreateParticleGroup(particleGroupName_, "resources/app/particle/circle.png", kParticleCount_);
   ParticleManager::GetInstance()->CreateParticleGroup("explosion", "resources/explosion/explosion.png", 100);

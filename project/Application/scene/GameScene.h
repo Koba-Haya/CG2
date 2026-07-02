@@ -30,13 +30,11 @@ public:
   void Draw() override;
   void DrawEditorUI() override;
 
-  void SaveScene();
-  void LoadScene();
+
 
 protected:
   void BackupScene() override;
   void RestoreScene() override;
-  void SaveEditorScene() override;
 
 private:
   void SpawnHitEffect(const Vector3 &pos);

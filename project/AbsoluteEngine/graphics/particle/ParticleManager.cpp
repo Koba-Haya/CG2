@@ -5,7 +5,7 @@
 #include "DirectXCommon.h"
 #include "DirectXResourceUtils.h"
 #include "SrvAllocator.h"
-#include "TextureManager.h"
+#include "../../resources/AssetManager.h"
 #include "TextureResource.h"
 #include "UnifiedPipeline.h"
 #include "Method.h"
@@ -70,7 +70,7 @@ bool ParticleManager::CreateParticleGroup(const std::string& name, const std::st
     g.activeInstanceCount = 0;
 
     // Texture SRV (t0)
-    g.texture = TextureManager::GetInstance()->Load(texturePath);
+    g.texture = AbsoluteEngine::AssetManager::GetInstance()->Load<TextureResource>(texturePath);
     assert(g.texture);
     g.textureSrvGpu = g.texture->GetSrvGpu();
 

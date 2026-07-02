@@ -1,0 +1,110 @@
+{
+    "rootObjects": [
+        {
+            "children": [],
+            "components": [
+                {
+                    "color": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
+                    "coneAngleDeg": 30.0,
+                    "decay": 2.0,
+                    "distance": 10.0,
+                    "intensity": 1.0,
+                    "lightType": 1,
+                    "radius": 10.0,
+                    "type": "LightNodeComponent"
+                }
+            ],
+            "name": "Directional Light",
+            "tag": "Untagged",
+            "transform": {
+                "rotate": {
+                    "x": 0.5,
+                    "y": 0.5,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                }
+            }
+        },
+        {
+            "children": [],
+            "components": [
+                {
+                    "color": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
+                    "coneAngleDeg": 30.0,
+                    "decay": 2.0,
+                    "distance": 10.0,
+                    "intensity": 1.0,
+                    "lightType": 2,
+                    "radius": 10.0,
+                    "type": "LightNodeComponent"
+                }
+            ],
+            "name": "Point Light",
+            "tag": "Untagged",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 0.0,
+                    "y": 2.0,
+                    "z": -2.0
+                }
+            }
+        },
+        {
+            "children": [],
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "",
+                    "type": "ModelComponent"
+                }
+            ],
+            "name": "Player",
+            "tag": "Untagged",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 0.0,
+                    "y": -1.100000023841858,
+                    "z": -15.0
+                }
+            }
+        }
+    ]
+}

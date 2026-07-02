@@ -26,6 +26,7 @@ public:
   virtual ~BaseScene() = default;
 
   void SetSceneManager(SceneManager *sm) { sceneManager_ = sm; }
+  void SetSceneId(const std::string& id) { sceneId_ = id; }
 
   virtual void Initialize(const SceneServices &services);
   virtual void Finalize() {}
@@ -49,6 +50,8 @@ protected:
   virtual void BackupScene();
   virtual void RestoreScene();
   virtual void SaveEditorScene();
+  bool LoadEditorScene();
+  std::string GetSceneFilePath() const;
 
 protected:
   void RequestSceneChange(const std::string &sceneId);
@@ -67,6 +70,7 @@ protected:
   std::unique_ptr<Camera> editorCamera_; // エディタ用カメラ
 
   PlayMode playMode_ = PlayMode::Edit;
+  std::string sceneId_ = "";
   std::string backupSceneJson_ = "";
 
   static BaseScene* activeScene_;

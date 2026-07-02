@@ -9,6 +9,7 @@
 #include "ModelComponent.h"
 #include "ColliderComponent.h"
 #include "LightNodeComponent.h"
+#include "RigidbodyComponent.h"
 
 namespace AbsoluteEngine {
 
@@ -47,6 +48,7 @@ private:
         Register("ModelComponent", []() { return std::make_unique<ModelComponent>(); });
         Register("ColliderComponent", []() { return std::make_unique<ColliderComponent>(); });
         Register("LightNodeComponent", []() { return std::make_unique<LightNodeComponent>(); });
+        Register("RigidbodyComponent", []() { return std::make_unique<RigidbodyComponent>(); });
     }
     std::map<std::string, CreatorFunc> creators_;
 };

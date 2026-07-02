@@ -12,6 +12,7 @@
 #include "GameObject.h"
 #include "Input.h"
 #include "Renderer.h"
+#include <filesystem>
 
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -56,10 +57,26 @@ void BaseScene::RestoreScene() {
     AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
 }
 
+std::string BaseScene::GetSceneFilePath() const {
+    if (sceneId_.empty()) return AbsoluteEngine::EnginePath::Resolve("resources/editor/scenes/scene.json");
+    return AbsoluteEngine::EnginePath::Resolve("resources/editor/scenes/" + sceneId_ + ".json");
+}
+
+bool BaseScene::LoadEditorScene() {
+    std::string filePath = GetSceneFilePath();
+    if (!std::filesystem::exists(filePath)) {
+        // ファイルがない場合は空の状態（または派生先で初期化された状態）で保存して新規作成する
+        SaveEditorScene();
+        return false;
+    }
+    AbsoluteEngine::SceneSerializer::Deserialize(filePath, rootObjects_);
+    return true;
+}
+
 void BaseScene::SaveEditorScene() {
-    std::string saveDir = AbsoluteEngine::EnginePath::Resolve("resources/editor/");
+    std::string saveDir = AbsoluteEngine::EnginePath::Resolve("resources/editor/scenes/");
     std::filesystem::create_directories(saveDir);
-    AbsoluteEngine::SceneSerializer::Serialize(saveDir + "scene.json", rootObjects_);
+    AbsoluteEngine::SceneSerializer::Serialize(GetSceneFilePath(), rootObjects_);
 }
 
 void BaseScene::UpdateEditor() {

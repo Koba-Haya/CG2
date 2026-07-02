@@ -2,7 +2,7 @@
 #include "ModelUtils.h"
 #include "Renderer.h"
 #include "DirectXCommon.h"
-#include "TextureManager.h"
+#include "../../../resources/AssetManager.h"
 #include "TextureResource.h"
 #include <cassert>
 #include <d3d12.h>
@@ -128,7 +128,7 @@ bool ModelResource::Initialize(const CreateInfo &ci) {
     pImpl_->texture = ci.texture;
   } else {
     const std::string texPath = PickDiffuseTexturePath(*ci.modelData);
-    pImpl_->texture = TextureManager::GetInstance()->Load(
+    pImpl_->texture = AbsoluteEngine::AssetManager::GetInstance()->Load<TextureResource>(
         texPath.empty() ? "resources/engine/textures/uvChecker.png" : texPath);
   }
 

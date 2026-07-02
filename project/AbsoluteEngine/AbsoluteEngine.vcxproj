@@ -175,6 +175,8 @@
     <ClCompile Include="scene\DissolveComponent.cpp" />
     <ClCompile Include="scene\SceneManager.cpp" />
     <ClCompile Include="scene\SceneSerializer.cpp" />
+    <ClCompile Include="resources\AssetManager.cpp" />
+    <ClCompile Include="scene\RigidbodyComponent.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\externals\ImGuizmo\ImGuizmo.h" />
@@ -250,6 +252,8 @@
     <ClInclude Include="Type\Matrix.h" />
     <ClInclude Include="Type\Transform.h" />
     <ClInclude Include="Type\Vector.h" />
+    <ClInclude Include="resources\AssetManager.h" />
+    <ClInclude Include="scene\RigidbodyComponent.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

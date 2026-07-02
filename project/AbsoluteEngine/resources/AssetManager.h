@@ -4,10 +4,10 @@
 #include <memory>
 #include <type_traits>
 
-namespace AbsoluteEngine {
-
 class ModelResource;
 class TextureResource;
+
+namespace AbsoluteEngine {
 
 class AssetManager {
 private:

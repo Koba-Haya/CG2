@@ -23,6 +23,7 @@
 #include "../actor/Enemy/EnemyShootComponent.h"
 #include "../actor/Enemy/BossComponent.h"
 #include "SceneIds.h"
+#include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
@@ -31,13 +32,13 @@
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
 
-  auto* mm = ModelManager::GetInstance();
+  auto* am = AbsoluteEngine::AssetManager::GetInstance();
 
   // リソースのロード
-  resPlayer_ = mm->Load("resources/app/player/player.obj"); // 追加された自機モデル
-  resBullet_ = mm->Load("resources/app/bullet/bullet.obj"); // 追加された弾モデル
-  resEnemy_  = mm->Load("resources/app/cube/cube.obj"); // 敵モデル
-  resEffect_ = mm->Load("resources/app/particle/particle.obj");
+  resPlayer_ = am->Load<ModelResource>("resources/app/player/player.obj"); // 追加された自機モデル
+  resBullet_ = am->Load<ModelResource>("resources/app/bullet/bullet.obj"); // 追加された弾モデル
+  resEnemy_  = am->Load<ModelResource>("resources/app/cube/cube.obj"); // 敵モデル
+  resEffect_ = am->Load<ModelResource>("resources/app/particle/particle.obj");
 
   if (!resBullet_) {
       // 万一 bullet.obj が読み込めない場合は、確実に存在する enemy (cube.obj) を仮割り当てする
@@ -60,18 +61,16 @@ void GameScene::Initialize(const SceneServices &services) {
   debugCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
 
   auto* cameraPtr = gameCamera_.get();
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("RailCameraComponent", [cameraPtr]() {
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("RailCameraComponent", []() {
       auto comp = std::make_unique<RailCameraComponent>();
-      comp->SetCamera(cameraPtr);
+      // cameraPtrはここではなくInitialize等で設定する
       return comp;
   });
   // コンポーネントファクトリの登録
   auto* inputPtr = services_.input;
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", [inputPtr, cameraPtr]() {
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", []() {
       auto comp = std::make_unique<PlayerComponent>();
       comp->Initialize();
-      comp->SetInput(inputPtr);
-      comp->SetCamera(cameraPtr);
       return comp;
   });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BulletComponent", []() { return std::make_unique<BulletComponent>(); });
@@ -81,7 +80,7 @@ void GameScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BossComponent", []() { return std::make_unique<BossComponent>(); });
 
   // オートロード：保存されたシーンを読み込む
-  LoadScene();
+  LoadEditorScene();
 
   // シーン開始直後の初期視点がワープしないように1度更新して位置を確定させる
   gameCamera_->Update(*services_.input);
@@ -143,6 +142,7 @@ void GameScene::Initialize(const SceneServices &services) {
   bool hasRailCamera = false;
   for (const auto& obj : rootObjects_) {
       if (obj && obj->GetComponent<RailCameraComponent>()) {
+          obj->GetComponent<RailCameraComponent>()->SetCamera(gameCamera_.get());
           hasRailCamera = true;
           break;
       }
@@ -305,7 +305,7 @@ void GameScene::Update() {
       }
   }
   if (shouldSave) {
-      SaveScene();
+      SaveEditorScene();
   }
 }
 
@@ -318,9 +318,6 @@ void GameScene::RestoreScene() {
     AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
 }
 
-void GameScene::SaveEditorScene() {
-    SaveScene();
-}
 
 void GameScene::Draw() {
   auto *renderer = Renderer::GetInstance();
@@ -409,24 +406,7 @@ void GameScene::Draw() {
   renderer->EndRenderScene(projInverse);
 }
 
-#include "AbsoluteEngine/scene/SceneSerializer.h"
-#include "AbsoluteEngine/base/EnginePath.h"
-#include <filesystem>
 
-void GameScene::SaveScene() {
-    std::string saveDir = AbsoluteEngine::EnginePath::Resolve("resources/editor/");
-    std::filesystem::create_directories(saveDir);
-    sceneFilePath_ = AbsoluteEngine::EnginePath::Resolve("resources/editor/scene.json");
-    AbsoluteEngine::SceneSerializer::Serialize(sceneFilePath_, rootObjects_);
-}
-
-void GameScene::LoadScene() {
-    sceneFilePath_ = AbsoluteEngine::EnginePath::Resolve("resources/editor/scene.json");
-    AbsoluteEngine::SceneSerializer::Deserialize(sceneFilePath_, rootObjects_);
-    if (editorUIManager_) {
-        editorUIManager_->SetSelectedObject(nullptr);
-    }
-}
 
 void GameScene::DrawEditorUI() {
     BaseScene::DrawEditorUI(); // ツールバー等の描画
