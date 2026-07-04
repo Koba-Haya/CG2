@@ -22,7 +22,7 @@ RailCameraComponent::RailCameraComponent() {
         {-15.0f, 2.0f, 140.0f}, // P3: 左下へと急降下旋回
         { 0.0f,  5.0f, 220.0f}  // P4: ゴールへと向かう直進路
     };
-    speed_ = 0.10f; // 進行感を実感できるようスピードを向上
+    speed_ = 0.05f; // 進行スピードを半減してロックオンの余裕を持たせる
     lookAheadOffset_ = 0.02f;
 }
 

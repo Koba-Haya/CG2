@@ -9,6 +9,7 @@
 #include "../actor/Player/PlayerComponent.h"
 #include "../actor/Bullet/BulletComponent.h"
 #include "../actor/Enemy/EnemyShootComponent.h"
+#include "../hud/GameHUD.h"
 #include <memory>
 #include <vector>
 
@@ -79,4 +80,6 @@ private:
   float time_ = 0.0f;
 
   GamePhase phase_ = GamePhase::InProgress;
+
+  std::unique_ptr<GameHUD> gameHUD_;
 };
