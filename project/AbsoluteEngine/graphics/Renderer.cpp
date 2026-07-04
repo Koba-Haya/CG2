@@ -1045,6 +1045,10 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
 
   auto *cmdList = dx_->GetCommandList();
 
+  // ディスクリプタヒープの設定
+  ID3D12DescriptorHeap* heaps[] = { dx_->GetSRVHeap() };
+  cmdList->SetDescriptorHeaps(1, heaps);
+
   // パイプライン設定
   pipeline->SetPipelineState(cmdList);
 

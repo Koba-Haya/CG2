@@ -23,5 +23,5 @@ private:
   bool isActive_ = false;
   float lifeTimer_ = 0.0f;
   float maxLife_ = 3.0f; // 3秒で消滅
-  float radius_ = 0.5f;  // 当たり判定半径
+  float radius_ = 0.2f;  // 当たり判定半径
 };

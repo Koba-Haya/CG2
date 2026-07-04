@@ -1,4 +1,5 @@
 #include "GameOverScene.h"
+#include "Input.h"
 #include "SceneIds.h"
 
 #ifdef USE_IMGUI
@@ -12,6 +13,15 @@ void GameOverScene::Initialize(const SceneServices &services) {
 void GameOverScene::Finalize() {}
 
 void GameOverScene::Update() {
+  if (services_.input) {
+    if (services_.input->TriggerKey(DIK_SPACE) || services_.input->TriggerKey(DIK_RETURN) || services_.input->WasPadPressed(XINPUT_GAMEPAD_A)) {
+      RequestSceneChange(SceneId::Title);
+    }
+    if (services_.input->TriggerKey(DIK_R) || services_.input->WasPadPressed(XINPUT_GAMEPAD_B)) {
+      RequestSceneChange(SceneId::Game);
+    }
+  }
+
 #ifdef USE_IMGUI
   ImGui::SetNextWindowPos(ImVec2(640, 360), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
   ImGui::Begin("Game Over", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove);

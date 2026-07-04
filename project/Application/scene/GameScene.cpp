@@ -154,6 +154,10 @@ void GameScene::Initialize(const SceneServices &services) {
       railCamObj->AddComponent(std::move(rComp));
       rootObjects_.push_back(railCamObj);
   }
+
+  // HUDの初期化
+  gameHUD_ = std::make_unique<GameHUD>();
+  gameHUD_->Initialize();
 }
 
 void GameScene::Finalize() {
@@ -292,6 +296,30 @@ void GameScene::Update() {
       if (ef.frame >= ef.maxFrame) ef.isActive = false;
   }
   hitEffects_.erase(std::remove_if(hitEffects_.begin(), hitEffects_.end(), [](const HitEffect& e) { return !e.isActive; }), hitEffects_.end());
+  
+  // HUDの更新
+  if (gameHUD_) {
+      int hp = 0;
+      int maxHp = 0;
+      std::vector<Vector2> lockPositions;
+      bool isLockingMode = false;
+
+      if (playerObj_) {
+          if (auto pComp = playerObj_->GetComponent<PlayerComponent>()) {
+              hp = pComp->GetHp();
+              maxHp = pComp->GetMaxHp();
+              
+              // ロックオン情報の取得
+              isLockingMode = pComp->lockon_.IsLockingMode();
+              lockPositions = pComp->lockon_.GetLockedScreenPositions(gameCamera_.get());
+              
+              gameHUD_->Update(hp, maxHp, lockPositions, isLockingMode, pComp->GetCursorPos());
+          }
+      } else {
+          gameHUD_->Update(hp, maxHp, lockPositions, isLockingMode, {640.0f, 360.0f});
+      }
+  }
+
   } // end of if (playMode_ == PlayMode::Play)
 
 
@@ -397,6 +425,11 @@ void GameScene::Draw() {
 
   renderer->RenderPrimitives();
   renderer->DrawGPUParticles();
+
+  // HUD等の2Dスプライト描画
+  if (playMode_ == PlayMode::Play && gameHUD_) {
+      gameHUD_->Draw();
+  }
 
   Matrix4x4 projInverse;
   if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
