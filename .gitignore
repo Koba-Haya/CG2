@@ -331,3 +331,5 @@ FodyWeavers.xsd
 # ===== Exclude logs and imgui settings =====
 project/logs/
 project/imgui.ini
+*.tmp
+*.bak
