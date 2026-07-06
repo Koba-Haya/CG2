@@ -33,6 +33,7 @@ void EditorUIManager::DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjec
   DrawHierarchy(rootObjects);
   DrawInspector();
   DrawViewport(rootObjects, viewMatrix, projectionMatrix);
+  DrawPostProcessSettings();
   HandleShortcuts(rootObjects, camera);
 #endif
 }
@@ -1087,8 +1088,10 @@ void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObj
     }
     ImGui::EndDragDropTarget();
   }
+#endif
 }
 
+#ifdef USE_IMGUI
 void EditorUIManager::DrawPostProcessSettings() {
     ImGui::Begin("Post Process Settings");
     
@@ -1115,6 +1118,7 @@ void EditorUIManager::DrawPostProcessSettings() {
     if (ImGui::RadioButton("Random", &postProcessMode_, static_cast<int>(Renderer::PostProcessMode::Random))) postProcessMode_ = static_cast<int>(Renderer::PostProcessMode::Random);
 
     auto* renderer = Renderer::GetInstance();
+    renderer->SetPostProcessMode(static_cast<Renderer::PostProcessMode>(postProcessMode_));
     if (postProcessMode_ == static_cast<int>(Renderer::PostProcessMode::Vignette)) {
         ImGui::SliderFloat("Vignette Scale", &vignetteScale_, 1.0f, 32.0f);
         ImGui::SliderFloat("Vignette Pow", &vignettePow_, 0.1f, 5.0f);
