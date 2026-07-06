@@ -753,6 +753,13 @@ void Renderer::EndRenderScene(const Matrix4x4& projInverse) {
             dx_->FinishRendering(postProcessTexture_.get());
         }
     }
+
+#ifndef USE_IMGUI
+    if (postProcessTexture_) {
+        dx_->ResetRenderTarget();
+        DrawFullscreen(postProcessTexture_->GetSrvGpuHandle(), PostProcessMode::Normal);
+    }
+#endif
 }
 
 void Renderer::RenderPrimitives() {
