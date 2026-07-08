@@ -555,8 +555,10 @@ void EditorUIManager::DrawColliderDebug(const std::vector<std::shared_ptr<GameOb
 void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
   ImGui::Begin("Hierarchy");
 
-  // 階層のルートオブジェクトからツリーを描画
-  for (const auto& obj : rootObjects) {
+  // イテレータ無効化を防ぐため、ループ前にスナップショットを取ってから描画する
+  // （ドラッグ＆ドロップやコンテキストメニュー等でループ中に rootObjects が変更されても安全）
+  auto rootSnapshot = rootObjects;
+  for (const auto& obj : rootSnapshot) {
     DrawGameObjectNode(obj, rootObjects);
   }
 

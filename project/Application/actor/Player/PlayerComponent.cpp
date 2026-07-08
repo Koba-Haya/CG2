@@ -3,6 +3,7 @@
 #include "GameCamera.h"
 #include <algorithm>
 #include <cmath>
+#include <random>   // ランダムな左右オフセット生成に使用
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
@@ -16,20 +17,25 @@ void PlayerComponent::Initialize() {
 }
 
 void PlayerComponent::Update(float deltaTime) {
-  if (!owner_ || !input_ || !camera_) return;
+  if (!owner_) return;
+  auto scene = BaseScene::GetActiveScene();
+  if (!scene) return;
+  auto* input = scene->GetInput();
+  auto* camera = scene->GetMainCamera();
+  if (!input || !camera) return;
 
   // 入力によるカーソルの移動
   float cStep = cursorSpeed_ * deltaTime;
-  if (input_->PressKey(DIK_W) || input_->PressKey(DIK_UP)) {
+  if (input->PressKey(DIK_W) || input->PressKey(DIK_UP)) {
     cursorPos_.y -= cStep; // スクリーン座標なので上は-
   }
-  if (input_->PressKey(DIK_S) || input_->PressKey(DIK_DOWN)) {
+  if (input->PressKey(DIK_S) || input->PressKey(DIK_DOWN)) {
     cursorPos_.y += cStep;
   }
-  if (input_->PressKey(DIK_A) || input_->PressKey(DIK_LEFT)) {
+  if (input->PressKey(DIK_A) || input->PressKey(DIK_LEFT)) {
     cursorPos_.x -= cStep;
   }
-  if (input_->PressKey(DIK_D) || input_->PressKey(DIK_RIGHT)) {
+  if (input->PressKey(DIK_D) || input->PressKey(DIK_RIGHT)) {
     cursorPos_.x += cStep;
   }
 
@@ -49,10 +55,10 @@ void PlayerComponent::Update(float deltaTime) {
   localPos_.y += (targetLocalPos.y - localPos_.y) * moveSpeed_ * deltaTime;
 
   // カメラの情報を取得
-  Vector3 eye = camera_->GetEye();
-  Vector3 forward = camera_->GetForward();
-  Vector3 right = camera_->GetRight();
-  Vector3 up = camera_->GetActualUp();
+  Vector3 eye = camera->GetEye();
+  Vector3 forward = camera->GetForward();
+  Vector3 right = camera->GetRight();
+  Vector3 up = camera->GetActualUp();
 
   // ワールド座標の計算: Eye + Forward*Dist + Right*localX + Up*localY
   Vector3 forwardOffset = { forward.x * cameraDistance_, forward.y * cameraDistance_, forward.z * cameraDistance_ };
@@ -75,11 +81,8 @@ void PlayerComponent::Update(float deltaTime) {
   
   t.rotate = { pitch, yaw, 0.0f };
 
-  auto scene = BaseScene::GetActiveScene();
-  if (!scene) return;
-
   // ロックオンシステムの更新
-  lockon_.Update(deltaTime, input_, camera_, scene, cursorPos_);
+  lockon_.Update(deltaTime, input, camera, scene, cursorPos_);
 
   // クールダウンの減算（以前消えてしまっていたため復活）
   if (shootCooldown_ > 0.0f) {
@@ -87,35 +90,71 @@ void PlayerComponent::Update(float deltaTime) {
   }
 
   // 弾の発射関連
-  bool isReleased = input_->ReleaseKey(DIK_SPACE) || input_->WasPadReleased(XINPUT_GAMEPAD_A) || input_->WasMouseReleased(0);
+  bool isReleased = input->ReleaseKey(DIK_SPACE) || input->WasPadReleased(XINPUT_GAMEPAD_A) || input->WasMouseReleased(0);
 
   if (isReleased) {
       if (lockon_.IsLockingMode()) {
           // 1. 長押し（ロックオンモード）から離したとき：ホーミング弾を発射
           const auto& targets = lockon_.GetLockedTargets();
           if (!targets.empty()) {
-              for (auto target : targets) {
+              // ランダム左右オフセット生成用（弾ごとに異なる弧を描かせる）
+              static std::mt19937 rng(std::random_device{}());
+              std::uniform_real_distribution<float> sideDist(-6.0f, 6.0f);   // 左右オフセット幅
+              std::uniform_real_distribution<float> upDist(5.0f, 10.0f);     // 上方向オフセット幅
+
+              for (const auto& weakTarget : targets) {
+                  // lock()で生存確認。既に消滅しているターゲットへの発射を防ぐ
+                  auto target = weakTarget.lock();
+                  if (!target) continue;
+
                   auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("PlayerHomingBullet");
                   bulletObj->SetTag("PlayerBullet");
-                  
+
                   auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
                   bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
                   bulletObj->AddComponent(std::move(bulletModelComp));
-                  
+
                   auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
                   colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-                  colliderComp->radius = 0.5f;
+                  colliderComp->radius = 1.0f; // ホーミング弾は当たり判定を広めに設定
                   bulletObj->AddComponent(std::move(colliderComp));
-                  
-                  bulletObj->GetTransform().translate = t.translate;
-                  
-                  // ターゲットへ向かう初速ベクトル
-                  Vector3 vel = { forward.x * 20.0f, forward.y * 20.0f + 5.0f, forward.z * 20.0f };
-                  
+
+                  // --- ベジェ曲線用パラメータの計算 ---
+
+                  // P0: 始点（現在の銃口ワールド座標）
+                  Vector3 p0 = t.translate;
+                  bulletObj->GetTransform().translate = p0;
+
+                  // P2の初期値: ターゲットの現在座標（発射瞬間）
+                  Vector3 p2Initial = target->GetTransform().translate;
+
+                  // 中間点: P0 と P2_initial の中点
+                  Vector3 midPoint = {
+                      (p0.x + p2Initial.x) * 0.5f,
+                      (p0.y + p2Initial.y) * 0.5f,
+                      (p0.z + p2Initial.z) * 0.5f
+                  };
+
+                  // P1: 中間点から上方向 + ランダムな左右オフセットを加えた制御点
+                  // 弾ごとに異なるランダム値にすることで、花火のように散開した放物線を実現する
+                  float sideOffset = sideDist(rng); // ランダム左右オフセット
+                  float upOffset   = upDist(rng);   // ランダム上方オフセット
+
+                  // カメラのRight方向を使って「横」を定義することで、どの方向を見ていても正しく散開する
+                  Vector3 p1 = {
+                      midPoint.x + right.x * sideOffset,
+                      midPoint.y + upOffset,
+                      midPoint.z + right.z * sideOffset
+                  };
+
+                  // 着弾時間は固定（0.6秒）
+                  constexpr float kBulletDuration = 0.6f;
+
+                  // HomingBulletComponentをベジェ曲線パラメータで初期化
                   auto homingComp = std::make_unique<HomingBulletComponent>();
-                  homingComp->Initialize(vel, target);
+                  homingComp->Initialize(p0, p1, kBulletDuration, weakTarget);
                   bulletObj->AddComponent(std::move(homingComp));
-                  
+
                   scene->AddRootObject(bulletObj);
               }
           }
@@ -145,7 +184,7 @@ void PlayerComponent::Update(float deltaTime) {
               Vector3 ndcFar = { ndcX, ndcY, 1.0f };
               
               // ViewProjectionの逆行列を使ってワールド座標に変換
-              Matrix4x4 vpMat = Multiply(camera_->GetViewMatrix(), camera_->GetProjectionMatrix());
+              Matrix4x4 vpMat = Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
               Matrix4x4 invVp = Inverse(vpMat);
               
               float w = ndcFar.x * invVp.m[0][3] + ndcFar.y * invVp.m[1][3] + ndcFar.z * invVp.m[2][3] + invVp.m[3][3];

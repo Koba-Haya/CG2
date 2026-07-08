@@ -17,9 +17,11 @@ void LockOnSystem::Initialize() {
 void LockOnSystem::Update(float deltaTime, Input* input, GameCamera* camera, BaseScene* scene, const Vector2& cursorPos) {
     if (!input || !camera || !scene) return;
 
-    // 既に死んでいる敵をロックオン対象から外す
+    // 既に死んでいる・または破棄されている敵をロックオン対象から外す
     lockedTargets_.erase(std::remove_if(lockedTargets_.begin(), lockedTargets_.end(),
-        [](AbsoluteEngine::GameObject* obj) {
+        [](const std::weak_ptr<AbsoluteEngine::GameObject>& weak) {
+            // weak_ptr.lock()で生存確認（破棄済みなら自動でtrue=除外）
+            auto obj = weak.lock();
             if (!obj) return true;
             // EnemyComponentかBossComponentを見て死んでいるかチェック
             auto enemyComp = obj->GetComponent<EnemyComponent>();
@@ -69,11 +71,12 @@ void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, co
         auto bossComp = obj->GetComponent<BossComponent>();
         if (bossComp && bossComp->GetHp() <= 0) continue;
 
-        // 既にロックオン済みかチェック
-        AbsoluteEngine::GameObject* objPtr = obj.get();
-        if (std::find(lockedTargets_.begin(), lockedTargets_.end(), objPtr) != lockedTargets_.end()) {
-            continue;
-        }
+        // 既にロックオン済みかチェック（weak_ptr経由で比較）
+        bool alreadyLocked = std::any_of(lockedTargets_.begin(), lockedTargets_.end(),
+            [&obj](const std::weak_ptr<AbsoluteEngine::GameObject>& weak) {
+                return weak.lock() == obj;
+            });
+        if (alreadyLocked) continue;
 
         // スクリーン内にいるか判定
         Vector3 worldPos = obj->GetTransform().translate;
@@ -100,7 +103,8 @@ void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, co
             
             // 半径75ピクセル以内の場合ロックオン (75*75 = 5625)
             if (distSq <= 5625.0f) {
-                lockedTargets_.push_back(objPtr);
+                // shared_ptr → weak_ptr に変換して安全に保持
+                lockedTargets_.push_back(obj);
                 
                 if (lockedTargets_.size() >= maxLockTargets_) {
                     break;
@@ -122,7 +126,9 @@ std::vector<Vector2> LockOnSystem::GetLockedScreenPositions(GameCamera* camera) 
     float screenW = 1280.0f;
     float screenH = 720.0f;
 
-    for (auto obj : lockedTargets_) {
+    for (const auto& weak : lockedTargets_) {
+        // weak_ptr.lock()で生存確認（破棄済みオブジェクトへのアクセスを防ぐ）
+        auto obj = weak.lock();
         if (!obj) continue;
         Vector3 worldPos = obj->GetTransform().translate;
         Vector3 posV = {

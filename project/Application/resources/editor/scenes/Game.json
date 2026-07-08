@@ -19,7 +19,7 @@
                 }
             ],
             "name": "Directional Light",
-            "tag": "Untagged",
+            "tag": "Light",
             "transform": {
                 "rotate": {
                     "x": 1.0,
@@ -79,7 +79,7 @@
                 }
             ],
             "name": "Player",
-            "tag": "Untagged",
+            "tag": "Player",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -99,7 +99,6 @@
             }
         },
         {
-            "children": [],
             "components": [
                 {
                     "environmentCoefficient": 0.0,
@@ -129,8 +128,7 @@
                     "type": "EnemyShootComponent"
                 }
             ],
-            "name": "Enemy",
-            "tag": "Untagged",
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -150,7 +148,6 @@
             }
         },
         {
-            "children": [],
             "components": [
                 {
                     "environmentCoefficient": 0.0,
@@ -180,8 +177,7 @@
                     "type": "EnemyShootComponent"
                 }
             ],
-            "name": "Enemy",
-            "tag": "Untagged",
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -235,7 +231,7 @@
                 }
             ],
             "name": "RailCamera",
-            "tag": "Untagged",
+            "tag": "RailCameraPoint",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -251,6 +247,447 @@
                     "x": 0.0,
                     "y": 0.0,
                     "z": 70.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": -1.5007017850875854,
+                    "y": -0.9477169513702393,
+                    "z": 0.021877288818359375
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 4.023596286773682,
+                    "y": -0.6905447244644165,
+                    "z": -0.3167724609375
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": -4.518974304199219,
+                    "y": 0.010907936841249466,
+                    "z": -0.4118824005126953
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 4.023596286773682,
+                    "y": -0.6905447244644165,
+                    "z": -0.3167724609375
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": -2.401654005050659,
+                    "y": 1.5401890277862549,
+                    "z": -0.8224868774414063
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 1.8616573810577393,
+                    "y": 1.9193105697631836,
+                    "z": -0.7977371215820313
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": -3.3446004390716553,
+                    "y": -2.722550630569458,
+                    "z": -1.0856609344482422
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": -6.05741024017334,
+                    "y": 2.3208858966827393,
+                    "z": -1.6895389556884766
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/cube/cube.obj",
+                    "texturePath": "resources/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": -5.537829399108887,
+                    "y": -2.5708134174346924,
+                    "z": -1.56451416015625
                 }
             }
         }

@@ -27,8 +27,11 @@ RailCameraComponent::RailCameraComponent() {
 }
 
 void RailCameraComponent::Update(float deltaTime) {
-    if (!camera_) return;
     if (waypoints_.size() < 2) return;
+    auto* scene = BaseScene::GetActiveScene();
+    if (!scene) return;
+    auto* camera = scene->GetMainCamera();
+    if (!camera) return;
 
     // 進捗の更新
     progress_ += speed_ * deltaTime;
@@ -51,9 +54,9 @@ void RailCameraComponent::Update(float deltaTime) {
     }
 
     // カメラの設定
-    camera_->SetEye(currentPos);
-    camera_->SetTarget(targetPos);
-    camera_->SetUp({ 0.0f, 1.0f, 0.0f });
+    camera->SetEye(currentPos);
+    camera->SetTarget(targetPos);
+    camera->SetUp({ 0.0f, 1.0f, 0.0f });
 }
 
 void RailCameraComponent::Serialize(nlohmann::json& j) const {
@@ -74,6 +77,14 @@ void RailCameraComponent::Deserialize(const nlohmann::json& j) {
                 ptJson.value("z", 0.0f)
             });
         }
+    }
+
+    // デシリアライズ後、selectedPointIndex_ が範囲外にならないようリセットする
+    // （空配列をロードした場合や要素数が減った場合の範囲外アクセスを防止）
+    if (waypoints_.empty()) {
+        selectedPointIndex_ = -1;
+    } else if (selectedPointIndex_ >= static_cast<int>(waypoints_.size())) {
+        selectedPointIndex_ = static_cast<int>(waypoints_.size()) - 1;
     }
 }
 

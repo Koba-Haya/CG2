@@ -6,6 +6,7 @@
 #include "SceneServices.h"
 
 class Camera;
+class GameCamera;
 namespace AbsoluteEngine {
     class GameObject;
     class EditorUIManager;
@@ -46,6 +47,11 @@ public:
 
   AbsoluteEngine::CommandManager* GetCommandManager() const;
 
+  // エンジンインフラ機能のグローバルアクセス
+  GameCamera* GetMainCamera() const { return mainCamera_.get(); }
+  void SetMainCamera(std::shared_ptr<GameCamera> camera) { mainCamera_ = camera; }
+  class Input* GetInput() const { return services_.input; }
+
 protected:
   virtual void BackupScene();
   virtual void RestoreScene();
@@ -68,6 +74,7 @@ protected:
   std::unique_ptr<AbsoluteEngine::EditorUIManager> editorUIManager_;
   std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> rootObjects_;
   std::unique_ptr<Camera> editorCamera_; // エディタ用カメラ
+  std::shared_ptr<GameCamera> mainCamera_; // ゲーム全体で共有するメインカメラ
 
   PlayMode playMode_ = PlayMode::Edit;
   std::string sceneId_ = "";
