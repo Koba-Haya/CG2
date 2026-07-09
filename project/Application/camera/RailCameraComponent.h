@@ -6,7 +6,6 @@
 #include <string>
 
 class GameCamera;
-
 class RailCameraComponent : public AbsoluteEngine::IComponent {
 public:
     RailCameraComponent();
@@ -18,8 +17,6 @@ public:
 
     void Serialize(nlohmann::json& j) const override;
     void Deserialize(const nlohmann::json& j) override;
-
-    void SetCamera(GameCamera* camera) { camera_ = camera; }
 
     // レールのウェイポイントを設定・取得
     void SetWaypoints(const std::vector<Vector3>& points) { waypoints_ = points; }
@@ -51,7 +48,6 @@ public:
     void SetModifiedFlag() { isModified_ = true; }
 
 private:
-    GameCamera* camera_ = nullptr;
     std::vector<Vector3> waypoints_;
     float progress_ = 0.0f;
     float speed_ = 0.01f;

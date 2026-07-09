@@ -33,15 +33,12 @@ public:
 
 
 
-protected:
-  void BackupScene() override;
-  void RestoreScene() override;
+
 
 private:
   void SpawnHitEffect(const Vector3 &pos);
 
 private:
-  std::unique_ptr<GameCamera> gameCamera_;
   std::unique_ptr<DebugCamera> debugCamera_;
 
   bool isDebugCamera_ = false;

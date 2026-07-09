@@ -1,5 +1,6 @@
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
+#include "Type/Vector.h"
 #include <string>
 
 class EnemyShootComponent : public AbsoluteEngine::IComponent {
@@ -23,4 +24,9 @@ private:
     float shootInterval_ = 2.0f; // デフォルトは2秒に1回
     float shootTimer_ = 0.0f;
     bool wantToShoot_ = false;
+
+    // 進行方向追跞用（マジックナンバー不要で動的に取得）
+    Vector3 prevPos_     = { 0, 0, 0 }; // 前フレームの位置
+    Vector3 facingDir_   = { 0, 0, -1 }; // 現在の進行方向（初期値：Z軍手前）
+    bool hasPrevPos_     = false; // prevPos_が初期化済みかのフラグ
 };

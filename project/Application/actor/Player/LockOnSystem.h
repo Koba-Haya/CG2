@@ -25,13 +25,15 @@ public:
     void FireHomingBullets(BaseScene* scene, const Vector3& spawnPos);
 
     bool IsLockingMode() const { return isLockingMode_; }
-    const std::vector<AbsoluteEngine::GameObject*>& GetLockedTargets() const { return lockedTargets_; }
+    // weak_ptrのリストを返す（呼び出し側でlock()して生存確認してから使うこと）
+    const std::vector<std::weak_ptr<AbsoluteEngine::GameObject>>& GetLockedTargets() const { return lockedTargets_; }
     
     // HUDに渡すための、ロック中対象のスクリーン座標を計算して返す
     std::vector<Vector2> GetLockedScreenPositions(GameCamera* camera) const;
 
 private:
-    std::vector<AbsoluteEngine::GameObject*> lockedTargets_;
+    // weak_ptrで保持することで、ターゲットが破棄された後も安全に参照できる
+    std::vector<std::weak_ptr<AbsoluteEngine::GameObject>> lockedTargets_;
     int maxLockTargets_ = 8; // パンツァードラグーン式（最大8体）
 
     float holdTimer_ = 0.0f;
@@ -41,3 +43,4 @@ private:
     // 敵をスクリーン上に収めているか判定し、ロックする処理
     void SearchAndLockTargets(GameCamera* camera, BaseScene* scene, const Vector2& cursorPos);
 };
+

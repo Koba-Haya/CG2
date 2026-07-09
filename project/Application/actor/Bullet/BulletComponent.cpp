@@ -30,21 +30,21 @@ void BulletComponent::Update(float deltaTime) {
 void BulletComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (!isActive_ || !owner_) return;
 
-    bool isEnemyBullet = (owner_->GetName().find("EnemyBullet") != std::string::npos || owner_->GetTag() == "EnemyBullet");
-    if (isEnemyBullet) {
-        if (other->GetName().find("Player") != std::string::npos || other->GetTag() == "Player") {
-            if (other->GetName().find("PlayerBullet") == std::string::npos && other->GetTag() != "PlayerBullet") {
-                isActive_ = false;
-                owner_->Destroy();
-            }
+    // タグのみで判定する（名前検索は「EnemyBullet」に「Enemy」が含まれるなど誤反応を招くため廃止）
+    const std::string& ownerTag = owner_->GetTag();
+    const std::string& otherTag = other->GetTag();
+
+    if (ownerTag == "EnemyBullet") {
+        // 敵弾 → プレイヤー本体にのみ反応（プレイヤー弾とは相殺しない）
+        if (otherTag == "Player") {
+            isActive_ = false;
+            owner_->Destroy();
         }
-    } else {
-        if (other->GetName().find("Enemy") != std::string::npos || other->GetTag() == "Enemy" || 
-            other->GetName().find("Boss") != std::string::npos || other->GetTag() == "Boss") {
-            if (other->GetName().find("EnemyBullet") == std::string::npos && other->GetTag() != "EnemyBullet") {
-                isActive_ = false;
-                owner_->Destroy();
-            }
+    } else if (ownerTag == "PlayerBullet") {
+        // プレイヤー弾 → 敵・ボス本体にのみ反応（敵弾とは相殺しない）
+        if (otherTag == "Enemy" || otherTag == "Boss") {
+            isActive_ = false;
+            owner_->Destroy();
         }
     }
 }

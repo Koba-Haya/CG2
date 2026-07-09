@@ -26,14 +26,11 @@
             "type": "EnemyComponent"
         },
         {
-            "type": "StraightMoveComponent"
-        },
-        {
             "type": "EnemyShootComponent"
         }
     ],
     "name": "Enemy",
-    "tag": "Untagged",
+    "tag": "Enemy",
     "transform": {
         "rotate": {
             "x": 0.0,
@@ -46,9 +43,9 @@
             "z": 1.0
         },
         "translate": {
-            "x": 1.8378509283065796,
-            "y": 2.1828391551971436,
-            "z": 20.0
+            "x": -6.05741024017334,
+            "y": 2.3208858966827393,
+            "z": -1.6895389556884766
         }
     }
 }

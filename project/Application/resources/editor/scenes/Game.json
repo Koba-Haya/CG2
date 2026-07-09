@@ -19,7 +19,7 @@
                 }
             ],
             "name": "Directional Light",
-            "tag": "Untagged",
+            "tag": "Light",
             "transform": {
                 "rotate": {
                     "x": 1.0,
@@ -79,7 +79,7 @@
                 }
             ],
             "name": "Player",
-            "tag": "Untagged",
+            "tag": "Player",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -99,7 +99,6 @@
             }
         },
         {
-            "children": [],
             "components": [
                 {
                     "environmentCoefficient": 0.0,
@@ -129,8 +128,7 @@
                     "type": "EnemyShootComponent"
                 }
             ],
-            "name": "Enemy",
-            "tag": "Untagged",
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -150,7 +148,6 @@
             }
         },
         {
-            "children": [],
             "components": [
                 {
                     "environmentCoefficient": 0.0,
@@ -180,8 +177,7 @@
                     "type": "EnemyShootComponent"
                 }
             ],
-            "name": "Enemy",
-            "tag": "Untagged",
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
             "transform": {
                 "rotate": {
                     "x": 0.0,
@@ -235,7 +231,7 @@
                 }
             ],
             "name": "RailCamera",
-            "tag": "Untagged",
+            "tag": "RailCameraPoint",
             "transform": {
                 "rotate": {
                     "x": 0.0,

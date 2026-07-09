@@ -51,23 +51,21 @@ void GameScene::Initialize(const SceneServices &services) {
   ParticleManager::GetInstance()->CreateParticleGroup("default", "resources/app/particle/circle.png", 500);
 
   // レールカメラの初期化
-  gameCamera_ = std::make_unique<GameCamera>();
-  gameCamera_->Initialize();
-  gameCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
+  auto camera = std::make_shared<GameCamera>();
+  camera->Initialize();
+  camera->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
+  SetMainCamera(camera);
 
   // デバッグカメラ初期化
   debugCamera_ = std::make_unique<DebugCamera>();
   debugCamera_->Initialize();
   debugCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
 
-  auto* cameraPtr = gameCamera_.get();
   AbsoluteEngine::ComponentFactory::GetInstance().Register("RailCameraComponent", []() {
       auto comp = std::make_unique<RailCameraComponent>();
-      // cameraPtrはここではなくInitialize等で設定する
       return comp;
   });
   // コンポーネントファクトリの登録
-  auto* inputPtr = services_.input;
   AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", []() {
       auto comp = std::make_unique<PlayerComponent>();
       comp->Initialize();
@@ -83,7 +81,7 @@ void GameScene::Initialize(const SceneServices &services) {
   LoadEditorScene();
 
   // シーン開始直後の初期視点がワープしないように1度更新して位置を確定させる
-  gameCamera_->Update(*services_.input);
+  GetMainCamera()->Update(*services_.input);
 
   // プレイヤーを探す（ロードされたデータにあるか）
   playerObj_.reset();
@@ -108,13 +106,9 @@ void GameScene::Initialize(const SceneServices &services) {
   if (!playerComp) {
       auto pComp = std::make_unique<PlayerComponent>();
       pComp->Initialize();
-      pComp->SetInput(services_.input);
-      pComp->SetCamera(gameCamera_.get());
       playerObj_->AddComponent(std::move(pComp));
   } else {
       playerComp->Initialize();
-      playerComp->SetInput(services_.input);
-      playerComp->SetCamera(gameCamera_.get());
   }
 
   Renderer::GetInstance()->InitializePostProcess(1280, 720);
@@ -142,7 +136,6 @@ void GameScene::Initialize(const SceneServices &services) {
   bool hasRailCamera = false;
   for (const auto& obj : rootObjects_) {
       if (obj && obj->GetComponent<RailCameraComponent>()) {
-          obj->GetComponent<RailCameraComponent>()->SetCamera(gameCamera_.get());
           hasRailCamera = true;
           break;
       }
@@ -150,7 +143,6 @@ void GameScene::Initialize(const SceneServices &services) {
   if (!hasRailCamera) {
       auto railCamObj = std::make_shared<AbsoluteEngine::GameObject>("RailCamera");
       auto rComp = std::make_unique<RailCameraComponent>();
-      rComp->SetCamera(gameCamera_.get());
       railCamObj->AddComponent(std::move(rComp));
       rootObjects_.push_back(railCamObj);
   }
@@ -220,8 +212,8 @@ void GameScene::Update() {
           // ゲーム（レール）カメラ進行 (GameCamera 内にセットしたコントローラーを正しく動作させる)
           CameraContext ctx{};
           ctx.deltaTime = deltaTime;
-          gameCamera_->SetContext(ctx);
-          if (!isDragging && phase_ == GamePhase::InProgress) gameCamera_->Update(*services_.input);
+          GetMainCamera()->SetContext(ctx);
+          if (!isDragging && phase_ == GamePhase::InProgress) GetMainCamera()->Update(*services_.input);
       }
 
   // プレイヤー更新 (常にゲームカメラを基準とする)
@@ -240,8 +232,8 @@ void GameScene::Update() {
   if (phase_ == GamePhase::InProgress && railProgress >= 1.0f) {
       phase_ = GamePhase::Boss;
       auto bossObj = std::make_shared<AbsoluteEngine::GameObject>("Boss");
-      Vector3 eye = gameCamera_->GetEye();
-      Vector3 forward = gameCamera_->GetForward();
+      Vector3 eye = GetMainCamera()->GetEye();
+      Vector3 forward = GetMainCamera()->GetForward();
       bossObj->GetTransform().translate = { eye.x + forward.x * 20.0f, eye.y + forward.y * 20.0f, eye.z + forward.z * 20.0f };
       bossObj->GetTransform().scale = {3.0f, 3.0f, 3.0f};
       auto bossModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
@@ -311,7 +303,7 @@ void GameScene::Update() {
               
               // ロックオン情報の取得
               isLockingMode = pComp->lockon_.IsLockingMode();
-              lockPositions = pComp->lockon_.GetLockedScreenPositions(gameCamera_.get());
+              lockPositions = pComp->lockon_.GetLockedScreenPositions(GetMainCamera());
               
               gameHUD_->Update(hp, maxHp, lockPositions, isLockingMode, pComp->GetCursorPos());
           }
@@ -337,15 +329,6 @@ void GameScene::Update() {
   }
 }
 
-void GameScene::BackupScene() {
-    backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, true);
-}
-
-void GameScene::RestoreScene() {
-    rootObjects_.clear();
-    AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
-}
-
 
 void GameScene::Draw() {
   auto *renderer = Renderer::GetInstance();
@@ -356,7 +339,7 @@ void GameScene::Draw() {
   } else if (isDebugCamera_) {
       renderer->SetCamera(*debugCamera_);
   } else {
-      renderer->SetCamera(*gameCamera_);
+      renderer->SetCamera(*GetMainCamera());
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
   renderer->SetRandomParam(time_);
@@ -424,7 +407,7 @@ void GameScene::Draw() {
   renderer->DrawGrid(500.0f, 50, Vector4{0.2f, 0.4f, 0.8f, 0.5f});
 
   renderer->RenderPrimitives();
-  renderer->DrawGPUParticles();
+  // renderer->DrawGPUParticles(); // 実装確認用のパーティクルを描画・更新しないようにコメントアウト
 
   // HUD等の2Dスプライト描画
   if (playMode_ == PlayMode::Play && gameHUD_) {
@@ -434,7 +417,7 @@ void GameScene::Draw() {
   Matrix4x4 projInverse;
   if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
   else if (isDebugCamera_) projInverse = Inverse(debugCamera_->GetProjectionMatrix());
-  else projInverse = Inverse(gameCamera_->GetProjectionMatrix());
+  else projInverse = Inverse(GetMainCamera()->GetProjectionMatrix());
 
   renderer->EndRenderScene(projInverse);
 }
@@ -468,8 +451,8 @@ void GameScene::DrawEditorUI() {
     ImGui::Text("Player HP: %d / %d", hp, maxHp);
     
     ImGui::SeparatorText("Camera Controls");
-    Vector3 eye = gameCamera_->GetEye();
-    Vector3 target = gameCamera_->GetTarget();
+    Vector3 eye = GetMainCamera()->GetEye();
+    Vector3 target = GetMainCamera()->GetTarget();
     ImGui::Text("Camera Eye: (%.2f, %.2f, %.2f)", eye.x, eye.y, eye.z);
     ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
     
@@ -507,8 +490,8 @@ void GameScene::DrawEditorUI() {
             }
         }
         CameraContext ctx{ 1.0f / 60.0f };
-        gameCamera_->SetContext(ctx);
-        if (services_.input) gameCamera_->Update(*services_.input);
+        GetMainCamera()->SetContext(ctx);
+        if (services_.input) GetMainCamera()->Update(*services_.input);
     }
 
     ImGui::End();

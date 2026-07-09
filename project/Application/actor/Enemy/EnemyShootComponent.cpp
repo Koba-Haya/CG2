@@ -5,54 +5,110 @@
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Bullet/BulletComponent.h"
 #include "../../actor/Player/PlayerComponent.h"
+#include "GameCamera.h"  // VP行列取得・画面内判定のために必要
 #include <cmath>
 
 void EnemyShootComponent::Update(float deltaTime) {
     if (!owner_) return;
 
-    shootTimer_ += deltaTime;
-    if (shootTimer_ >= shootInterval_) {
-        shootTimer_ -= shootInterval_;
-        
-        auto scene = BaseScene::GetActiveScene();
-        if (!scene) return;
-        
-        std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;
-        for (const auto& obj : scene->GetRootObjects()) {
-            if (obj && obj->GetComponent<PlayerComponent>()) {
-                playerObj = obj;
-                break;
-            }
-        }
-        
-        if (playerObj) {
-            Vector3 spawnPos = owner_->GetTransform().translate;
-            Vector3 targetPos = playerObj->GetTransform().translate;
-            
-            Vector3 diff = { targetPos.x - spawnPos.x, targetPos.y - spawnPos.y, targetPos.z - spawnPos.z };
-            float len = std::sqrt(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
-            Vector3 dir = {0,0,0};
-            if (len > 0.0f) dir = {diff.x/len, diff.y/len, diff.z/len};
-            Vector3 vel = { dir.x * 20.0f, dir.y * 20.0f, dir.z * 20.0f };
-            
-            auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("EnemyBullet");
-            bulletObj->SetTag("EnemyBullet");
-            auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-            bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
-            bulletObj->AddComponent(std::move(bulletModelComp));
-            
-            auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-            colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-            colliderComp->radius = 0.5f;
-            bulletObj->AddComponent(std::move(colliderComp));
-            
-            bulletObj->GetTransform().translate = spawnPos;
-            
-            auto bulletComp = std::make_unique<BulletComponent>();
-            bulletComp->Initialize(vel);
-            bulletObj->AddComponent(std::move(bulletComp));
-            
-            scene->AddRootObject(bulletObj);
+    // --- 進行方向の動的追跡（マジックナンバーを使わずに向きを取得する）---
+    Vector3 currentPos = owner_->GetTransform().translate;
+    if (hasPrevPos_) {
+        Vector3 delta = {
+            currentPos.x - prevPos_.x,
+            currentPos.y - prevPos_.y,
+            currentPos.z - prevPos_.z
+        };
+        float deltaLen = std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+        // 移動があった場合のみ方向を更新（停止中は直前の方向を維持）
+        if (deltaLen > 0.001f) {
+            facingDir_ = { delta.x / deltaLen, delta.y / deltaLen, delta.z / deltaLen };
         }
     }
+    prevPos_    = currentPos;
+    hasPrevPos_ = true;
+
+    // タイマー更新
+    shootTimer_ += deltaTime;
+    if (shootTimer_ < shootInterval_) return;
+    shootTimer_ -= shootInterval_;
+        
+    auto scene = BaseScene::GetActiveScene();
+    if (!scene) return;
+
+    // --- 画面内チェック（NDC ±1.2 マージン内にいる敵のみ発射を許可）---
+    auto* camera = scene->GetMainCamera();
+    if (!camera) return;
+
+    Matrix4x4 viewMat = camera->GetViewMatrix();
+    Matrix4x4 projMat = camera->GetProjectionMatrix();
+    Matrix4x4 vpMat   = Multiply(viewMat, projMat);
+
+    // 自身のワールド座標をクリップ空間に変換
+    float w = currentPos.x * vpMat.m[0][3] + currentPos.y * vpMat.m[1][3]
+            + currentPos.z * vpMat.m[2][3] + vpMat.m[3][3];
+    if (w <= 0.01f) return; // カメラの背後にいる場合は発射しない
+
+    float ndcX = (currentPos.x * vpMat.m[0][0] + currentPos.y * vpMat.m[1][0]
+               + currentPos.z * vpMat.m[2][0] + vpMat.m[3][0]) / w;
+    float ndcY = (currentPos.x * vpMat.m[0][1] + currentPos.y * vpMat.m[1][1]
+               + currentPos.z * vpMat.m[2][1] + vpMat.m[3][1]) / w;
+
+    // NDC ±1.2 の範囲外は発射しない（画面外ギリギリの敵も少し猶予を持たせる）
+    constexpr float ndcMargin = 1.2f;
+    if (ndcX < -ndcMargin || ndcX > ndcMargin || ndcY < -ndcMargin || ndcY > ndcMargin) return;
+
+    // --- プレイヤーを探す ---
+    std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;
+    for (const auto& obj : scene->GetRootObjects()) {
+        if (obj && obj->GetComponent<PlayerComponent>()) {
+            playerObj = obj;
+            break;
+        }
+    }
+    if (!playerObj) return;
+
+    // --- 視野角チェック（正面約30度以内のみ発射を許可）---
+    Vector3 playerPos = playerObj->GetTransform().translate;
+    Vector3 toPlayer  = {
+        playerPos.x - currentPos.x,
+        playerPos.y - currentPos.y,
+        playerPos.z - currentPos.z
+    };
+    float toPlayerLen = std::sqrt(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y + toPlayer.z * toPlayer.z);
+    if (toPlayerLen < 0.001f) return;
+    toPlayer.x /= toPlayerLen;
+    toPlayer.y /= toPlayerLen;
+    toPlayer.z /= toPlayerLen;
+
+    // 内積でプレイヤーが視野角内にいるか判定（0.866 ≈ cos(30°)）
+    float dot = facingDir_.x * toPlayer.x + facingDir_.y * toPlayer.y + facingDir_.z * toPlayer.z;
+    if (dot < 0.866f) return; // 正面30度以外は発射しない
+
+    // --- 弾の発射 ---
+    Vector3 spawnPos = currentPos;
+    
+    Vector3 vel = { toPlayer.x * 20.0f, toPlayer.y * 20.0f, toPlayer.z * 20.0f };
+    
+    auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("EnemyBullet");
+    bulletObj->SetTag("EnemyBullet");
+    auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+    bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
+    bulletObj->AddComponent(std::move(bulletModelComp));
+    
+    auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
+    colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+    colliderComp->radius = 0.5f;
+    bulletObj->AddComponent(std::move(colliderComp));
+    
+    bulletObj->GetTransform().translate = spawnPos;
+    
+    auto bulletComp = std::make_unique<BulletComponent>();
+    bulletComp->Initialize(vel);
+    bulletObj->AddComponent(std::move(bulletComp));
+    
+    scene->AddRootObject(bulletObj);
 }
+
+
+
