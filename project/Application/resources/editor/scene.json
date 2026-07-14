@@ -64,18 +64,6 @@
                 },
                 {
                     "type": "PlayerComponent"
-                },
-                {
-                    "drag": 0.0,
-                    "isKinematic": false,
-                    "mass": 1.0,
-                    "type": "RigidbodyComponent",
-                    "useGravity": true,
-                    "velocity": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ]
                 }
             ],
             "name": "Player",
