@@ -12,6 +12,7 @@
 #include "GameObject.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>  // rand()
 
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -28,6 +29,10 @@
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
+#include "AbsoluteEngine/scene/DissolveComponent.h"
+#include "graphics/particle/EffectManager.h"
+#include "graphics/particle/RingEffect.h"
+#include "component/ExplosionLightComponent.h"
 
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
@@ -35,10 +40,18 @@ void GameScene::Initialize(const SceneServices &services) {
   auto* am = AbsoluteEngine::AssetManager::GetInstance();
 
   // リソースのロード
-  resPlayer_ = am->Load<ModelResource>("resources/app/player/player.obj"); // 追加された自機モデル
-  resBullet_ = am->Load<ModelResource>("resources/app/bullet/bullet.obj"); // 追加された弾モデル
+  resPlayer_ = am->Load<ModelResource>("resources/app/player/player.obj");
+  resBullet_ = am->Load<ModelResource>("resources/app/bullet/bullet.obj");
   resEnemy_  = am->Load<ModelResource>("resources/app/cube/cube.obj"); // 敵モデル
   resEffect_ = am->Load<ModelResource>("resources/app/particle/particle.obj");
+
+  // ヒットエフェクト用テクスチャのロード
+  texRing_   = am->Load<TextureResource>("resources/app/textures/gradationLine.png");
+  texNoise0_ = am->Load<TextureResource>("resources/noise/noise0.png");
+  // ディゾルブのマスクテクスチャをレンダラーにセット
+  if (texNoise0_) {
+      Renderer::GetInstance()->SetDissolveMaskTexture(texNoise0_);
+  }
 
   if (!resBullet_) {
       // 万一 bullet.obj が読み込めない場合は、確実に存在する enemy (cube.obj) を仮割り当てする
@@ -49,6 +62,7 @@ void GameScene::Initialize(const SceneServices &services) {
 
   // パーティクルグループの初期化（連射ヒット時のアサートクラッシュ防止）
   ParticleManager::GetInstance()->CreateParticleGroup("default", "resources/app/particle/circle.png", 500);
+  ParticleManager::GetInstance()->CreateParticleGroup("explosion", "resources/explosion/explosion.png", 100);
 
   // レールカメラの初期化
   auto camera = std::make_shared<GameCamera>();
@@ -79,6 +93,44 @@ void GameScene::Initialize(const SceneServices &services) {
 
   // オートロード：保存されたシーンを読み込む
   LoadEditorScene();
+
+  // -----------------------------------------------------------------------
+  // 【バグ修正】エディタで配置した敵への onDestroyed コールバック一括登録
+  // SpawnManager 経由で生成した敵は Spawn 時にコールバックを登録するが、
+  // JSON/エディタからロードした敵にはその処理が走らないため、ここで補完する。
+  // -----------------------------------------------------------------------
+  for (const auto& obj : rootObjects_) {
+      if (!obj) continue;
+      auto* enemyComp = obj->GetComponent<EnemyComponent>();
+      if (!enemyComp) continue;
+      // 既にコールバックが登録済みの場合は上書きしない
+      if (enemyComp->onDestroyed) continue;
+
+      enemyComp->onDestroyed = [this](const Vector3& hitPos) {
+          // 1. ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
+          SpawnHitEffect(hitPos);
+
+          // 2. カメラシェイク開始
+          cameraShakeDuration_  = 0.3f;
+          cameraShakeTimer_     = 0.0f;
+          cameraShakeIntensity_ = 0.2f;
+
+          // 3. 画面歪み（RadialBlur）開始
+          hitDistortionDuration_  = 0.25f;
+          hitDistortionTimer_     = 0.0f;
+          hitDistortionIntensity_ = 0.06f;
+
+          // 4. RadialBlur の中心を敵のスクリーン座標に設定
+          auto* cam = isDebugCamera_
+              ? static_cast<Camera*>(debugCamera_.get())
+              : static_cast<Camera*>(GetMainCamera());
+          if (cam) {
+              Matrix4x4 vp = Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
+              Vector3 sp = TransformPoint(hitPos, vp);
+              radialBlurCenter_ = { sp.x * 0.5f + 0.5f, -sp.y * 0.5f + 0.5f };
+          }
+      };
+  }
 
   // シーン開始直後の初期視点がワープしないように1度更新して位置を確定させる
   GetMainCamera()->Update(*services_.input);
@@ -150,31 +202,128 @@ void GameScene::Initialize(const SceneServices &services) {
   // HUDの初期化
   gameHUD_ = std::make_unique<GameHUD>();
   gameHUD_->Initialize();
+
+  // -----------------------------------------------------------------------
+  // SpawnManagerの初期化：デモ用スポーンイベントを登録する
+  // -----------------------------------------------------------------------
+  spawnTimer_ = 0.0f;
+  InitSpawnEvents_();
+}
+
+// -----------------------------------------------------------------------
+// InitSpawnEvents_
+// 発表デモ用のウェーブデータをハードコードで定義する。
+// 将来的にはJSON/タイムラインエディタから読み込む形に置き換える。
+// -----------------------------------------------------------------------
+void GameScene::InitSpawnEvents_() {
+  spawnEvents_.clear();
+
+  // フォーマット: { triggerTime(秒), prefabId, position(X,Y,Z) }
+  // カメラのレールが前進するにつれて、前方に敵が出現する構成
+
+  // --- 第1波：ゲーム開始直後（3秒後）に正面へ3体出現 ---
+  spawnEvents_.push_back({ 3.0f,  "Enemy", { -6.0f, 0.0f,  60.0f } });
+  spawnEvents_.push_back({ 3.0f,  "Enemy", {  0.0f, 2.0f,  65.0f } });
+  spawnEvents_.push_back({ 3.0f,  "Enemy", {  6.0f, 0.0f,  60.0f } });
+
+  // --- 第2波：6秒後に斜め配置で2体出現（上下に散らして見栄えを出す） ---
+  spawnEvents_.push_back({ 6.0f,  "Enemy", { -8.0f,  3.0f, 90.0f } });
+  spawnEvents_.push_back({ 6.0f,  "Enemy", {  8.0f, -3.0f, 90.0f } });
+
+  // --- 第3波：10秒後に前方中央に密集した4体 ---
+  spawnEvents_.push_back({ 10.0f, "Enemy", { -4.0f,  2.0f, 120.0f } });
+  spawnEvents_.push_back({ 10.0f, "Enemy", {  4.0f,  2.0f, 120.0f } });
+  spawnEvents_.push_back({ 10.0f, "Enemy", { -4.0f, -2.0f, 125.0f } });
+  spawnEvents_.push_back({ 10.0f, "Enemy", {  4.0f, -2.0f, 125.0f } });
+
+  // --- 第4波：14秒後の最終波（大きく散らして迫力を演出） ---
+  spawnEvents_.push_back({ 14.0f, "Enemy", { -12.0f,  0.0f, 150.0f } });
+  spawnEvents_.push_back({ 14.0f, "Enemy", {   0.0f,  5.0f, 155.0f } });
+  spawnEvents_.push_back({ 14.0f, "Enemy", {  12.0f,  0.0f, 150.0f } });
 }
 
 void GameScene::Finalize() {
 }
 
+// -----------------------------------------------------------------------
+// zEffect
+// DevScene の実装を GameScene に移植。
+// パーティクル + RingEffect + ExplosionLight の3段構えのエフェクト。
+// -----------------------------------------------------------------------
 void GameScene::SpawnHitEffect(const Vector3 &pos) {
+  // 1. 爆発パーティクル（explosion グループ）を散布
+  for (int i = 0; i < 30; ++i) {
+      float rX = ((rand() % 200) / 100.0f) - 1.0f;
+      float rY = ((rand() % 200) / 100.0f) - 1.0f;
+      float rZ = ((rand() % 200) / 100.0f) - 1.0f;
+      Vector3 vel = { rX * 1.5f, rY * 1.5f, rZ * 1.5f };
+      ParticleManager::GetInstance()->Emit(
+          "explosion", pos, vel,
+          Vector3{ 1.5f, 1.5f, 1.5f }, Vector3{ 0, 0, 0 }, 0.7f, Vector4{ 1, 1, 1, 1 });
+  }
+
+  // 2. リングエフェクト
+  if (texRing_) {
+      auto device = Renderer::GetInstance()->GetDX()->GetDevice();
+      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_.get(), pos));
+  }
+
+  // 3. 爆発のポイントライト（寿命付き）を生成
+  auto lightObj = std::make_shared<AbsoluteEngine::GameObject>("ExplosionLight");
+  lightObj->GetTransform().translate = pos;
+  auto lightNodeComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
+  lightNodeComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
+  lightNodeComp->color = { 1.0f, 0.5f, 0.1f };  // オレンジ色の爆発光
+  lightNodeComp->radius = 30.0f;
+  lightNodeComp->decay = 1.0f;
+  lightObj->AddComponent(std::move(lightNodeComp));
+  auto lightComp = std::make_unique<ExplosionLightComponent>();
+  lightComp->maxIntensity_ = 20.0f;
+  lightComp->lifeTime_ = 0.5f;
+  lightObj->AddComponent(std::move(lightComp));
+  rootObjects_.push_back(lightObj);
+
+  // 4. 旧型スケールアニメーションのヒットエフェクト（後方互換）
   HitEffect ef;
   ef.instance.Initialize({ resEffect_, {1, 1, 1, 1}, 0 });
   ef.position = pos;
   ef.frame = 0.0f;
   ef.isActive = true;
   hitEffects_.push_back(std::move(ef));
-
-  // パーティクルも少し出す
-  for (int i = 0; i < 10; ++i) {
-      ParticleManager::GetInstance()->Emit(
-          "default", pos, Vector3{0, 0, 0}, Vector3{0.1f, 1.0f, 1.0f},
-          Vector3{0, 0, (float)i}, 0.5f, Vector4{1, 0.5f, 0, 1});
-  }
 }
 
 void GameScene::Update() {
   bool isTransitioning = false;
   const float deltaTime = 1.0f / 60.0f;
   time_ += deltaTime;
+
+  // -----------------------------------------------------------------------
+  // カメラシェイクの更新
+  // -----------------------------------------------------------------------
+  if (cameraShakeTimer_ < cameraShakeDuration_) {
+      cameraShakeTimer_ += deltaTime;
+      float t = 1.0f - (cameraShakeTimer_ / cameraShakeDuration_);
+      float intensity = cameraShakeIntensity_ * t;
+      float rX = ((rand() % 100) / 100.0f * 2.0f - 1.0f) * intensity;
+      float rY = ((rand() % 100) / 100.0f * 2.0f - 1.0f) * intensity;
+      cameraShakeOffset_ = { rX, rY, 0.0f };
+  } else {
+      cameraShakeOffset_ = { 0.0f, 0.0f, 0.0f };
+  }
+
+  // -----------------------------------------------------------------------
+  // 画面歪み（RadialBlur）の更新
+  // -----------------------------------------------------------------------
+  if (hitDistortionTimer_ < hitDistortionDuration_) {
+      hitDistortionTimer_ += deltaTime;
+      float t = 1.0f - (hitDistortionTimer_ / hitDistortionDuration_);
+      Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, hitDistortionIntensity_ * t);
+      Renderer::GetInstance()->SetPostProcessMode(Renderer::PostProcessMode::RadialBlur);
+  } else if (hitDistortionDuration_ > 0.0f) {
+      Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, 0.0f);
+      Renderer::GetInstance()->SetPostProcessMode(Renderer::PostProcessMode::Normal);
+      hitDistortionDuration_ = 0.0f;
+  }
 
   // プレイヤーを探す（ロード時などでポインタが切り替わった場合に対応）
   playerObj_.reset();
@@ -209,16 +358,120 @@ void GameScene::Update() {
       if (isDebugCamera_) {
           if (!isDragging) debugCamera_->Update(*services_.input);
       } else {
-          // ゲーム（レール）カメラ進行 (GameCamera 内にセットしたコントローラーを正しく動作させる)
+          // ゲーム（レール）カメラ進行
           CameraContext ctx{};
           ctx.deltaTime = deltaTime;
           GetMainCamera()->SetContext(ctx);
           if (!isDragging && phase_ == GamePhase::InProgress) GetMainCamera()->Update(*services_.input);
       }
 
-  // プレイヤー更新 (常にゲームカメラを基準とする)
-  // PlayerComponentのUpdateは、rootObjects_の中にいるためUpdateEditor経由で自動的に呼ばれます。
-  // ただしPlayMode時のみ。
+  // -----------------------------------------------------------------------
+  // SpawnManager の更新
+  // 毎フレーム経過時間を計測し、トリガー時間を超えたSpawnEventの敵を生成する。
+  // -----------------------------------------------------------------------
+  if (phase_ == GamePhase::InProgress) {
+      spawnTimer_ += deltaTime;
+
+      for (auto& ev : spawnEvents_) {
+          // 既にスポーン済み or まだトリガー時間に達していない場合はスキップ
+          if (ev.spawned || spawnTimer_ < ev.triggerTime) continue;
+
+          ev.spawned = true;
+
+          // 敵のGameObjectを生成する
+          auto newEnemy = std::make_shared<AbsoluteEngine::GameObject>("Enemy");
+          newEnemy->SetTag("Enemy");
+
+          // ディゾルブコンポーネント（撃破時の消滅エフェクト）
+          newEnemy->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
+
+          // モデルコンポーネント
+          auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+          modelComp->LoadModel("resources/app/cube/cube.obj");
+          newEnemy->AddComponent(std::move(modelComp));
+
+          // 出現座標をセット
+          newEnemy->GetTransform().translate = ev.position;
+
+          // スフィアコライダー（当たり判定）
+          auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
+          colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+          colliderComp->radius = 2.0f;
+          newEnemy->AddComponent(std::move(colliderComp));
+
+          // EnemyComponent（死亡状態・ディゾルブ演出の制御）
+          auto enemyComp = std::make_unique<EnemyComponent>();
+
+          // -----------------------------------------------------------------------
+          // Observer（イベントコールバック）の登録
+          // Spawn 時点で GameScene 側の演出処理をラムダで登録する。
+          // これにより EnemyComponent は演出の詳細を一切知らなくて済む（疎結合）。
+          // -----------------------------------------------------------------------
+          EnemyComponent* rawComp = enemyComp.get();
+          enemyComp->onDestroyed = [this](const Vector3& hitPos) {
+              // 1. ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
+              SpawnHitEffect(hitPos);
+
+              // 2. カメラシェイク開始
+              cameraShakeDuration_  = 0.3f;
+              cameraShakeTimer_     = 0.0f;
+              cameraShakeIntensity_ = 0.2f;
+
+              // 3. 画面歪み（RadialBlur）開始
+              hitDistortionDuration_  = 0.25f;
+              hitDistortionTimer_     = 0.0f;
+              hitDistortionIntensity_ = 0.06f;
+
+              // 4. RadialBlur の中心を敵のスクリーン座標に設定
+              auto* cam = isDebugCamera_
+                  ? static_cast<Camera*>(debugCamera_.get())
+                  : static_cast<Camera*>(GetMainCamera());
+              if (cam) {
+                  Matrix4x4 vp = Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
+                  Vector3 sp = TransformPoint(hitPos, vp);
+                  radialBlurCenter_ = { sp.x * 0.5f + 0.5f, -sp.y * 0.5f + 0.5f };
+              }
+          };
+          newEnemy->AddComponent(std::move(enemyComp));
+
+          rootObjects_.push_back(newEnemy);
+      }
+  }
+
+  // -----------------------------------------------------------------------
+  // ヒットエフェクトはイベントコールバック（onDestroyed）によって
+  // EnemyComponent::Update 内から自動的に発火されるため、
+  // ここでのポーリングは不要。
+  // -----------------------------------------------------------------------
+
+
+  // 寿命切れの ExplosionLight を削除
+  for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
+      auto& obj = *it;
+      bool shouldDelete = false;
+      if (obj && obj->GetName() == "ExplosionLight") {
+          for (const auto& comp : obj->GetComponents()) {
+              if (comp->GetTypeName() == "ExplosionLightComponent") {
+                  if (static_cast<ExplosionLightComponent*>(comp.get())->IsDead()) {
+                      shouldDelete = true;
+                  }
+                  break;
+              }
+          }
+      }
+      if (shouldDelete) {
+          it = rootObjects_.erase(it);
+      } else {
+          ++it;
+      }
+  }
+
+  // パーティクルの更新（爆発エフェクト等）
+  ParticleManager::GetInstance()->Update(deltaTime);
+
+  // EffectManagerの更新（RingEffectなど）
+  auto* activeCamera = isDebugCamera_ ? static_cast<Camera*>(debugCamera_.get()) : static_cast<Camera*>(GetMainCamera());
+  EffectManager::GetInstance()->Update(deltaTime, activeCamera);
 
   // ボスフェーズ移行
   float railProgress = 0.0f;
@@ -277,7 +530,7 @@ void GameScene::Update() {
       }
   }
 
-  // ヒットエフェクトの更新
+  // ヒットエフェクト（旧型スケールアニメーション）の更新
   for (auto& ef : hitEffects_) {
       if (!ef.isActive) continue;
       ef.frame += 1.0f;
@@ -295,22 +548,35 @@ void GameScene::Update() {
       int maxHp = 0;
       std::vector<Vector2> lockPositions;
       bool isLockingMode = false;
+      Vector3 nearPos{ 0,0,0 }, midPos{ 0,0,0 }, farPos{ 0,0,0 };
+
+      // HUD に使うカメラ（デバッグカメラ or ゲームカメラ）
+      Camera* hudCam = isDebugCamera_
+          ? static_cast<Camera*>(debugCamera_.get())
+          : static_cast<Camera*>(GetMainCamera());
 
       if (playerObj_) {
           if (auto pComp = playerObj_->GetComponent<PlayerComponent>()) {
-              hp = pComp->GetHp();
+              hp    = pComp->GetHp();
               maxHp = pComp->GetMaxHp();
-              
-              // ロックオン情報の取得
+
               isLockingMode = pComp->lockon_.IsLockingMode();
               lockPositions = pComp->lockon_.GetLockedScreenPositions(GetMainCamera());
-              
-              gameHUD_->Update(hp, maxHp, lockPositions, isLockingMode, pComp->GetCursorPos());
+
+              // 3D レティクルのワールド座標を PlayerComponent から取得
+              nearPos = pComp->GetNearReticleWorldPos();
+              midPos  = pComp->GetMidReticleWorldPos();
+              farPos  = pComp->GetFarReticleWorldPos();
+
+              gameHUD_->Update(hp, maxHp, lockPositions, isLockingMode,
+                               pComp->GetCursorPos(), hudCam, nearPos, midPos, farPos);
           }
       } else {
-          gameHUD_->Update(hp, maxHp, lockPositions, isLockingMode, {640.0f, 360.0f});
+          gameHUD_->Update(hp, maxHp, lockPositions, isLockingMode,
+                           { 640.0f, 360.0f }, hudCam, nearPos, midPos, farPos);
       }
   }
+
 
   } // end of if (playMode_ == PlayMode::Play)
 
@@ -334,13 +600,21 @@ void GameScene::Draw() {
   auto *renderer = Renderer::GetInstance();
   renderer->BeginRenderScene();
 
+  Camera* activeCamera = nullptr;
   if (playMode_ == PlayMode::Edit) {
-      if (editorCamera_) renderer->SetCamera(*editorCamera_);
+      if (editorCamera_) {
+          renderer->SetCamera(*editorCamera_);
+          activeCamera = editorCamera_.get();
+      }
   } else if (isDebugCamera_) {
       renderer->SetCamera(*debugCamera_);
+      activeCamera = debugCamera_.get();
   } else {
+      // カメラシェイクオフセットをゲームカメラに適用する（キャスト不要の共通APIがあれば理想だが、ここではシンプルに）
       renderer->SetCamera(*GetMainCamera());
+      activeCamera = GetMainCamera();
   }
+
   renderer->SetEnvironmentMap(skybox_.GetTexture());
   renderer->SetRandomParam(time_);
 
@@ -351,7 +625,6 @@ void GameScene::Draw() {
   skybox_.Draw();
 
   // エディタ上で配置したオブジェクト群の描画
-  // rootObjects_にすべて登録されているので、手動での描画は不要。
   for (auto& obj : rootObjects_) {
       if (obj) obj->Draw();
   }
@@ -359,6 +632,12 @@ void GameScene::Draw() {
   for (auto& ef : hitEffects_) {
       renderer->DrawEffectModel(&ef.instance);
   }
+
+  // EffectManager（RingEffect等）の描画
+  EffectManager::GetInstance()->Draw();
+
+  // パーティクルの描画（爆発エフェクト等）
+  ParticleManager::GetInstance()->Draw(BlendMode::Add);
 
   // --- デバッグラインの描画 ---
   if (showDebugRail_) {
@@ -374,7 +653,6 @@ void GameScene::Draw() {
           Matrix4x4 viewMat = renderer->GetViewMatrix();
           Matrix4x4 invView = Inverse(viewMat);
           Vector3 camEye = { invView.m[3][0], invView.m[3][1], invView.m[3][2] };
-          // カメラ自身のワールド空間における正確な正面ベクトル（invViewの第3行）
           Vector3 camForward = { invView.m[2][0], invView.m[2][1], invView.m[2][2] };
 
           Vector4 color = {1.0f, 1.0f, 0.0f, 1.0f}; // 黄色
@@ -384,7 +662,6 @@ void GameScene::Draw() {
               float t = (float)i / (float)subdivisions;
               Vector3 currPoint = Spline::GetPoint(waypoints, t);
               
-              // カメラより前にあるポイント間だけを描画（距離の大小に影響されない厳格な前方カリング）
               Vector3 diff1 = { prevPoint.x - camEye.x, prevPoint.y - camEye.y, prevPoint.z - camEye.z };
               Vector3 diff2 = { currPoint.x - camEye.x, currPoint.y - camEye.y, currPoint.z - camEye.z };
               if (Dot(diff1, camForward) > 0.0f && Dot(diff2, camForward) > 0.0f) {
@@ -392,7 +669,6 @@ void GameScene::Draw() {
               }
               prevPoint = currPoint;
           }
-          // ウェイポイントマーカーも同様に厳格に前方カリング
           for (const auto& wp : waypoints) {
               Vector3 diff = { wp.x - camEye.x, wp.y - camEye.y, wp.z - camEye.z };
               if (Dot(diff, camForward) > 0.0f) {
@@ -403,11 +679,10 @@ void GameScene::Draw() {
       }
   }
 
-  // 進行速度と空間の奥行きを実感しやすくするため、地面に広大なグリッドを描画
+  // グリッドの描画（進行感を演出）
   renderer->DrawGrid(500.0f, 50, Vector4{0.2f, 0.4f, 0.8f, 0.5f});
 
   renderer->RenderPrimitives();
-  // renderer->DrawGPUParticles(); // 実装確認用のパーティクルを描画・更新しないようにコメントアウト
 
   // HUD等の2Dスプライト描画
   if (playMode_ == PlayMode::Play && gameHUD_) {
@@ -449,6 +724,21 @@ void GameScene::DrawEditorUI() {
         }
     }
     ImGui::Text("Player HP: %d / %d", hp, maxHp);
+
+    // SpawnManagerのデバッグ情報
+    ImGui::SeparatorText("SpawnManager");
+    ImGui::Text("Elapsed Time: %.2f sec", spawnTimer_);
+    int spawnedCount = 0;
+    for (const auto& ev : spawnEvents_) {
+        if (ev.spawned) ++spawnedCount;
+    }
+    ImGui::Text("Spawned: %d / %d events", spawnedCount, (int)spawnEvents_.size());
+    if (ImGui::Button("Reset SpawnTimer")) {
+        spawnTimer_ = 0.0f;
+        for (auto& ev : spawnEvents_) {
+            ev.spawned = false;
+        }
+    }
     
     ImGui::SeparatorText("Camera Controls");
     Vector3 eye = GetMainCamera()->GetEye();
@@ -457,7 +747,6 @@ void GameScene::DrawEditorUI() {
     ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
     
     if (showDebugRail_) {
-        // Find component
         RailCameraComponent* rComp = nullptr;
         for (const auto& obj : rootObjects_) {
             if (auto comp = obj->GetComponent<RailCameraComponent>()) {

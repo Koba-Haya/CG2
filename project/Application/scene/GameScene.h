@@ -10,14 +10,28 @@
 #include "../actor/Bullet/BulletComponent.h"
 #include "../actor/Enemy/EnemyShootComponent.h"
 #include "../hud/GameHUD.h"
+#include "AbsoluteEngine/resources/AssetManager.h"
+#include "TextureResource.h"
 #include <memory>
 #include <vector>
+#include <string>
 
 enum class GamePhase {
   InProgress,
   Boss,
   Clear,
   GameOver
+};
+
+// -----------------------------------------------------------------------
+// SpawnEvent 構造体
+// 将来のタイムラインエディタ（再生側）の基盤となるウェーブデータ単位。
+// -----------------------------------------------------------------------
+struct SpawnEvent {
+    float triggerTime;    // 出現時間（ゲーム開始からの秒数）
+    std::string prefabId; // 敵の種類ID（"Enemy" など）
+    Vector3 position;     // 出現ワールド座標
+    bool spawned = false; // 既にスポーン済みかどうか（内部管理用）
 };
 
 class GameScene final : public BaseScene {
@@ -34,9 +48,12 @@ public:
 
 
 
-
 private:
+  // ヒットエフェクトの発生（パーティクル＋リングエフェクト＋爆発ライト）
   void SpawnHitEffect(const Vector3 &pos);
+
+  // ウェーブデータの初期化（デモ用ハードコードデータを登録する）
+  void InitSpawnEvents_();
 
 private:
   std::unique_ptr<DebugCamera> debugCamera_;
@@ -57,7 +74,11 @@ private:
   std::shared_ptr<ModelResource> resEnemy_;
   std::shared_ptr<ModelResource> resEffect_;
 
-  // ヒットエフェクト
+  // ヒットエフェクト用テクスチャ
+  std::shared_ptr<TextureResource> texRing_;
+  std::shared_ptr<TextureResource> texNoise0_;
+
+  // ヒットエフェクト（旧型：スケールアニメーション）
   struct HitEffect {
     HitEffect() = default;
     ~HitEffect() = default;
@@ -72,8 +93,24 @@ private:
   };
   std::vector<HitEffect> hitEffects_;
 
-  float spawnTimer_ = 0.0f;
-  
+  // カメラシェイク用
+  float cameraShakeTimer_ = 0.0f;
+  float cameraShakeDuration_ = 0.0f;
+  float cameraShakeIntensity_ = 0.0f;
+  Vector3 cameraShakeOffset_{ 0, 0, 0 };
+
+  // 画面歪み（RadialBlur）用
+  float hitDistortionTimer_ = 0.0f;
+  float hitDistortionDuration_ = 0.0f;
+  float hitDistortionIntensity_ = 0.0f;
+  Vector2 radialBlurCenter_ = { 0.5f, 0.5f };
+
+  // -----------------------------------------------------------------------
+  // SpawnManager：データ駆動型の簡易ウェーブシステム
+  // -----------------------------------------------------------------------
+  float spawnTimer_ = 0.0f;           // ゲーム開始からの経過時間（スポーン判定用）
+  std::vector<SpawnEvent> spawnEvents_; // 全スポーンイベントリスト
+
   float time_ = 0.0f;
 
   GamePhase phase_ = GamePhase::InProgress;

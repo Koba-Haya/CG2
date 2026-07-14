@@ -175,6 +175,9 @@
                 },
                 {
                     "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "DissolveComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
