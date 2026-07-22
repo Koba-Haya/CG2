@@ -204,10 +204,26 @@ void GameScene::Initialize(const SceneServices &services) {
   gameHUD_->Initialize();
 
   // -----------------------------------------------------------------------
+  // タイムラインマネージャーにRailCameraComponentを登録する
+  // LoadEditorScene() 後に rootObjects_ を走査して RailCameraComponent を探し、
+  // BaseScene 経由でタイムラインと紐付ける
+  // -----------------------------------------------------------------------
+  for (const auto& obj : rootObjects_) {
+      if (!obj) continue;
+      auto* railComp = obj->GetComponent<RailCameraComponent>();
+      if (railComp) {
+          SetTimelineRailCamera(railComp);
+          break; // レールカメラは1つだけなので最初に見つかったものを使う
+      }
+  }
+  // タイムラインデータを読み込む（ファイルが無ければ空の状態で開始）
+  LoadTimeline();
+
+  // -----------------------------------------------------------------------
   // SpawnManagerの初期化：デモ用スポーンイベントを登録する
   // -----------------------------------------------------------------------
   spawnTimer_ = 0.0f;
-  InitSpawnEvents_();
+  //InitSpawnEvents_();
 }
 
 // -----------------------------------------------------------------------
@@ -215,34 +231,80 @@ void GameScene::Initialize(const SceneServices &services) {
 // 発表デモ用のウェーブデータをハードコードで定義する。
 // 将来的にはJSON/タイムラインエディタから読み込む形に置き換える。
 // -----------------------------------------------------------------------
-void GameScene::InitSpawnEvents_() {
-  spawnEvents_.clear();
-
-  // フォーマット: { triggerTime(秒), prefabId, position(X,Y,Z) }
-  // カメラのレールが前進するにつれて、前方に敵が出現する構成
-
-  // --- 第1波：ゲーム開始直後（3秒後）に正面へ3体出現 ---
-  spawnEvents_.push_back({ 3.0f,  "Enemy", { -6.0f, 0.0f,  60.0f } });
-  spawnEvents_.push_back({ 3.0f,  "Enemy", {  0.0f, 2.0f,  65.0f } });
-  spawnEvents_.push_back({ 3.0f,  "Enemy", {  6.0f, 0.0f,  60.0f } });
-
-  // --- 第2波：6秒後に斜め配置で2体出現（上下に散らして見栄えを出す） ---
-  spawnEvents_.push_back({ 6.0f,  "Enemy", { -8.0f,  3.0f, 90.0f } });
-  spawnEvents_.push_back({ 6.0f,  "Enemy", {  8.0f, -3.0f, 90.0f } });
-
-  // --- 第3波：10秒後に前方中央に密集した4体 ---
-  spawnEvents_.push_back({ 10.0f, "Enemy", { -4.0f,  2.0f, 120.0f } });
-  spawnEvents_.push_back({ 10.0f, "Enemy", {  4.0f,  2.0f, 120.0f } });
-  spawnEvents_.push_back({ 10.0f, "Enemy", { -4.0f, -2.0f, 125.0f } });
-  spawnEvents_.push_back({ 10.0f, "Enemy", {  4.0f, -2.0f, 125.0f } });
-
-  // --- 第4波：14秒後の最終波（大きく散らして迫力を演出） ---
-  spawnEvents_.push_back({ 14.0f, "Enemy", { -12.0f,  0.0f, 150.0f } });
-  spawnEvents_.push_back({ 14.0f, "Enemy", {   0.0f,  5.0f, 155.0f } });
-  spawnEvents_.push_back({ 14.0f, "Enemy", {  12.0f,  0.0f, 150.0f } });
-}
+//void GameScene::InitSpawnEvents_() {
+//  spawnEvents_.clear();
+//
+//  // フォーマット: { triggerTime(秒), prefabId, position(X,Y,Z) }
+//  // カメラのレールが前進するにつれて、前方に敵が出現する構成
+//
+//  // --- 第1波：ゲーム開始直後（3秒後）に正面へ3体出現 ---
+//  spawnEvents_.push_back({ 3.0f,  "Enemy", { -6.0f, 0.0f,  60.0f } });
+//  spawnEvents_.push_back({ 3.0f,  "Enemy", {  0.0f, 2.0f,  65.0f } });
+//  spawnEvents_.push_back({ 3.0f,  "Enemy", {  6.0f, 0.0f,  60.0f } });
+//
+//  // --- 第2波：6秒後に斜め配置で2体出現（上下に散らして見栄えを出す） ---
+//  spawnEvents_.push_back({ 6.0f,  "Enemy", { -8.0f,  3.0f, 90.0f } });
+//  spawnEvents_.push_back({ 6.0f,  "Enemy", {  8.0f, -3.0f, 90.0f } });
+//
+//  // --- 第3波：10秒後に前方中央に密集した4体 ---
+//  spawnEvents_.push_back({ 10.0f, "Enemy", { -4.0f,  2.0f, 120.0f } });
+//  spawnEvents_.push_back({ 10.0f, "Enemy", {  4.0f,  2.0f, 120.0f } });
+//  spawnEvents_.push_back({ 10.0f, "Enemy", { -4.0f, -2.0f, 125.0f } });
+//  spawnEvents_.push_back({ 10.0f, "Enemy", {  4.0f, -2.0f, 125.0f } });
+//
+//  // --- 第4波：14秒後の最終波（大きく散らして迫力を演出） ---
+//  spawnEvents_.push_back({ 14.0f, "Enemy", { -12.0f,  0.0f, 150.0f } });
+//  spawnEvents_.push_back({ 14.0f, "Enemy", {   0.0f,  5.0f, 155.0f } });
+//  spawnEvents_.push_back({ 14.0f, "Enemy", {  12.0f,  0.0f, 150.0f } });
+//}
 
 void GameScene::Finalize() {
+}
+
+// -----------------------------------------------------------------------
+// AddRootObject オーバーライド（タスクC: 依存性注入）
+// BaseScene::AddRootObject を呼んだ後、追加オブジェクトが EnemyComponent を持って
+// いれば onDestroyed コールバックを自動注入する。
+// タイムライン経由でスポーンされた敵にもコールバックが登録される。
+// -----------------------------------------------------------------------
+void GameScene::AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) {
+    // まず基底クラスの処理でリストに追加する
+    BaseScene::AddRootObject(obj);
+
+    if (!obj) return;
+
+    // EnemyComponent を持っているか確認する
+    auto* enemyComp = obj->GetComponent<EnemyComponent>();
+    if (!enemyComp) return;
+
+    // 既にコールバックが登録済みの場合は上書きしない（二重登録防止）
+    if (enemyComp->onDestroyed) return;
+
+    // GameScene 固有の撃破コールバックを注入する
+    enemyComp->onDestroyed = [this](const Vector3& hitPos) {
+        // 1. ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
+        SpawnHitEffect(hitPos);
+
+        // 2. カメラシェイク開始
+        cameraShakeDuration_  = 0.3f;
+        cameraShakeTimer_     = 0.0f;
+        cameraShakeIntensity_ = 0.2f;
+
+        // 3. 画面歪み（RadialBlur）開始
+        hitDistortionDuration_  = 0.25f;
+        hitDistortionTimer_     = 0.0f;
+        hitDistortionIntensity_ = 0.06f;
+
+        // 4. RadialBlur の中心を敵のスクリーン座標に設定
+        auto* cam = isDebugCamera_
+            ? static_cast<Camera*>(debugCamera_.get())
+            : static_cast<Camera*>(GetMainCamera());
+        if (cam) {
+            Matrix4x4 vp = Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
+            Vector3 sp = TransformPoint(hitPos, vp);
+            radialBlurCenter_ = { sp.x * 0.5f + 0.5f, -sp.y * 0.5f + 0.5f };
+        }
+    };
 }
 
 // -----------------------------------------------------------------------
@@ -601,16 +663,17 @@ void GameScene::Draw() {
   renderer->BeginRenderScene();
 
   Camera* activeCamera = nullptr;
-  if (playMode_ == PlayMode::Edit) {
-      if (editorCamera_) {
+  if (isDebugCamera_) {
+      // Debug Camera ON: エディット中はEditorCamera、プレイ中はDebugCameraを使用する
+      if (playMode_ == PlayMode::Edit && editorCamera_) {
           renderer->SetCamera(*editorCamera_);
           activeCamera = editorCamera_.get();
+      } else {
+          renderer->SetCamera(*debugCamera_);
+          activeCamera = debugCamera_.get();
       }
-  } else if (isDebugCamera_) {
-      renderer->SetCamera(*debugCamera_);
-      activeCamera = debugCamera_.get();
   } else {
-      // カメラシェイクオフセットをゲームカメラに適用する（キャスト不要の共通APIがあれば理想だが、ここではシンプルに）
+      // Debug Camera OFF: エディット/プレイ共通で GetMainCamera() を標準描画に使用する（タスクD）
       renderer->SetCamera(*GetMainCamera());
       activeCamera = GetMainCamera();
   }
@@ -690,9 +753,14 @@ void GameScene::Draw() {
   }
 
   Matrix4x4 projInverse;
-  if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
-  else if (isDebugCamera_) projInverse = Inverse(debugCamera_->GetProjectionMatrix());
-  else projInverse = Inverse(GetMainCamera()->GetProjectionMatrix());
+  if (isDebugCamera_) {
+      // Debug Camera ON: エディット中はEditorCamera、プレイ中はDebugCameraのプロジェクション逆行列を使用
+      if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
+      else projInverse = Inverse(debugCamera_->GetProjectionMatrix());
+  } else {
+      // Debug Camera OFF: GetMainCamera() のプロジェクション逆行列を使用（タスクD）
+      projInverse = Inverse(GetMainCamera()->GetProjectionMatrix());
+  }
 
   renderer->EndRenderScene(projInverse);
 }
@@ -706,6 +774,30 @@ void GameScene::DrawEditorUI() {
     if (phase_ != GamePhase::GameOver) {
         // [REMOVED] Duplicated ImGui::Begin("Viewport##GameView") which breaks ImGui rendering
     }
+
+    // -----------------------------------------------------------------------
+    // Debug Camera トグル（タスクD: ツールバー拡張）
+    // BaseScene のツールバーと並列に表示される GameScene 固有のツールバー
+    // -----------------------------------------------------------------------
+    ImGui::Begin("Camera##CameraToolbar", nullptr,
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize);
+    // トグルがONの間はボタン背景色をハイライトする
+    if (isDebugCamera_) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 1.0f, 1.0f));
+    }
+    if (ImGui::Button("Debug Camera (Free Camera)")) {
+        isDebugCamera_ = !isDebugCamera_;
+        // Debug Camera をONにした時はEditorCameraの位置・姿勢をDebugCameraに引き継ぐ
+        if (isDebugCamera_ && debugCamera_ && editorCamera_) {
+            // DebugCamera は独立した更新ループを持つためリセットは不要
+        }
+    }
+    if (isDebugCamera_) {
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::TextDisabled("(Free Camera Mode)");
+    }
+    ImGui::End();
 
     ImGui::Begin("GameScene Controls##LeftPanel");
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);

@@ -38,6 +38,10 @@ public:
     void SetLookAhead(float offset) { lookAheadOffset_ = offset; }
     void ResetProgress() { progress_ = 0.0f; }
     float GetProgress() const { return progress_; }
+    // タイムラインからカメラ進行度を直接設定するセッター（シーク同期用）
+    // progress_ を書き換えるだけでなく、即座にカメラ位置を再計算して反映する
+    // これによりエディットモードでのスライダー操作が即座に画面に反映される
+    void SetProgress(float progress);
 
     // 変更検知用（エディタ連携など）
     bool ConsumeModifiedFlag() {
@@ -48,6 +52,9 @@ public:
     void SetModifiedFlag() { isModified_ = true; }
 
 private:
+    // カメラ位置の計算とSet処理を共通化したヘルパー（UpdateとSetProgressから呼ばれる）
+    void ApplyCameraTransform_();
+
     std::vector<Vector3> waypoints_;
     float progress_ = 0.0f;
     float speed_ = 0.01f;

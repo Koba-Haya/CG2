@@ -55,6 +55,9 @@
     <Filter Include="engine\scene">
       <UniqueIdentifier>{7a89047b-7b0b-4b2a-8c8e-8a2a8b2a8b2a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="engine\scene\timeline">
+      <UniqueIdentifier>{ca89047b-7b0b-4b2a-8c8e-8a2a8b2a8b2a}</UniqueIdentifier>
+    </Filter>
     <Filter Include="engine\Type">
       <UniqueIdentifier>{8a89047b-7b0b-4b2a-8c8e-8a2a8b2a8b2a}</UniqueIdentifier>
     </Filter>
@@ -222,6 +225,22 @@
     <ClCompile Include="scene\RigidbodyComponent.cpp" />
     <ClCompile Include="resources\AssetManager.cpp">
       <Filter>resources</Filter>
+    </ClCompile>
+    <!-- タイムラインシステム -->
+    <ClCompile Include="scene\timeline\PrefabRegistry.cpp">
+      <Filter>engine\scene\timeline</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\timeline\SpawnEvent.cpp">
+      <Filter>engine\scene\timeline</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\timeline\TimelineTrack.cpp">
+      <Filter>engine\scene\timeline</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\timeline\TimelineManager.cpp">
+      <Filter>engine\scene\timeline</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\timeline\TimelineEditorWindow.cpp">
+      <Filter>engine\scene\timeline</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -421,6 +440,25 @@
     <ClInclude Include="scene\RigidbodyComponent.h" />
     <ClInclude Include="resources\AssetManager.h">
       <Filter>resources</Filter>
+    </ClInclude>
+    <!-- タイムラインシステム -->
+    <ClInclude Include="scene\timeline\ITimelineEvent.h">
+      <Filter>engine\scene\timeline</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\timeline\PrefabRegistry.h">
+      <Filter>engine\scene\timeline</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\timeline\SpawnEvent.h">
+      <Filter>engine\scene\timeline</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\timeline\TimelineTrack.h">
+      <Filter>engine\scene\timeline</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\timeline\TimelineManager.h">
+      <Filter>engine\scene\timeline</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\timeline\TimelineEditorWindow.h">
+      <Filter>engine\scene\timeline</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

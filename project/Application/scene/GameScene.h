@@ -45,15 +45,20 @@ public:
   void Draw() override;
   void DrawEditorUI() override;
 
+  // AddRootObject をオーバーライドして EnemyComponent へのコールバックを自動注入する（タスクC）
+  // SpawnEvent 経由でスポーンされた敵にも onDestroyed が登録されるようになる
+  void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) override;
 
-
+protected:
+  // Debug Camera トグルがONの間だけ editorCamera_ の入力操作を許可する（タスクD）
+  bool IsEditorCameraOperationEnabled() const override { return isDebugCamera_; }
 
 private:
   // ヒットエフェクトの発生（パーティクル＋リングエフェクト＋爆発ライト）
   void SpawnHitEffect(const Vector3 &pos);
 
   // ウェーブデータの初期化（デモ用ハードコードデータを登録する）
-  void InitSpawnEvents_();
+  //void InitSpawnEvents_();
 
 private:
   std::unique_ptr<DebugCamera> debugCamera_;

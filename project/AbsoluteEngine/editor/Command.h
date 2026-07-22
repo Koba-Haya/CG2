@@ -142,4 +142,36 @@ private:
     nlohmann::json after_;
 };
 
+// -----------------------------------------------------------
+// タイムライン操作のコマンド（タスクF: Undo/Redo）
+// -----------------------------------------------------------
+// TimelineManager の状態変化（イベント追加・削除・プロパティ変更など）を
+// 変更前後の JSON スナップショット文字列で記録する軽量な Undo コマンド。
+// undoAction_ / redoAction_ はラムダで実装側が注入するため、
+// TimelineManager への直接依存をこのヘッダから排除できる。
+// -----------------------------------------------------------
+class TimelineCommand : public ICommand {
+public:
+    // コンストラクタ:
+    //   undoAction = Undo時に実行する処理（通常 beforeJson を LoadFromString するラムダ）
+    //   redoAction = Redo時に実行する処理（通常 afterJson  を LoadFromString するラムダ）
+    TimelineCommand(std::function<void()> undoAction, std::function<void()> redoAction)
+        : undoAction_(std::move(undoAction))
+        , redoAction_(std::move(redoAction)) {}
+
+    // Redo / 初回実行
+    void Execute() override {
+        if (redoAction_) redoAction_();
+    }
+
+    // Undo
+    void Undo() override {
+        if (undoAction_) undoAction_();
+    }
+
+private:
+    std::function<void()> undoAction_; // Undo時の処理
+    std::function<void()> redoAction_; // Redo時の処理
+};
+
 } // namespace AbsoluteEngine

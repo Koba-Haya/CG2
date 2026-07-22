@@ -1,0 +1,32 @@
+{
+    "duration": 60.0,
+    "tracks": [
+        {
+            "events": [
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "Enemy",
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        }
+                    },
+                    "triggerTime": 5.019999980926514
+                }
+            ],
+            "trackName": "NewTrack"
+        }
+    ]
+}

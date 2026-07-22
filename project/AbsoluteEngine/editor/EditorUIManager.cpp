@@ -11,6 +11,8 @@
 #include "../scene/ModelComponent.h"
 #include "../scene/DissolveComponent.h"
 #include "../graphics/Renderer.h"
+// タイムラインイベントインスペクタ用（タスク15）
+#include "../scene/timeline/SpawnEvent.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include "../../externals/ImGuizmo/ImGuizmo.h"
@@ -685,6 +687,13 @@ void EditorUIManager::DrawGameObjectNode(std::shared_ptr<GameObject> obj, std::v
 void EditorUIManager::DrawInspector() {
   ImGui::Begin("Inspector");
 
+  // タイムラインイベントが選択されている場合はイベント専用UIを描画して早期リターン（タスク15）
+  if (timelineManager_ && timelineManager_->GetSelectedEvent() != nullptr) {
+      DrawTimelineEventInspector();
+      ImGui::End();
+      return;
+  }
+
   auto obj = selectedObject_.lock();
   if (obj) {
     // 名前の編集
@@ -996,7 +1005,117 @@ void EditorUIManager::DrawInspector() {
 
   ImGui::End();
 }
+
+// ============================================================
+// タスク15: タイムラインイベント選択時の専用インスペクタUI
+// ============================================================
+void EditorUIManager::DrawTimelineEventInspector() {
+    if (!timelineManager_) return;
+
+    ITimelineEvent* selectedEvent = timelineManager_->GetSelectedEvent();
+    if (!selectedEvent) return;
+
+    ImGui::TextColored({ 1.0f, 0.85f, 0.2f, 1.0f }, "[ Timeline Event Inspector ]");
+    ImGui::Separator();
+
+    // 編集開始/終了を横断して集計する（複数ウィジェットのいずれかが該当すればtrue）
+    bool activated = false;
+    bool deactivatedAfterEdit = false;
+
+    // --- 発火時刻 (Time) ---
+    ImGui::Text("Time: %.3f s", selectedEvent->triggerTime_);
+    ImGui::SameLine();
+    // DragFloatで直接編集可能にする
+    float triggerTime = selectedEvent->triggerTime_;
+    ImGui::SetNextItemWidth(100.0f);
+    if (ImGui::DragFloat("##TriggerTime", &triggerTime, 0.01f, 0.0f, timelineManager_->GetDuration(), "%.3f s")) {
+        selectedEvent->triggerTime_ = triggerTime;
+    }
+    activated |= ImGui::IsItemActivated();
+    deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+    ImGui::Separator();
+
+    // --- SpawnEvent 専用プロパティ ---
+    // dynamic_cast でキャストが成功した場合のみSpawnEvent固有UIを表示する
+    if (auto* spawnEv = dynamic_cast<AbsoluteEngine::SpawnEvent*>(selectedEvent)) {
+        // プレハブID（表示のみ、変更不可）
+        ImGui::Text("Prefab: %s", spawnEv->prefabId_.c_str());
+
+        ImGui::Separator();
+
+        // スポーン位置 (Spawn Offset) の編集 - XYZ個別のDragFloat
+        ImGui::Text("Spawn Offset:");
+        float pos[3] = {
+            spawnEv->spawnTransform_.translate.x,
+            spawnEv->spawnTransform_.translate.y,
+            spawnEv->spawnTransform_.translate.z
+        };
+        if (ImGui::DragFloat3("Position##SpawnOffset", pos, 0.1f)) {
+            spawnEv->spawnTransform_.translate = { pos[0], pos[1], pos[2] };
+        }
+        activated |= ImGui::IsItemActivated();
+        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+        float rot[3] = {
+            spawnEv->spawnTransform_.rotate.x,
+            spawnEv->spawnTransform_.rotate.y,
+            spawnEv->spawnTransform_.rotate.z
+        };
+        if (ImGui::DragFloat3("Rotation##SpawnOffset", rot, 0.01f)) {
+            spawnEv->spawnTransform_.rotate = { rot[0], rot[1], rot[2] };
+        }
+        activated |= ImGui::IsItemActivated();
+        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+        float scl[3] = {
+            spawnEv->spawnTransform_.scale.x,
+            spawnEv->spawnTransform_.scale.y,
+            spawnEv->spawnTransform_.scale.z
+        };
+        if (ImGui::DragFloat3("Scale##SpawnOffset", scl, 0.1f, 0.001f, 100.0f)) {
+            spawnEv->spawnTransform_.scale = { scl[0], scl[1], scl[2] };
+        }
+        activated |= ImGui::IsItemActivated();
+        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+        ImGui::Separator();
+    } else {
+        // SpawnEvent 以外の汎用イベント
+        ImGui::Text("Type: %s", selectedEvent->GetEventType().c_str());
+        ImGui::Separator();
+    }
+
+    // --- Undo/Redo用スナップショットの取得・コマンド発行（タスクF） ---
+    // 毎フレームスタックが積まれるのを防ぐため、編集開始時(Activated)にスナップショットを取り、
+    // 編集完了時(DeactivatedAfterEdit)にのみコマンドを発行する
+    if (activated) {
+        timelineSnapshotBeforeEdit_ = timelineManager_->SerializeToString();
+    }
+    if (deactivatedAfterEdit) {
+        const std::string beforeSnapshot = timelineSnapshotBeforeEdit_;
+        const std::string afterSnapshot = timelineManager_->SerializeToString();
+        if (beforeSnapshot != afterSnapshot) {
+            if (commandManager_) {
+                auto* mgr = timelineManager_;
+                auto cmd = std::make_shared<TimelineCommand>(
+                    [mgr, beforeSnapshot]() { mgr->LoadFromString(beforeSnapshot); },
+                    [mgr, afterSnapshot]() { mgr->LoadFromString(afterSnapshot); }
+                );
+                commandManager_->AddCommand(cmd);
+            }
+            timelineManager_->SetDirty(true);
+            SetSceneModified();
+        }
+    }
+
+    // --- 選択解除ボタン ---
+    if (ImGui::Button("Deselect Event")) {
+        timelineManager_->SetSelectedEvent(nullptr);
+    }
+}
 #endif
+
 
 void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
 #ifdef USE_IMGUI

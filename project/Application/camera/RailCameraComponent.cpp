@@ -3,6 +3,8 @@
 #include "GameCamera.h"
 #include "Method.h"
 #include "Spline.h"
+#include "../../AbsoluteEngine/scene/BaseScene.h"
+#include "../actor/Player/PlayerComponent.h"
 #include <algorithm>
 #include <string>
 
@@ -37,6 +39,25 @@ void RailCameraComponent::Update(float deltaTime) {
     progress_ += speed_ * deltaTime;
     if (progress_ > 1.0f) progress_ = 1.0f;
 
+    // カメラ位置を計算して反映する（SetProgressと共通処理）
+    ApplyCameraTransform_();
+}
+
+void RailCameraComponent::SetProgress(float progress) {
+    progress_ = std::clamp(progress, 0.0f, 1.0f);
+
+    // progress_ を書き換えた直後にカメラ位置を即座に再計算する
+    // これにより、エディットモードでシークバーを動かした際のリアルタイムプレビューが実現する
+    ApplyCameraTransform_();
+}
+
+void RailCameraComponent::ApplyCameraTransform_() {
+    if (waypoints_.size() < 2) return;
+    auto* scene = BaseScene::GetActiveScene();
+    if (!scene) return;
+    auto* camera = scene->GetMainCamera();
+    if (!camera) return;
+
     // 現在地点の計算
     Vector3 currentPos = Spline::GetPoint(waypoints_, progress_);
 
@@ -57,7 +78,20 @@ void RailCameraComponent::Update(float deltaTime) {
     camera->SetEye(currentPos);
     camera->SetTarget(targetPos);
     camera->SetUp({ 0.0f, 1.0f, 0.0f });
+
+    // タイムラインシーク時のプレイヤー位置の同期（エディットモードでのシーク時のみ）
+    if (scene->GetPlayMode() == PlayMode::Edit) {
+        const auto& rootObjs = scene->GetRootObjects();
+        for (size_t i = 0; i < rootObjs.size(); ++i) {
+            auto obj = rootObjs[i];
+            if (!obj) continue;
+            if (auto pComp = obj->GetComponent<PlayerComponent>()) {
+                pComp->Update(0.0f);
+            }
+        }
+    }
 }
+
 
 void RailCameraComponent::Serialize(nlohmann::json& j) const {
     nlohmann::json waypointsArray = nlohmann::json::array();

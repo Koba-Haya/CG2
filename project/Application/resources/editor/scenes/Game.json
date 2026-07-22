@@ -67,10 +67,10 @@
                 },
                 {
                     "drag": 0.0,
-                    "isKinematic": false,
+                    "isKinematic": true,
                     "mass": 1.0,
                     "type": "RigidbodyComponent",
-                    "useGravity": true,
+                    "useGravity": false,
                     "velocity": [
                         0.0,
                         0.0,
@@ -83,7 +83,7 @@
             "transform": {
                 "rotate": {
                     "x": 0.0,
-                    "y": -0.0,
+                    "y": 0.0,
                     "z": 0.0
                 },
                 "scale": {
@@ -93,8 +93,8 @@
                 },
                 "translate": {
                     "x": 0.0,
-                    "y": -1.100000023841858,
-                    "z": -15.0
+                    "y": -0.5,
+                    "z": 27.048967361450195
                 }
             }
         },
@@ -175,9 +175,6 @@
                 },
                 {
                     "type": "EnemyShootComponent"
-                },
-                {
-                    "type": "DissolveComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs/Enemy.json",
