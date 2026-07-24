@@ -53,6 +53,12 @@ protected:
   // Debug Camera トグルがONの間だけ editorCamera_ の入力操作を許可する（タスクD）
   bool IsEditorCameraOperationEnabled() const override { return isDebugCamera_; }
 
+  // Timeline Editor内のDebug CameraトグルボタンにisDebugCamera_のアドレスを渡す
+  bool* GetDebugCameraFlag() override { return &isDebugCamera_; }
+
+  // Draw() の描画カメラ分岐と一致させる（ギズモ/マウスピッキングが実際の見た目とズレないように）
+  Camera* GetEditorViewCamera() const override;
+
 private:
   // ヒットエフェクトの発生（パーティクル＋リングエフェクト＋爆発ライト）
   void SpawnHitEffect(const Vector3 &pos);

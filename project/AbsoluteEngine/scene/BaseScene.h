@@ -93,6 +93,17 @@ protected:
   // OFF時は非表示のeditorCamera_が入力を奪わないようにする
   virtual bool IsEditorCameraOperationEnabled() const { return true; }
 
+  // Debug/Game カメラ切替フラグへの非所有ポインタを返す（Timeline Editorのトグルボタン用）
+  // 派生クラス（GameScene等）がisDebugCamera_のアドレスを返すようオーバーライドする
+  // デフォルトはnullptrで、その場合Timeline Editorはトグルボタンを表示しない
+  virtual bool* GetDebugCameraFlag() { return nullptr; }
+
+  // エディタのギズモ操作・マウスピッキングに使う view/projection 行列を提供するカメラを返す
+  // 派生クラス（GameScene等）は実際に画面に描画しているカメラ（Draw()内の分岐）と
+  // 必ず一致させるようオーバーライドすること。ここが描画カメラとズレると、
+  // ギズモやクリック判定が画面上の見た目と食い違う不具合になる
+  virtual Camera* GetEditorViewCamera() const { return editorCamera_.get(); }
+
 protected:
   SceneManager *sceneManager_ = nullptr;
   SceneServices services_{};

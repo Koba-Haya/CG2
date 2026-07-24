@@ -13,6 +13,7 @@
 #include "../graphics/Renderer.h"
 // タイムラインイベントインスペクタ用（タスク15）
 #include "../scene/timeline/SpawnEvent.h"
+#include "../scene/timeline/PrefabRegistry.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include "../../externals/ImGuizmo/ImGuizmo.h"
@@ -944,6 +945,8 @@ void EditorUIManager::DrawInspector() {
         std::string filepath = prefabDir + filename;
         if (SceneSerializer::SavePrefab(filepath, obj)) {
             obj->SetPrefabPath(filepath);
+            // 保存直後にPrefabRegistryを再スキャンし、Timeline Editor側のプレハブ選択肢に即反映する
+            AbsoluteEngine::PrefabRegistry::GetInstance().ScanDirectory(prefabDir);
         }
       }
     }

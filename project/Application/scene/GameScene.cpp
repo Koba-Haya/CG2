@@ -262,6 +262,22 @@ void GameScene::Finalize() {
 }
 
 // -----------------------------------------------------------------------
+// GetEditorViewCamera オーバーライド
+// Draw() のカメラ選択分岐（isDebugCamera_ / playMode_ による切り替え）と完全に一致させる。
+// ここがズレると、Viewportに表示されている絵と、ギズモ・クリック判定の座標系が
+// 食い違い、「実際のゲームカメラとは関係ない視点」に見えるバグになる。
+// -----------------------------------------------------------------------
+Camera* GameScene::GetEditorViewCamera() const {
+    if (isDebugCamera_) {
+        if (playMode_ == PlayMode::Edit && editorCamera_) {
+            return editorCamera_.get();
+        }
+        return debugCamera_.get();
+    }
+    return GetMainCamera();
+}
+
+// -----------------------------------------------------------------------
 // AddRootObject オーバーライド（タスクC: 依存性注入）
 // BaseScene::AddRootObject を呼んだ後、追加オブジェクトが EnemyComponent を持って
 // いれば onDestroyed コールバックを自動注入する。
@@ -776,28 +792,9 @@ void GameScene::DrawEditorUI() {
     }
 
     // -----------------------------------------------------------------------
-    // Debug Camera トグル（タスクD: ツールバー拡張）
-    // BaseScene のツールバーと並列に表示される GameScene 固有のツールバー
+    // Debug Camera トグルはTimeline Editor内に一本化した（GetDebugCameraFlag経由）
+    // ここにあった専用ツールバーウィンドウは廃止
     // -----------------------------------------------------------------------
-    ImGui::Begin("Camera##CameraToolbar", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize);
-    // トグルがONの間はボタン背景色をハイライトする
-    if (isDebugCamera_) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 1.0f, 1.0f));
-    }
-    if (ImGui::Button("Debug Camera (Free Camera)")) {
-        isDebugCamera_ = !isDebugCamera_;
-        // Debug Camera をONにした時はEditorCameraの位置・姿勢をDebugCameraに引き継ぐ
-        if (isDebugCamera_ && debugCamera_ && editorCamera_) {
-            // DebugCamera は独立した更新ループを持つためリセットは不要
-        }
-    }
-    if (isDebugCamera_) {
-        ImGui::PopStyleColor();
-        ImGui::SameLine();
-        ImGui::TextDisabled("(Free Camera Mode)");
-    }
-    ImGui::End();
 
     ImGui::Begin("GameScene Controls##LeftPanel");
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
@@ -851,8 +848,9 @@ void GameScene::DrawEditorUI() {
         }
     }
 
-    ImGui::Checkbox("Debug Camera Mode", &isDebugCamera_);
+    // Debug Cameraのトグルボタン自体はTimeline Editorに一本化したため、ここでは状態表示のみ行う
     if (isDebugCamera_) {
+        ImGui::TextDisabled("Debug Camera: ON (Timeline Editorで切替)");
         Vector3 camPos = debugCamera_->GetTranslate();
         if (ImGui::DragFloat3("Debug Camera Pos", &camPos.x, 0.1f)) {
             debugCamera_->SetTranslate(camPos);

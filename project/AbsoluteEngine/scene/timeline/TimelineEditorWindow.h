@@ -6,6 +6,7 @@
 #pragma once
 #include "TimelineManager.h"
 #include <string>
+#include <functional>
 
 // 前方宣言（CommandManagerの完全定義は.cppでのみインクルードする）
 namespace AbsoluteEngine { class CommandManager; }
@@ -25,26 +26,39 @@ public:
     // nullptr を渡した場合はコマンド発行を無効化する
     void SetCommandManager(CommandManager* commandManager) { commandManager_ = commandManager; }
 
+    // Debug/Game カメラ切替フラグへの非所有ポインタを設定する
+    // Application層（GameScene等）が持つ bool を直接トグルするための橋渡し
+    // nullptr の場合はトグルボタンを表示しない
+    void SetDebugCameraFlag(bool* flag) { debugCameraFlag_ = flag; }
+
+    // トラック/イベントの追加・削除等でシーンが変更された際に呼ばれるコールバックを設定する
+    // 既存のオートセーブ経路（EditorUIManager::SetSceneModified）に接続するために使う
+    void SetOnModifiedCallback(std::function<void()> callback) { onModified_ = std::move(callback); }
+
     // 毎フレームUIを描画する（BaseScene::DrawEditorUI から呼ばれる想定）
     // USE_IMGUI マクロが無効な場合は何もしない
     void Draw(const std::string& timelineFilePath);
 
 private:
 #ifdef USE_IMGUI
-    // ツールバー（Play/Pause/Stop/Save/Load ボタン）を描画する
+    // ツールバー（1行目: 再生系+Debug Cameraトグル、2行目: プレハブ関連）を描画する
     void DrawToolbar(const std::string& timelineFilePath);
 
-    // シークバーを描画する
+    // ルーラー（目盛り+再生ヘッド）とシークスライダーを描画する
+    // トラックレーンと同じ座標系（ラベル列オフセット+可変レーン幅）を共有する
     void DrawSeekBar();
 
     // トラックとイベントのレーンを描画する
     void DrawTracks();
 
-    // 1つのトラックのイベントレーンを描画する（インデックス指定）
-    void DrawTrackLane(size_t trackIndex);
+    // 1つのトラックのイベントレーンを描画する（インデックスとレーン幅を指定）
+    void DrawTrackLane(size_t trackIndex, float laneWidth);
 
     // イベント追加ポップアップを描画する（プレハブID選択付き）
     void DrawAddEventPopup();
+
+    // トラックインデックスに応じた固定パレット色を返す（重なり識別用、戻り値はImU32と同一表現）
+    static unsigned int GetTrackColor(size_t trackIndex);
 #endif
 
 private:
@@ -54,6 +68,12 @@ private:
     // CommandManager への非所有ポインタ（Undo/Redo用: タスクF）
     // nullptr の場合はコマンド発行を行わない
     CommandManager* commandManager_ = nullptr;
+
+    // Debug/Game カメラ切替フラグへの非所有ポインタ
+    bool* debugCameraFlag_ = nullptr;
+
+    // シーン変更通知コールバック（オートセーブ用）
+    std::function<void()> onModified_;
 
 #ifdef USE_IMGUI
     // UIの状態変数（エディタのみで使用）
@@ -70,8 +90,9 @@ private:
     // 選択中のプレハブIDのインデックス（ドロップダウン用）
     int selectedPrefabIndex_ = 0;
 
-    // タイムライン表示エリアのピクセル幅
-    static constexpr float kTimelineAreaWidth = 800.0f;
+    // トラックのラベル列（名前+ボタン）の固定幅（ピクセル）
+    // ルーラー・シークバー・各トラックレーンはこの幅ぶんオフセットして座標系を揃える
+    static constexpr float kTrackLabelWidth = 130.0f;
 
     // トラック1本の高さ（ピクセル）
     static constexpr float kTrackHeight = 30.0f;

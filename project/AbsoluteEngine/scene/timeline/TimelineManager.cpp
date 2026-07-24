@@ -13,6 +13,45 @@
 namespace AbsoluteEngine {
 
 // -----------------------------------------------------------
+// Duration算出
+// -----------------------------------------------------------
+
+float TimelineManager::GetDuration() const {
+    if (railCamera_) {
+        const float railDuration = railCamera_->GetDuration();
+        if (railDuration > 0.0f) return railDuration;
+    }
+    return kFallbackDuration_;
+}
+
+// -----------------------------------------------------------
+// スポーン位置の自動算出
+// -----------------------------------------------------------
+
+Transform TimelineManager::ComputeSpawnAnchorTransform(float triggerTime) const {
+    Transform t{};
+    if (!railCamera_) return t;
+
+    const float duration = GetDuration();
+    const float progress = (duration > 0.0f) ? std::clamp(triggerTime / duration, 0.0f, 1.0f) : 0.0f;
+
+    Vector3 pos{};
+    Vector3 forward{};
+    railCamera_->GetPointAndForward(progress, pos, forward);
+
+    // レール（想定プレイヤー位置）から前方向へ少し奥へ進めた位置に出現させる
+    // プレイヤーはカメラから約22ユニット前方、遠レティクルはさらに約60ユニット先にあるため、
+    // その付近（プレイヤーが狙う先）に出現するよう80ユニットを既定値とする
+    constexpr float kSpawnAheadDistance = 80.0f;
+    t.translate = {
+        pos.x + forward.x * kSpawnAheadDistance,
+        pos.y + forward.y * kSpawnAheadDistance,
+        pos.z + forward.z * kSpawnAheadDistance
+    };
+    return t;
+}
+
+// -----------------------------------------------------------
 // 再生制御
 // -----------------------------------------------------------
 
@@ -53,7 +92,7 @@ void TimelineManager::Stop() {
 
 void TimelineManager::Seek(float targetTime) {
     // 有効範囲にクランプ
-    targetTime = std::clamp(targetTime, 0.0f, duration_);
+    targetTime = std::clamp(targetTime, 0.0f, GetDuration());
 
     // スイープ判定のために以前の時間を保存する
     previousTime_ = currentTime_;
@@ -80,8 +119,9 @@ void TimelineManager::Update(float deltaTime) {
     currentTime_ += deltaTime;
 
     // タイムラインの終端を超えたら停止する
-    if (currentTime_ >= duration_) {
-        currentTime_ = duration_;
+    const float duration = GetDuration();
+    if (currentTime_ >= duration) {
+        currentTime_ = duration;
 
         // 末尾のイベントを発火させてから停止する
         for (auto& track : tracks_) {
@@ -134,7 +174,7 @@ void TimelineManager::RemoveTrack(size_t index) {
 bool TimelineManager::SaveToFile(const std::string& filePath) const {
     nlohmann::json j;
 
-    j["duration"] = duration_;
+    // Durationはレール（RailCameraComponent）の弧長とspeedから動的に算出するため保存しない
 
     // JSONの階層構造: { "tracks": [ { "trackName": "...", "events": [...] } ] }
     // この構造を保つことで将来の拡張（オーディオトラックなど）が容易になる
@@ -174,7 +214,7 @@ bool TimelineManager::LoadFromFile(const std::string& filePath) {
         return false;
     }
 
-    duration_ = j.value("duration", 60.0f);
+    // Durationはレールから動的に算出するため、ファイル内の値（旧フォーマット互換）は無視する
     tracks_.clear();
 
     if (j.contains("tracks") && j["tracks"].is_array()) {
@@ -201,11 +241,12 @@ bool TimelineManager::LoadFromFile(const std::string& filePath) {
 
 void TimelineManager::SyncCameraProgress() {
     if (!railCamera_) return;
-    if (duration_ <= 0.0f) return;
+    const float duration = GetDuration();
+    if (duration <= 0.0f) return;
 
     // 現在時間の全体に対する割合を計算してカメラに直接設定する
     // クランプして 0.0～1.0 の範囲に収める
-    const float progress = std::clamp(currentTime_ / duration_, 0.0f, 1.0f);
+    const float progress = std::clamp(currentTime_ / duration, 0.0f, 1.0f);
     railCamera_->SetProgress(progress);
 }
 
@@ -221,7 +262,7 @@ void TimelineManager::RewindAllEvents() {
 
 std::string TimelineManager::SerializeToString() const {
     nlohmann::json j;
-    j["duration"] = duration_;
+    // Durationはレールから動的に算出するため保存しない
 
     nlohmann::json tracksJson = nlohmann::json::array();
     for (const auto& track : tracks_) {
@@ -246,7 +287,7 @@ bool TimelineManager::LoadFromString(const std::string& jsonStr) {
     // 現在のイベントを全てRewindしてから再構築する
     RewindAllEvents();
 
-    duration_ = j.value("duration", 60.0f);
+    // Durationはレールから動的に算出するため、スナップショット内の値（旧フォーマット互換）は無視する
     tracks_.clear();
 
     if (j.contains("tracks") && j["tracks"].is_array()) {

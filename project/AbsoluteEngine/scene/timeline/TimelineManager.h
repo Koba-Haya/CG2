@@ -6,6 +6,7 @@
 #pragma once
 #include "TimelineTrack.h"
 #include "ITimelineEvent.h"
+#include "../../Type/Transform.h"
 #include "../../../externals/nlohmann/json.hpp"
 #include <vector>
 #include <memory>
@@ -33,9 +34,11 @@ public:
     // 初期化・終了
     // -----------------------------------------------------------
 
-    // タイムライン全体の長さ（秒）を設定する
-    void SetDuration(float duration) { duration_ = duration; isDirty_ = true; }
-    float GetDuration() const { return duration_; }
+    // タイムライン全体の長さ（秒）を取得する
+    // レール（RailCameraComponent）を最初から最後まで等速で走破するのに必要な秒数
+    // （弧長 ÷ speed）を毎回動的に算出する。手動設定は廃止し、レールの形状・速度に完全追従させる
+    // RailCameraComponent未接続、またはレール長・速度が0の場合はフォールバック値を返す
+    float GetDuration() const;
 
     // -----------------------------------------------------------
     // ダーティフラグ管理（未保存変更の追跡）
@@ -50,6 +53,15 @@ public:
     // シーン読み込み時に RailCameraComponent を関連付ける
     // タイムラインはカメラの進行度をこのポインタ経由で同期する
     void SetRailCamera(RailCameraComponent* camera) { railCamera_ = camera; }
+
+    // -----------------------------------------------------------
+    // スポーン位置の自動算出
+    // -----------------------------------------------------------
+
+    // 発火時刻に対応するレール上の想定プレイヤー位置から、前方向へ少し奥へ進めた位置を算出する
+    // SpawnEvent追加時のデフォルト出現位置に使う（座標を手入力する代わりに自動配置する）
+    // RailCameraComponent未接続の場合は原点のTransformを返す
+    Transform ComputeSpawnAnchorTransform(float triggerTime) const;
 
     // -----------------------------------------------------------
     // 再生制御
@@ -147,8 +159,8 @@ private:
     void RewindAllEvents();
 
 private:
-    // タイムライン全体の長さ（秒）
-    float duration_ = 60.0f;
+    // RailCameraComponent未接続時に使うフォールバックの長さ（秒）
+    static constexpr float kFallbackDuration_ = 60.0f;
 
     // 現在の再生時間（秒）
     float currentTime_ = 0.0f;
@@ -170,7 +182,7 @@ private:
     ITimelineEvent* selectedEvent_ = nullptr;
 
     // 未保存の変更があることを示すダーティフラグ
-    // AddTrack/RemoveTrack/SetDuration 等の変更操作でtrueになり、SaveToFile後にfalseにリセットする
+    // AddTrack/RemoveTrack 等の変更操作でtrueになり、SaveToFile後にfalseにリセットする
     // SaveToFile() は論理的にconstだが、保存完了のマーキングのため mutable にする
     mutable bool isDirty_ = false;
 };

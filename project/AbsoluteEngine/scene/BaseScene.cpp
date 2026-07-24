@@ -186,12 +186,18 @@ void BaseScene::UpdateEditor() {
         }
         
         AbsoluteEngine::CollisionManager::GetInstance().Update(rootObjects_);
-
-        // ガベージコレクション（IsActive() == false なオブジェクトを削除）
-        rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), [](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
-            return !obj || !obj->IsActive();
-        }), rootObjects_.end());
     }
+
+    // ガベージコレクション（IsActive() == false なオブジェクトを削除）
+    // Playモード限定ではなく毎フレーム・常時実行する。GameObject::Destroy()はisActive_を
+    // falseにするだけで実際の削除はここで行われるため、Editモード限定（タイムラインの
+    // トラック削除やEdit中のタイムラインプレビュー巻き戻しでSpawnEvent::Rewind()がDestroy()
+    // する場合など）でもここを通さないと、破棄されたはずのオブジェクトがrootObjects_に
+    // 残り続けて描画され続けてしまう（削除したはずのオブジェクトが消えない/再スポーンが
+    // 別オブジェクトとして重なって見えるバグの原因だった）
+    rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), [](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
+        return !obj || !obj->IsActive();
+    }), rootObjects_.end());
 }
 
 void BaseScene::DrawEditorUI() {
@@ -240,7 +246,12 @@ void BaseScene::DrawEditorUI() {
     // エディタUIの描画
     if (editorUIManager_ && editorCamera_) {
         auto* edCam = dynamic_cast<AbsoluteEngine::EditorCamera*>(editorCamera_.get());
-        editorUIManager_->DrawUI(rootObjects_, editorCamera_->GetViewMatrix(), editorCamera_->GetProjectionMatrix(), edCam);
+        // ギズモ・マウスピッキングは「実際に画面に描画されているカメラ」の行列を使う
+        // （常にeditorCamera_を使うと、Debug Camera OFF時にGameCamera(レールカメラ)で
+        //   描画されている絵とギズモ/クリック判定がズレて、意味不明な視点に見える不具合になる）
+        Camera* viewCam = GetEditorViewCamera();
+        if (!viewCam) viewCam = editorCamera_.get();
+        editorUIManager_->DrawUI(rootObjects_, viewCam->GetViewMatrix(), viewCam->GetProjectionMatrix(), edCam);
 
         // オートセーブの実行
         if (editorUIManager_->ConsumeSceneModifiedFlag()) {
@@ -364,5 +375,14 @@ void BaseScene::UpdateTimeline(float deltaTime) {
 }
 
 void BaseScene::DrawTimelineEditorUI() {
+    // Debug/Game カメラ切替フラグを接続する（派生クラスがオーバーライドしていればそのポインタを渡す）
+    timelineEditorWindow_.SetDebugCameraFlag(GetDebugCameraFlag());
+
+    // トラック/イベントの追加・削除等を既存のオートセーブ経路に接続する
+    if (editorUIManager_) {
+        AbsoluteEngine::EditorUIManager* uiManager = editorUIManager_.get();
+        timelineEditorWindow_.SetOnModifiedCallback([uiManager]() { uiManager->SetSceneModified(); });
+    }
+
     timelineEditorWindow_.Draw(GetTimelineFilePath());
 }
