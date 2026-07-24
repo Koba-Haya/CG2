@@ -176,6 +176,8 @@ std::string SceneSerializer::SerializeToString(const std::vector<std::shared_ptr
   json j;
   json rootArray = json::array();
   for (const auto& obj : rootObjects) {
+    // タイムラインプレビューオブジェクトは保存対象から除外する（タスク16）
+    if (obj && obj->IsTimelinePreview()) continue;
     rootArray.push_back(SerializeGameObject(obj, forceFullSerialize));
   }
   j["rootObjects"] = rootArray;

@@ -13,9 +13,12 @@ public:
 	void SetContext(const CameraContext& ctx) { ctx_ = ctx; }
 	const CameraContext& GetContext() const { return ctx_; }
 
-	void SetEye(const Vector3& eye) { eye_ = eye; }
-	void SetTarget(const Vector3& target) { target_ = target; }
-	void SetUp(const Vector3& up) { up_ = up; }
+	// Set系はview_（実際に描画で使われるビュー行列）もその場で再計算する
+	// GameCamera::Update()が呼ばれるまでview_が更新されないと、RailCameraComponentが
+	// タイムライン追従でSetEye/SetTargetしても画面上のカメラが追従しない不具合になるため
+	void SetEye(const Vector3& eye) { eye_ = eye; RecomputeView_(); }
+	void SetTarget(const Vector3& target) { target_ = target; RecomputeView_(); }
+	void SetUp(const Vector3& up) { up_ = up; RecomputeView_(); }
 
 	const Vector3& GetEye() const { return eye_; }
 	const Vector3& GetTarget() const { return target_; }
@@ -26,6 +29,8 @@ public:
 	Vector3 GetActualUp() const;
 
 private:
+	void RecomputeView_();
+
 	CameraContext ctx_{};
 	std::unique_ptr<ICameraController> controller_;
 

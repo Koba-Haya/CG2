@@ -177,6 +177,12 @@
     <ClCompile Include="scene\SceneSerializer.cpp" />
     <ClCompile Include="resources\AssetManager.cpp" />
     <ClCompile Include="scene\RigidbodyComponent.cpp" />
+    <!-- タイムラインシステム -->
+    <ClCompile Include="scene\timeline\PrefabRegistry.cpp" />
+    <ClCompile Include="scene\timeline\SpawnEvent.cpp" />
+    <ClCompile Include="scene\timeline\TimelineTrack.cpp" />
+    <ClCompile Include="scene\timeline\TimelineManager.cpp" />
+    <ClCompile Include="scene\timeline\TimelineEditorWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\externals\ImGuizmo\ImGuizmo.h" />
@@ -254,6 +260,13 @@
     <ClInclude Include="Type\Vector.h" />
     <ClInclude Include="resources\AssetManager.h" />
     <ClInclude Include="scene\RigidbodyComponent.h" />
+    <!-- タイムラインシステム -->
+    <ClInclude Include="scene\timeline\ITimelineEvent.h" />
+    <ClInclude Include="scene\timeline\PrefabRegistry.h" />
+    <ClInclude Include="scene\timeline\SpawnEvent.h" />
+    <ClInclude Include="scene\timeline\TimelineTrack.h" />
+    <ClInclude Include="scene\timeline\TimelineManager.h" />
+    <ClInclude Include="scene\timeline\TimelineEditorWindow.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

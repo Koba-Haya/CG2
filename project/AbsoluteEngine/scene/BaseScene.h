@@ -4,6 +4,8 @@
 #include <vector>
 
 #include "SceneServices.h"
+#include "timeline/TimelineManager.h"
+#include "timeline/TimelineEditorWindow.h"
 
 class Camera;
 class GameCamera;
@@ -39,7 +41,9 @@ public:
   void SetPlayMode(PlayMode mode) { playMode_ = mode; }
 
   const std::vector<std::shared_ptr<AbsoluteEngine::GameObject>>& GetRootObjects() const { return rootObjects_; }
-  void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) { rootObjects_.push_back(obj); }
+  // タイムラインのSpawnEventなど、あらゆる箇所からのオブジェクト追加を一元管理できるよう virtual 化する
+  // 派生クラスでオーバーライドすることで、Application固有の処理（コールバック注入など）を追加できる（DI）
+  virtual void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) { rootObjects_.push_back(obj); }
   void ClearRootObjects() { rootObjects_.clear(); }
 
   // アクティブシーンへのグローバルアクセス
@@ -59,12 +63,46 @@ protected:
   bool LoadEditorScene();
   std::string GetSceneFilePath() const;
 
+  // タイムラインデータのファイルパスを取得する（sceneId_ + "_timeline.json"）
+  std::string GetTimelineFilePath() const;
+
+  // タイムラインデータを保存・読み込みする
+  void SaveTimeline();
+  void LoadTimeline();
+
+  // タイムラインのカメラを設定する（RailCameraComponentへの参照を渡す）
+  // 派生クラスのInitializeでRailCameraComponentを設定後に呼ぶ
+  void SetTimelineRailCamera(class RailCameraComponent* camera);
+
+  // タイムラインを更新する（プレイモード中に毎フレーム呼ぶ）
+  void UpdateTimeline(float deltaTime);
+
+  // タイムラインのエディタUIを描画する
+  void DrawTimelineEditorUI();
+
 protected:
   void RequestSceneChange(const std::string &sceneId);
 
   // エディタ機能の更新・描画（派生クラスのUpdate/Drawから呼ばれることを想定）
   virtual void UpdateEditor();
   void ApplyEditorLightsToRenderer(class Renderer* renderer);
+
+  // editorCamera_（Debug/Free Camera）による入力操作を有効にするかどうか（タスクD）
+  // GameScene 側の「Debug Camera」トグルと描画分岐を一致させるため、
+  // 派生クラスでオーバーライドしてトグル状態を返すことで、
+  // OFF時は非表示のeditorCamera_が入力を奪わないようにする
+  virtual bool IsEditorCameraOperationEnabled() const { return true; }
+
+  // Debug/Game カメラ切替フラグへの非所有ポインタを返す（Timeline Editorのトグルボタン用）
+  // 派生クラス（GameScene等）がisDebugCamera_のアドレスを返すようオーバーライドする
+  // デフォルトはnullptrで、その場合Timeline Editorはトグルボタンを表示しない
+  virtual bool* GetDebugCameraFlag() { return nullptr; }
+
+  // エディタのギズモ操作・マウスピッキングに使う view/projection 行列を提供するカメラを返す
+  // 派生クラス（GameScene等）は実際に画面に描画しているカメラ（Draw()内の分岐）と
+  // 必ず一致させるようオーバーライドすること。ここが描画カメラとズレると、
+  // ギズモやクリック判定が画面上の見た目と食い違う不具合になる
+  virtual Camera* GetEditorViewCamera() const { return editorCamera_.get(); }
 
 protected:
   SceneManager *sceneManager_ = nullptr;
@@ -79,6 +117,18 @@ protected:
   PlayMode playMode_ = PlayMode::Edit;
   std::string sceneId_ = "";
   std::string backupSceneJson_ = "";
+
+  // タイムラインシステム（シーン独立のため BaseScene が所有する）
+  AbsoluteEngine::TimelineManager timelineManager_;
+  AbsoluteEngine::TimelineEditorWindow timelineEditorWindow_;
+
+  // タイムラインプレビューオブジェクト（タスク16）
+  // イベント選択時に生成した仮のオブジェクトへの弱参照
+  // 他のイベントへ選択が切り替わった際は古いプレビューを Destroy()してから新規生成する
+  std::weak_ptr<AbsoluteEngine::GameObject> timelinePreviewObject_;
+
+  // 前フレームの選択イベントポインタ（選択切り替え検出用）を保持する
+  AbsoluteEngine::ITimelineEvent* prevSelectedTimelineEvent_ = nullptr;
 
   static BaseScene* activeScene_;
 };

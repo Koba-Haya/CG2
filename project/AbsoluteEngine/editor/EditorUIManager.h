@@ -8,6 +8,8 @@
 #include "CommandManager.h"
 #include "../../externals/nlohmann/json.hpp"
 #include "../scene/LightNodeComponent.h"
+// タイムラインマネージャーとのインスペクタ連携（タスク15）
+#include "../scene/timeline/TimelineManager.h"
 
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -33,6 +35,10 @@ public:
   // 現在選択されているオブジェクトを取得
   std::shared_ptr<GameObject> GetSelectedObject() const { return selectedObject_.lock(); }
   void SetSelectedObject(std::shared_ptr<GameObject> obj) { selectedObject_ = obj; }
+
+  // タイムラインマネージャへの非所有ポインタを設定する（タスク15: インスペクタ連携）
+  // BaseScene::DrawEditorUI から呼び出してボイントする
+  void SetTimelineManager(AbsoluteEngine::TimelineManager* manager) { timelineManager_ = manager; }
 
   // シーンが変更されたかどうかを取得・クリアする
   bool ConsumeSceneModifiedFlag() {
@@ -60,6 +66,9 @@ private:
   void HandleMousePicking(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
   void CheckIntersection(std::shared_ptr<GameObject> obj, const Vector3& rayOrigin, const Vector3& rayDir, std::shared_ptr<GameObject>& hitObject, float& minT);
   void DrawColliderDebug(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const ImVec2& vMin, const ImVec2& vMax);
+
+  // タイムラインイベント選択時のインスペクタ専用UI（タスク15）
+  void DrawTimelineEventInspector();
 
   // Post process params
   int postProcessMode_ = 0;
@@ -89,8 +98,16 @@ private:
 
   Transform transformBeforeInspector_;
   nlohmann::json componentStateBefore_;
+
+  // タイムラインイベントインスペクタ編集用のUndo/Redoスナップショット（タスクF）
+  // IsItemActivated()時に取得し、IsItemDeactivatedAfterEdit()時にTimelineCommandを発行する
+  std::string timelineSnapshotBeforeEdit_;
 #endif
   bool isSceneModified_ = false;
+
+  // タイムラインマネージャへの非所有ポインタ（タスク15）
+  // BaseScene で初期化時に SetTimelineManager() でボイントする
+  AbsoluteEngine::TimelineManager* timelineManager_ = nullptr;
 };
 
 } // namespace AbsoluteEngine

@@ -69,12 +69,21 @@ public:
   bool IsActive() const { return isActive_; }
   void Destroy() { isActive_ = false; }
 
+  // タイムラインプレビューフラグ（タスク16）
+  // true の場合はシリアライザ（SceneSerializer）が保存対象から除外する
+  bool IsTimelinePreview() const { return isTimelinePreview_; }
+  void SetTimelinePreview(bool flag) { isTimelinePreview_ = flag; }
+
 private:
   std::string name_;
   std::string tag_ = "Untagged";
   std::string prefabPath_ = "";
 
   bool isActive_ = true;
+
+  // タイムラインプレビューフラグ（タスク16）
+  // true の場合はシリアライザが JSON への保存対象から除外する
+  bool isTimelinePreview_ = false;
 
   Transform transform_;
 

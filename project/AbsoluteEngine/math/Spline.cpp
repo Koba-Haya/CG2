@@ -29,6 +29,52 @@ Vector3 Spline::CatmullRom(const Vector3& p0, const Vector3& p1, const Vector3& 
     return result;
 }
 
+void Spline::ArcLengthTable::Build(const std::vector<Vector3>& points, int sampleCount) {
+    cumulativeLengths_.clear();
+    if (points.size() < 2 || sampleCount < 2) {
+        cumulativeLengths_.push_back(0.0f);
+        return;
+    }
+
+    cumulativeLengths_.reserve(sampleCount);
+    cumulativeLengths_.push_back(0.0f);
+
+    Vector3 prevPoint = Spline::GetPoint(points, 0.0f);
+    for (int i = 1; i < sampleCount; ++i) {
+        float t = static_cast<float>(i) / static_cast<float>(sampleCount - 1);
+        Vector3 currPoint = Spline::GetPoint(points, t);
+
+        Vector3 diff = { currPoint.x - prevPoint.x, currPoint.y - prevPoint.y, currPoint.z - prevPoint.z };
+        float segmentLength = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+
+        cumulativeLengths_.push_back(cumulativeLengths_.back() + segmentLength);
+        prevPoint = currPoint;
+    }
+}
+
+float Spline::ArcLengthTable::GetTAtDistance(float distance) const {
+    const size_t sampleCount = cumulativeLengths_.size();
+    if (sampleCount < 2) return 0.0f;
+
+    const float totalLength = cumulativeLengths_.back();
+    distance = std::clamp(distance, 0.0f, totalLength);
+
+    // 距離が収まる区間を線形探索する（サンプル数は数百程度なので十分高速）
+    for (size_t i = 1; i < sampleCount; ++i) {
+        if (distance <= cumulativeLengths_[i]) {
+            const float segStart = cumulativeLengths_[i - 1];
+            const float segEnd = cumulativeLengths_[i];
+            const float segLength = segEnd - segStart;
+            const float localRatio = (segLength > 0.0f) ? (distance - segStart) / segLength : 0.0f;
+
+            const float tStart = static_cast<float>(i - 1) / static_cast<float>(sampleCount - 1);
+            const float tEnd = static_cast<float>(i) / static_cast<float>(sampleCount - 1);
+            return tStart + (tEnd - tStart) * localRatio;
+        }
+    }
+    return 1.0f;
+}
+
 Vector3 Spline::GetPoint(const std::vector<Vector3>& points, float t) {
     if (points.empty()) return { 0, 0, 0 };
     if (points.size() == 1) return points[0];

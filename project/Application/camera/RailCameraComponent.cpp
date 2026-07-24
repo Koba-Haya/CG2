@@ -3,6 +3,8 @@
 #include "GameCamera.h"
 #include "Method.h"
 #include "Spline.h"
+#include "../../AbsoluteEngine/scene/BaseScene.h"
+#include "../actor/Player/PlayerComponent.h"
 #include <algorithm>
 #include <string>
 
@@ -22,8 +24,9 @@ RailCameraComponent::RailCameraComponent() {
         {-15.0f, 2.0f, 140.0f}, // P3: 左下へと急降下旋回
         { 0.0f,  5.0f, 220.0f}  // P4: ゴールへと向かう直進路
     };
-    speed_ = 0.05f; // 進行スピードを半減してロックオンの余裕を持たせる
+    speed_ = 15.0f; // 秒速15ユニットで走破する（ロックオンの余裕を持たせた速度）
     lookAheadOffset_ = 0.02f;
+    RebuildArcLengthTable_();
 }
 
 void RailCameraComponent::Update(float deltaTime) {
@@ -33,30 +36,95 @@ void RailCameraComponent::Update(float deltaTime) {
     auto* camera = scene->GetMainCamera();
     if (!camera) return;
 
-    // 進捗の更新
-    progress_ += speed_ * deltaTime;
+    // 進捗の更新（弧長ベース：秒速speed_ユニットで進むぶんを全体距離に対する割合に変換する）
+    const float totalLength = arcLengthTable_.GetTotalLength();
+    if (totalLength > 0.0f) {
+        progress_ += (speed_ * deltaTime) / totalLength;
+    }
     if (progress_ > 1.0f) progress_ = 1.0f;
 
-    // 現在地点の計算
-    Vector3 currentPos = Spline::GetPoint(waypoints_, progress_);
+    // カメラ位置を計算して反映する（SetProgressと共通処理）
+    ApplyCameraTransform_();
+}
 
-    // 注視点の計算 (Look-ahead)
-    Vector3 targetPos;
-    if (progress_ >= 1.0f - 0.001f) {
+void RailCameraComponent::SetProgress(float progress) {
+    progress_ = std::clamp(progress, 0.0f, 1.0f);
+
+    // progress_ を書き換えた直後にカメラ位置を即座に再計算する
+    // これにより、エディットモードでシークバーを動かした際のリアルタイムプレビューが実現する
+    ApplyCameraTransform_();
+}
+
+void RailCameraComponent::ComputePositionAndTarget_(float progress, Vector3& outPos, Vector3& outTarget) const {
+    // progress は弧長ベースの進行割合(0-1)。スプラインの生パラメータtへ変換してから座標を求める
+    const float totalLength = arcLengthTable_.GetTotalLength();
+    const float t = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(progress * totalLength) : progress;
+
+    // 現在地点の計算
+    outPos = Spline::GetPoint(waypoints_, t);
+
+    // 注視点の計算 (Look-ahead)：弧長ベースで一定割合先の地点を見るようにする
+    if (progress >= 1.0f - 0.001f) {
         // 終点付近では、少し手前の点から終点への方向を向くようにする
-        Vector3 p1 = Spline::GetPoint(waypoints_, 1.0f - lookAheadOffset_);
+        const float sBeforeEnd = std::max(1.0f - lookAheadOffset_, 0.0f);
+        const float tBeforeEnd = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(sBeforeEnd * totalLength) : sBeforeEnd;
+        Vector3 p1 = Spline::GetPoint(waypoints_, tBeforeEnd);
         Vector3 p2 = Spline::GetPoint(waypoints_, 1.0f);
         Vector3 diff = { p2.x - p1.x, p2.y - p1.y, p2.z - p1.z };
-        targetPos = { currentPos.x + diff.x, currentPos.y + diff.y, currentPos.z + diff.z };
+        outTarget = { outPos.x + diff.x, outPos.y + diff.y, outPos.z + diff.z };
     } else {
-        float targetT = std::min(progress_ + lookAheadOffset_, 1.0f);
-        targetPos = Spline::GetPoint(waypoints_, targetT);
+        const float sTarget = std::min(progress + lookAheadOffset_, 1.0f);
+        const float tTarget = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(sTarget * totalLength) : sTarget;
+        outTarget = Spline::GetPoint(waypoints_, tTarget);
     }
+}
+
+void RailCameraComponent::GetPointAndForward(float progress, Vector3& outPos, Vector3& outForward) const {
+    if (waypoints_.size() < 2) {
+        outPos = { 0.0f, 0.0f, 0.0f };
+        outForward = { 0.0f, 0.0f, 1.0f };
+        return;
+    }
+    progress = std::clamp(progress, 0.0f, 1.0f);
+
+    Vector3 targetPos;
+    ComputePositionAndTarget_(progress, outPos, targetPos);
+
+    Vector3 diff = { targetPos.x - outPos.x, targetPos.y - outPos.y, targetPos.z - outPos.z };
+    outForward = Normalize(diff);
+}
+
+void RailCameraComponent::ApplyCameraTransform_() {
+    if (waypoints_.size() < 2) return;
+    auto* scene = BaseScene::GetActiveScene();
+    if (!scene) return;
+    auto* camera = scene->GetMainCamera();
+    if (!camera) return;
+
+    Vector3 currentPos, targetPos;
+    ComputePositionAndTarget_(progress_, currentPos, targetPos);
 
     // カメラの設定
     camera->SetEye(currentPos);
     camera->SetTarget(targetPos);
     camera->SetUp({ 0.0f, 1.0f, 0.0f });
+
+    // タイムラインシーク時のプレイヤー位置の同期（エディットモードでのシーク時のみ）
+    if (scene->GetPlayMode() == PlayMode::Edit) {
+        const auto& rootObjs = scene->GetRootObjects();
+        for (size_t i = 0; i < rootObjs.size(); ++i) {
+            auto obj = rootObjs[i];
+            if (!obj) continue;
+            if (auto pComp = obj->GetComponent<PlayerComponent>()) {
+                pComp->Update(0.0f);
+            }
+        }
+    }
+}
+
+
+void RailCameraComponent::RebuildArcLengthTable_() {
+    arcLengthTable_.Build(waypoints_);
 }
 
 void RailCameraComponent::Serialize(nlohmann::json& j) const {
@@ -86,6 +154,8 @@ void RailCameraComponent::Deserialize(const nlohmann::json& j) {
     } else if (selectedPointIndex_ >= static_cast<int>(waypoints_.size())) {
         selectedPointIndex_ = static_cast<int>(waypoints_.size()) - 1;
     }
+
+    RebuildArcLengthTable_();
 }
 
 void RailCameraComponent::AddWaypoint(const Vector3& pos) {
@@ -94,6 +164,7 @@ void RailCameraComponent::AddWaypoint(const Vector3& pos) {
 
     waypoints_.push_back(pos);
     isModified_ = true;
+    RebuildArcLengthTable_();
 
     nlohmann::json afterState;
     Serialize(afterState);
@@ -115,6 +186,7 @@ void RailCameraComponent::InsertWaypoint(size_t index, const Vector3& pos) {
 
         waypoints_.insert(waypoints_.begin() + index, pos);
         isModified_ = true;
+        RebuildArcLengthTable_();
 
         nlohmann::json afterState;
         Serialize(afterState);
@@ -140,6 +212,7 @@ void RailCameraComponent::RemoveWaypoint(size_t index) {
             selectedPointIndex_ = static_cast<int>(waypoints_.size()) - 1;
         }
         isModified_ = true;
+        RebuildArcLengthTable_();
 
         nlohmann::json afterState;
         Serialize(afterState);
@@ -158,6 +231,13 @@ void RailCameraComponent::RemoveWaypoint(size_t index) {
 void RailCameraComponent::DrawInspectorUI() {
 #ifdef USE_IMGUI
     ImGui::Text("Waypoints: %d", static_cast<int>(waypoints_.size()));
+
+    // 秒速ユニット。弧長ベースでレールを等速移動する速度（Durationはここから自動算出される）
+    if (ImGui::DragFloat("Speed (units/s)", &speed_, 0.1f, 0.1f, 200.0f, "%.1f")) {
+        isModified_ = true;
+    }
+    ImGui::Text("Rail Length: %.1f units", GetTotalLength());
+    ImGui::Text("Duration: %.2f s", GetDuration());
 
     if (ImGui::Button("Add Point")) {
         Vector3 newPos = waypoints_.empty() ? Vector3(0,0,0) : waypoints_.back();
@@ -197,6 +277,7 @@ void RailCameraComponent::DrawInspectorUI() {
         if (ImGui::DragFloat3("Position", p, 0.1f)) {
             waypoints_[selectedPointIndex_] = { p[0], p[1], p[2] };
             isModified_ = true;
+            RebuildArcLengthTable_();
         }
         if (ImGui::IsItemActivated()) {
             waypointsBeforeEdit_ = waypoints_;
@@ -251,10 +332,11 @@ void RailCameraComponent::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x4
             ImGuizmo::DecomposeMatrixToComponents(objectMatrix, matrixTranslation, matrixRotation, matrixScale);
             
             Vector3 newPos = { matrixTranslation[0], matrixTranslation[1], matrixTranslation[2] };
-            if (waypoints_[selectedPointIndex_].x != newPos.x || 
-                waypoints_[selectedPointIndex_].y != newPos.y || 
+            if (waypoints_[selectedPointIndex_].x != newPos.x ||
+                waypoints_[selectedPointIndex_].y != newPos.y ||
                 waypoints_[selectedPointIndex_].z != newPos.z) {
                 waypoints_[selectedPointIndex_] = newPos;
+                RebuildArcLengthTable_();
             }
         }
 

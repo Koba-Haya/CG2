@@ -16,6 +16,10 @@ void GameCamera::Update(const Input& /*input*/) {
     if (controller_) {
         controller_->Update(*this, ctx_);
     }
+    RecomputeView_();
+}
+
+void GameCamera::RecomputeView_() {
     view_ = MakeLookAtMatrix(eye_, target_, up_);
 }
 
