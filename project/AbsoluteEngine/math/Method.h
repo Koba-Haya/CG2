@@ -128,4 +128,13 @@ Vector3 Lerp(const Vector3 &v1, const Vector3 &v2, float t);
 Quaternion IdentityQuaternion();
 Quaternion Slerp(const Quaternion &q1, const Quaternion &q2, float t);
 Matrix4x4 MakeRotateMatrix(const Quaternion &q);
-Matrix4x4 MakeAffineMatrix(const Vector3 &scale, const Quaternion &rotate, const Vector3 &translate);
+Matrix4x4 MakeAffineMatrix(const Vector3 &scale, const Quaternion &rotate, const Vector3 &translate);
+
+/// <summary>
+/// 行列の平行移動+回転成分のみを残し、スケール成分を除去した行列を返す。
+/// ボーンのワールド行列（スケーリングが焼き込まれていることがある）に、
+/// 意図した見た目のサイズで別オブジェクトを追従させたい場合に使う。
+/// </summary>
+/// <param name="m">スケール成分を含む行列</param>
+/// <returns>上3x3の各行ベクトルを正規化した行列（平行移動成分はそのまま）</returns>
+Matrix4x4 RemoveScale(const Matrix4x4 &m);

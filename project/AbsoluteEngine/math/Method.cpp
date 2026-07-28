@@ -469,3 +469,15 @@ Matrix4x4 MakeAffineMatrix(const Vector3 &scale, const Quaternion &rotate, const
             1};
   return result;
 }
+
+Matrix4x4 RemoveScale(const Matrix4x4 &m) {
+  Vector3 row0 = Normalize({m.m[0][0], m.m[0][1], m.m[0][2]});
+  Vector3 row1 = Normalize({m.m[1][0], m.m[1][1], m.m[1][2]});
+  Vector3 row2 = Normalize({m.m[2][0], m.m[2][1], m.m[2][2]});
+
+  Matrix4x4 result = m;
+  result.m[0][0] = row0.x; result.m[0][1] = row0.y; result.m[0][2] = row0.z;
+  result.m[1][0] = row1.x; result.m[1][1] = row1.y; result.m[1][2] = row1.z;
+  result.m[2][0] = row2.x; result.m[2][1] = row2.y; result.m[2][2] = row2.z;
+  return result;
+}

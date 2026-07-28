@@ -65,11 +65,22 @@ private:
   ModelInstance modelHuman_;
   std::shared_ptr<Animation> animSimpleSkin_;
   std::shared_ptr<Animation> animHuman_;
+  // Animation補間（クロスフェード）実演用の別アニメーション（歩行⇔忍び足）
+  std::shared_ptr<Animation> animHumanAlt_;
+  bool isWalkAnim_ = true;
 
   Transform transformAnimCube_;
   Transform transformSimpleSkin_;
   Transform transformHuman_;
   bool showSkeleton_ = false;
+
+  // --- 加点要素デモ: 武器(cube)の手追従 ---
+  ModelInstance weaponModel_;
+
+  // --- 加点要素デモ: MultiMesh & MultiMaterial ---
+  std::shared_ptr<ModelResource> resMultiMaterial_;
+  ModelInstance modelMultiMaterial_;
+  Transform transformMultiMaterial_;
 
   Sprite sprite_;
   Skybox skybox_;

@@ -1,52 +1,7 @@
 {
     "tracks": [
         {
-            "events": [
-                {
-                    "eventType": "SpawnEvent",
-                    "prefabId": "Enemy",
-                    "spawnTransform": {
-                        "rotate": {
-                            "x": 0.0,
-                            "y": 0.0,
-                            "z": 0.0
-                        },
-                        "scale": {
-                            "x": 1.0,
-                            "y": 1.0,
-                            "z": 1.0
-                        },
-                        "translate": {
-                            "x": 0.0,
-                            "y": 0.0,
-                            "z": 89.99860382080078
-                        }
-                    },
-                    "triggerTime": 4.0
-                },
-                {
-                    "eventType": "SpawnEvent",
-                    "prefabId": "Enemy",
-                    "spawnTransform": {
-                        "rotate": {
-                            "x": 0.0,
-                            "y": 0.0,
-                            "z": 0.0
-                        },
-                        "scale": {
-                            "x": 1.0,
-                            "y": 1.0,
-                            "z": 1.0
-                        },
-                        "translate": {
-                            "x": 0.0,
-                            "y": 0.0,
-                            "z": 135.0001220703125
-                        }
-                    },
-                    "triggerTime": 7.0
-                }
-            ],
+            "events": [],
             "trackName": "Main"
         }
     ]

@@ -12,6 +12,7 @@
 #include "../hud/GameHUD.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "TextureResource.h"
+#include "Animation.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -71,6 +72,7 @@ private:
 
   bool isDebugCamera_ = false;
   bool showDebugRail_ = true;
+  bool showDebugSkeleton_ = false; // Bキーでトグル：プレイヤーの骨をデバッグ表示
 
   std::string sceneFilePath_ = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/scene.json";
 
@@ -84,6 +86,12 @@ private:
   std::shared_ptr<ModelResource> resBullet_;
   std::shared_ptr<ModelResource> resEnemy_;
   std::shared_ptr<ModelResource> resEffect_;
+
+  // プレイヤー用スキニングモデル（歩行アニメーション）
+  std::shared_ptr<Animation> playerWalkAnim_;
+  // ロックオン中に切り替える別アニメーション（Animation補間の実演用）
+  std::shared_ptr<Animation> playerSneakWalkAnim_;
+  bool wasLockingMode_ = false;
 
   // ヒットエフェクト用テクスチャ
   std::shared_ptr<TextureResource> texRing_;

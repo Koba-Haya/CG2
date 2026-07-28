@@ -5,6 +5,7 @@
 #include "DirectXResourceUtils.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
+#include "particle/GPUParticleManager.h"
 #include "Input.h"
 #include "../camera/RailCameraComponent.h"
 #include "Spline.h"
@@ -27,6 +28,7 @@
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
+#include "AnimationManager.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "AbsoluteEngine/scene/DissolveComponent.h"
@@ -163,6 +165,54 @@ void GameScene::Initialize(const SceneServices &services) {
       playerComp->Initialize();
   }
 
+  // -----------------------------------------------------------------------
+  // プレイヤーモデルを骨あり(Skinning対応)のgltfに強制的に差し替える。
+  // resources/editor/scenes/Game.json 上は旧player.objのままでも、
+  // 実行時に必ずSkinning/Animation機能が可視化されるようにするための処置。
+  // -----------------------------------------------------------------------
+  {
+      auto* playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
+      if (!playerModelComp) {
+          auto newModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+          playerObj_->AddComponent(std::move(newModelComp));
+          playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
+      }
+      playerModelComp->LoadModel("resources/app/human/walk.gltf");
+
+      if (!playerWalkAnim_) {
+          playerWalkAnim_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/human", "walk.gltf");
+      }
+      // ロックオンON/OFF時のAnimation補間（クロスフェード）実演用に別アニメーションもロードしておく
+      if (!playerSneakWalkAnim_) {
+          playerSneakWalkAnim_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/human", "sneakWalk.gltf");
+      }
+      if (auto* instance = playerModelComp->GetModelInstance()) {
+          instance->PlayAnimation(playerWalkAnim_, true);
+      }
+  }
+
+  // -----------------------------------------------------------------------
+  // GPU Particle拡張の常時可視化（加点要素）：
+  // プレイヤー付近に常駐エミッタ(Box)を1つ設置し、Vortex Fieldで渦を巻かせる。
+  // フレーム開始直後からゲーム画面で複数エミッタ/Fieldが確認できるようにする。
+  // -----------------------------------------------------------------------
+  {
+      GPUParticleManager::EmitterDesc desc;
+      desc.shape = GPUParticleManager::EmitterShape::Box;
+      desc.translate = { 0.0f, 2.0f, 10.0f };
+      desc.halfExtents = { 2.0f, 2.0f, 2.0f };
+      desc.count = 12;
+      desc.frequency = 0.3f;
+      GPUParticleManager::GetInstance()->CreateEmitter(desc);
+
+      GPUParticleManager::FieldDesc fieldDesc;
+      fieldDesc.type = GPUParticleManager::FieldType::Vortex;
+      fieldDesc.target = { 0.0f, 2.0f, 10.0f };
+      fieldDesc.direction = { 0.0f, 1.0f, 0.0f };
+      fieldDesc.strength = 1.5f;
+      GPUParticleManager::GetInstance()->SetField(0, fieldDesc);
+  }
+
   Renderer::GetInstance()->InitializePostProcess(1280, 720);
 
   // デフォルトのライトを探す
@@ -197,6 +247,21 @@ void GameScene::Initialize(const SceneServices &services) {
       auto rComp = std::make_unique<RailCameraComponent>();
       railCamObj->AddComponent(std::move(rComp));
       rootObjects_.push_back(railCamObj);
+  }
+
+  // -----------------------------------------------------------------------
+  // MultiMesh & MultiMaterial対応（加点要素）の常時可視化：
+  // multiMaterial.objは複数メッシュ×複数マテリアルを持つアセットで、
+  // Renderer::DrawModelのサブメッシュ描画パスをゲームシーン上で確認できるようにする。
+  // -----------------------------------------------------------------------
+  {
+      auto multiMaterialObj = std::make_shared<AbsoluteEngine::GameObject>("MultiMaterialDecoration");
+      multiMaterialObj->GetTransform().translate = { 8.0f, 1.0f, 5.0f };
+      multiMaterialObj->GetTransform().scale = { 2.0f, 2.0f, 2.0f };
+      auto multiMaterialModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+      multiMaterialModelComp->LoadModel("resources/app/multiMaterial/multiMaterial.obj");
+      multiMaterialObj->AddComponent(std::move(multiMaterialModelComp));
+      rootObjects_.push_back(multiMaterialObj);
   }
 
   // HUDの初期化
@@ -340,10 +405,13 @@ void GameScene::SpawnHitEffect(const Vector3 &pos) {
           Vector3{ 1.5f, 1.5f, 1.5f }, Vector3{ 0, 0, 0 }, 0.7f, Vector4{ 1, 1, 1, 1 });
   }
 
+  // 1.5. GPU Particle（加点要素）: 敵撃破のたびに並列化されたEmit CSでバーストを発生させる
+  GPUParticleManager::GetInstance()->EmitBurst(pos, 20);
+
   // 2. リングエフェクト
   if (texRing_) {
       auto device = Renderer::GetInstance()->GetDX()->GetDevice();
-      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_.get(), pos));
+      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_, pos));
   }
 
   // 3. 爆発のポイントライト（寿命付き）を生成
@@ -441,6 +509,11 @@ void GameScene::Update() {
           ctx.deltaTime = deltaTime;
           GetMainCamera()->SetContext(ctx);
           if (!isDragging && phase_ == GamePhase::InProgress) GetMainCamera()->Update(*services_.input);
+      }
+
+      // 骨のデバッグ表示トグル（Bキー）
+      if (services_.input && services_.input->TriggerKey(DIK_B)) {
+          showDebugSkeleton_ = !showDebugSkeleton_;
       }
 
   // -----------------------------------------------------------------------
@@ -641,6 +714,17 @@ void GameScene::Update() {
               isLockingMode = pComp->lockon_.IsLockingMode();
               lockPositions = pComp->lockon_.GetLockedScreenPositions(GetMainCamera());
 
+              // Animation補間（加点要素）：ロックオンのON/OFF切り替わり時に
+              // 歩行アニメーション同士をクロスフェードで遷移させる。
+              if (isLockingMode != wasLockingMode_) {
+                  if (auto* playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+                      if (auto* instance = playerModelComp->GetModelInstance()) {
+                          instance->PlayAnimation(isLockingMode ? playerSneakWalkAnim_ : playerWalkAnim_, true, 0.3f);
+                      }
+                  }
+                  wasLockingMode_ = isLockingMode;
+              }
+
               // 3D レティクルのワールド座標を PlayerComponent から取得
               nearPos = pComp->GetNearReticleWorldPos();
               midPos  = pComp->GetMidReticleWorldPos();
@@ -718,6 +802,9 @@ void GameScene::Draw() {
   // パーティクルの描画（爆発エフェクト等）
   ParticleManager::GetInstance()->Draw(BlendMode::Add);
 
+  // GPU Particleの描画（加点要素: GPU Particle拡張）
+  Renderer::GetInstance()->DrawGPUParticles(BlendMode::Add);
+
   // --- デバッグラインの描画 ---
   if (showDebugRail_) {
       std::vector<Vector3> waypoints;
@@ -760,6 +847,15 @@ void GameScene::Draw() {
 
   // グリッドの描画（進行感を演出）
   renderer->DrawGrid(500.0f, 50, Vector4{0.2f, 0.4f, 0.8f, 0.5f});
+
+  // 骨のデバッグ表示（Bキートグル）
+  if (showDebugSkeleton_ && playerObj_) {
+      if (auto* modelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+          if (auto* instance = modelComp->GetModelInstance()) {
+              instance->DrawSkeleton();
+          }
+      }
+  }
 
   renderer->RenderPrimitives();
 

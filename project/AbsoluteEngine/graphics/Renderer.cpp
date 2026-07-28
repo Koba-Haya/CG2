@@ -4,6 +4,7 @@
 #include "DirectXCommon.h"
 #include "ModelInstance.h"
 #include "ModelResource.h"
+#include "ModelUtils.h"
 #include "ParticleManager.h"
 #include "particle/GPUParticleManager.h"
 #include "Ring.h"
@@ -564,16 +565,7 @@ void Renderer::DrawModel(ModelInstance *instance) {
   ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
   cmdList->SetDescriptorHeaps(1, heaps);
 
-  // 通常テクスチャ
-  D3D12_GPU_DESCRIPTOR_HANDLE texHandle{};
-  if (instance->GetOverrideTexture()) {
-    texHandle.ptr = instance->GetOverrideTexture()->GetSrvGpu().ptr;
-  } else {
-    texHandle.ptr = resource->GetTextureHandleGPUAsUInt64();
-  }
-  cmdList->SetGraphicsRootDescriptorTable(2, texHandle);
-
-  // t1: 環境マップ 
+  // t1: 環境マップ
   if (environmentMap_) {
     cmdList->SetGraphicsRootDescriptorTable(7, environmentMap_->GetSrvGpu());
   }
@@ -596,10 +588,33 @@ void Renderer::DrawModel(ModelInstance *instance) {
 
   // 6. 描画
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  if (resource->GetIndexCount() > 0) {
-    cmdList->DrawIndexedInstanced(resource->GetIndexCount(), 1, 0, 0, 0);
+
+  const uint32_t subMeshCount = resource->GetSubMeshCount();
+  if (subMeshCount == 0 || instance->GetOverrideTexture()) {
+    // 単一メッシュ、またはオーバーライドテクスチャ指定時は従来通り1回の描画で済ませる
+    D3D12_GPU_DESCRIPTOR_HANDLE texHandle{};
+    if (instance->GetOverrideTexture()) {
+      texHandle.ptr = instance->GetOverrideTexture()->GetSrvGpu().ptr;
+    } else {
+      texHandle.ptr = resource->GetTextureHandleGPUAsUInt64();
+    }
+    cmdList->SetGraphicsRootDescriptorTable(2, texHandle);
+
+    if (resource->GetIndexCount() > 0) {
+      cmdList->DrawIndexedInstanced(resource->GetIndexCount(), 1, 0, 0, 0);
+    } else {
+      cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+    }
   } else {
-    cmdList->DrawInstanced(resource->GetVertexCount(), 1, 0, 0);
+    // MultiMesh & MultiMaterial対応：サブメッシュごとにテクスチャを差し替えて個別に描画する
+    for (uint32_t i = 0; i < subMeshCount; ++i) {
+      D3D12_GPU_DESCRIPTOR_HANDLE texHandle{};
+      texHandle.ptr = resource->GetSubMeshTextureHandleGPUAsUInt64(i);
+      cmdList->SetGraphicsRootDescriptorTable(2, texHandle);
+
+      const SubMeshRange &range = resource->GetSubMeshRange(i);
+      cmdList->DrawIndexedInstanced(range.indexCount, 1, range.indexStart, 0, 0);
+    }
   }
 }
 

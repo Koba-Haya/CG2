@@ -4,6 +4,7 @@
 #include <memory>
 
 struct ModelData;
+struct SubMeshRange;
 class TextureResource;
 class DirectXCommon;
 
@@ -36,7 +37,13 @@ public:
   uint32_t GetIndexCount() const;
 
   unsigned long long GetTextureHandleGPUAsUInt64() const;
-  
+
+  // MultiMesh & MultiMaterial対応。単一メッシュのモデルでは0を返し、
+  // 呼び出し側は従来通りの単一描画パスにフォールバックする。
+  uint32_t GetSubMeshCount() const;
+  const SubMeshRange &GetSubMeshRange(uint32_t index) const;
+  unsigned long long GetSubMeshTextureHandleGPUAsUInt64(uint32_t index) const;
+
   bool HasBones() const;
   unsigned long long GetBoneVBVAddress() const;
   unsigned int GetBoneVBVSize() const;

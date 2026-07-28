@@ -5,6 +5,7 @@
 #include "Method.h"
 #include "texture/TextureResource.h"
 #include <cassert>
+#include <cstring>
 #include <dxcapi.h>
 
 namespace {
@@ -176,17 +177,44 @@ void GPUParticleManager::Initialize(DirectXCommon* dx) {
 }
 
 void GPUParticleManager::Update() {
-    const float kDeltaTime = 1.0f / 60.0f; // 本来はGameSceneなどから受け取るべき
+    const float kDeltaTime = 1.0f / 60.0f; // エンジン全体が固定タイムステップのため合わせる
     static float totalTime = 0.0f;
     totalTime += kDeltaTime;
 
-    // Emitter Update (CPU側で射出判定を行う)
-    emitterMapped_->frequencyTime += kDeltaTime;
-    if (emitterMapped_->frequency <= emitterMapped_->frequencyTime) {
-        emitterMapped_->frequencyTime -= emitterMapped_->frequency;
-        emitterMapped_->emit = 1;
-    } else {
-        emitterMapped_->emit = 0;
+    // 1. 前フレームでEmit CSに消費させ終えたバーストスロットのemitフラグをここでクリアする。
+    //    （このUpdate()が呼ばれる時点で前フレームのGPUコマンドは実行済みという前提。
+    //     emittersCB_はダブルバッファリングされていない単一のアップロードバッファのため、
+    //     EmitBurst()直後にここでクリアすると今フレーム分のDispatchに反映されなくなってしまう。
+    //     そのため「立てた次のUpdate()」まで1フレーム遅らせてクリアする。）
+    for (uint32_t i = 0; i < kBurstPoolSize; ++i) {
+        if (burstPendingClear_[i]) {
+            emittersMapped_->emitters[kPersistentEmitterSlots + i].emit = 0;
+            burstPendingClear_[i] = false;
+        }
+    }
+
+    // 2. 常駐エミッタ（頻度タイマー方式）の射出判定
+    for (uint32_t i = 0; i < kPersistentEmitterSlots; ++i) {
+        GPUEmitter& em = emittersMapped_->emitters[i];
+        if (em.enabled == 0 || em.frequency <= 0.0f) {
+            em.emit = 0;
+            continue;
+        }
+        em.frequencyTime += kDeltaTime;
+        if (em.frequency <= em.frequencyTime) {
+            em.frequencyTime -= em.frequency;
+            em.emit = 1;
+        } else {
+            em.emit = 0;
+        }
+    }
+
+    // 3. このフレームでEmitBurst()等によりemit==1になっているバーストスロットは、
+    //    次回のUpdate()でクリアするよう予約する。
+    for (uint32_t i = 0; i < kBurstPoolSize; ++i) {
+        if (emittersMapped_->emitters[kPersistentEmitterSlots + i].emit != 0) {
+            burstPendingClear_[i] = true;
+        }
     }
 
     // PerFrame Update
@@ -218,16 +246,17 @@ void GPUParticleManager::Update() {
     ID3D12DescriptorHeap* heaps[] = { dx_->GetSRVHeap() };
     cmdList->SetDescriptorHeaps(1, heaps);
 
-    // --- Emit CS 起動 ---
+    // --- Emit/Update共有のRootSignatureを1度だけセットする ---
     cmdList->SetComputeRootSignature(emitRootSignature_.Get());
-    cmdList->SetPipelineState(emitPipelineState_.Get());
-
-    // 0: Emitter(b0), 1: PerFrame(b1), 2: UAVs(u0, u1, u2)
-    cmdList->SetComputeRootConstantBufferView(0, emitterCB_->GetGPUVirtualAddress());
+    // 0: Emitter[](b0), 1: PerFrame(b1), 2: Field[](b2), 3: UAVs(u0, u1, u2)
+    cmdList->SetComputeRootConstantBufferView(0, emittersCB_->GetGPUVirtualAddress());
     cmdList->SetComputeRootConstantBufferView(1, perFrameCB_->GetGPUVirtualAddress());
-    cmdList->SetComputeRootDescriptorTable(2, srvAlloc.Gpu(uavIndex_));
+    cmdList->SetComputeRootConstantBufferView(2, fieldsCB_->GetGPUVirtualAddress());
+    cmdList->SetComputeRootDescriptorTable(3, srvAlloc.Gpu(uavIndex_));
 
-    cmdList->Dispatch(1, 1, 1);
+    // --- Emit CS 起動（エミッタ数ぶんのスレッドグループを並列実行） ---
+    cmdList->SetPipelineState(emitPipelineState_.Get());
+    cmdList->Dispatch(kMaxGPUEmitters, 1, 1);
 
     // UAV Barrier (Emit CS で更新されたリソースが Update CS での読み書きに入るため同期をとる)
     D3D12_RESOURCE_BARRIER uavBarriers[3]{};
@@ -239,13 +268,8 @@ void GPUParticleManager::Update() {
     uavBarriers[2].UAV.pResource = freeListBuffer_.Get();
     cmdList->ResourceBarrier(3, uavBarriers);
 
-    // --- Update CS 起動 ---
+    // --- Update CS 起動（RootSignatureはEmitと共有のため再セット不要、PSOのみ切り替える） ---
     cmdList->SetPipelineState(updatePipelineState_.Get());
-    // emitRootSignature_ を使い回す
-    cmdList->SetComputeRootConstantBufferView(0, emitterCB_->GetGPUVirtualAddress());
-    cmdList->SetComputeRootConstantBufferView(1, perFrameCB_->GetGPUVirtualAddress());
-    cmdList->SetComputeRootDescriptorTable(2, srvAlloc.Gpu(uavIndex_));
-
     cmdList->Dispatch(1, 1, 1);
 
     // SRVへ戻す (particleBuffer_ のみ)
@@ -288,6 +312,76 @@ void GPUParticleManager::Draw(BlendMode blendMode) {
     cmdList->DrawIndexedInstanced(6, kMaxParticles, 0, 0, 0);
 }
 
+uint32_t GPUParticleManager::CreateEmitter(const EmitterDesc& desc) {
+    if (persistentEmitterCount_ >= kPersistentEmitterSlots) {
+        assert(false && "GPUParticleManager: persistent emitter slots exhausted");
+        return UINT32_MAX;
+    }
+    uint32_t index = persistentEmitterCount_++;
+    GPUEmitter& em = emittersMapped_->emitters[index];
+    em.translate = desc.translate;
+    em.radius = desc.radius;
+    em.halfExtents = desc.halfExtents;
+    em.pad0 = 0.0f;
+    em.shape = static_cast<uint32_t>(desc.shape);
+    em.count = desc.count;
+    em.frequency = desc.frequency;
+    em.frequencyTime = 0.0f;
+    em.emit = 0;
+    em.enabled = 1;
+    em.pad1[0] = 0.0f;
+    em.pad1[1] = 0.0f;
+    return index;
+}
+
+void GPUParticleManager::SetEmitterTransform(uint32_t emitterIndex, const Vector3& translate) {
+    if (emitterIndex >= kPersistentEmitterSlots) return;
+    emittersMapped_->emitters[emitterIndex].translate = translate;
+}
+
+void GPUParticleManager::SetEmitterEnabled(uint32_t emitterIndex, bool enabled) {
+    if (emitterIndex >= kPersistentEmitterSlots) return;
+    emittersMapped_->emitters[emitterIndex].enabled = enabled ? 1 : 0;
+}
+
+void GPUParticleManager::EmitBurst(const Vector3& position, uint32_t count, float radius) {
+    uint32_t slot = kPersistentEmitterSlots + (burstCursor_ % kBurstPoolSize);
+    burstCursor_++;
+
+    GPUEmitter& em = emittersMapped_->emitters[slot];
+    em.translate = position;
+    em.radius = radius;
+    em.halfExtents = { radius, radius, radius };
+    em.pad0 = 0.0f;
+    em.shape = static_cast<uint32_t>(EmitterShape::Sphere);
+    em.count = count;
+    em.frequency = 0.0f; // バースト枠は頻度タイマーを使わずワンショットで直接emitを立てる
+    em.frequencyTime = 0.0f;
+    em.enabled = 1;
+    em.emit = 1;
+    em.pad1[0] = 0.0f;
+    em.pad1[1] = 0.0f;
+}
+
+void GPUParticleManager::SetField(int slot, const FieldDesc& desc) {
+    if (slot < 0 || slot >= static_cast<int>(kMaxGPUFields)) return;
+
+    GPUField& f = fieldsMapped_->fields[slot];
+    f.target = desc.target;
+    f.strength = desc.strength;
+    f.direction = desc.direction;
+    f.type = static_cast<uint32_t>(desc.type);
+
+    // countは「有効なフィールドが存在する末尾のslot+1」として管理する（HLSL側は0..count-1をループする）
+    uint32_t activeCount = 0;
+    for (uint32_t i = 0; i < kMaxGPUFields; ++i) {
+        if (fieldsMapped_->fields[i].type != 0) {
+            activeCount = i + 1;
+        }
+    }
+    fieldsMapped_->count = activeCount;
+}
+
 void GPUParticleManager::CreateResources() {
     auto* renderer = Renderer::GetInstance();
     auto& srvAlloc = dx_->GetSrvAllocator();
@@ -296,6 +390,7 @@ void GPUParticleManager::CreateResources() {
     // Particle Buffer
     size_t bufferSize = sizeof(GPUParticle) * kMaxParticles;
     particleBuffer_ = renderer->CreateUAVBuffer(bufferSize);
+    particleBuffer_->SetName(L"GPUParticleManager::ParticleBuffer");
 
     // SRV
     srvIndex_ = srvAlloc.Allocate();
@@ -322,6 +417,7 @@ void GPUParticleManager::CreateResources() {
 
     // FreeListIndex Buffer
     freeListIndexBuffer_ = renderer->CreateUAVBuffer(sizeof(int32_t));
+    freeListIndexBuffer_->SetName(L"GPUParticleManager::FreeListIndexBuffer");
     freeListIndexUavIndex_ = srvAlloc.Allocate();
     D3D12_UNORDERED_ACCESS_VIEW_DESC freeListIndexUavDesc{};
     freeListIndexUavDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -334,6 +430,7 @@ void GPUParticleManager::CreateResources() {
 
     // FreeList Buffer
     freeListBuffer_ = renderer->CreateUAVBuffer(sizeof(uint32_t) * kMaxParticles);
+    freeListBuffer_->SetName(L"GPUParticleManager::FreeListBuffer");
     freeListUavIndex_ = srvAlloc.Allocate();
     D3D12_UNORDERED_ACCESS_VIEW_DESC freeListUavDesc{};
     freeListUavDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -346,23 +443,26 @@ void GPUParticleManager::CreateResources() {
 
     // PerView CB
     perViewCB_ = renderer->CreateUploadBuffer(Align256_(sizeof(PerView)));
+    perViewCB_->SetName(L"GPUParticleManager::PerViewCB");
     perViewCB_->Map(0, nullptr, reinterpret_cast<void**>(&perViewMapped_));
 
     // PerFrame CB
     perFrameCB_ = renderer->CreateUploadBuffer(Align256_(sizeof(PerFrame)));
+    perFrameCB_->SetName(L"GPUParticleManager::PerFrameCB");
     perFrameCB_->Map(0, nullptr, reinterpret_cast<void**>(&perFrameMapped_));
 
-    // Emitter CB
-    emitterCB_ = renderer->CreateUploadBuffer(Align256_(sizeof(EmitterSphere)));
-    emitterCB_->Map(0, nullptr, reinterpret_cast<void**>(&emitterMapped_));
-    
-    // Initial values for Emitter (from material)
-    emitterMapped_->count = 10;
-    emitterMapped_->frequency = 0.5f;
-    emitterMapped_->frequencyTime = 0.0f;
-    emitterMapped_->translate = {0.0f, 0.0f, 0.0f};
-    emitterMapped_->radius = 1.0f;
-    emitterMapped_->emit = 0;
+    // Emitter[] CB（複数エミッタ対応。ゼロ初期化しないとenabled/countが不定値になり
+    // Emit CS側で巨大なストライドループやゴミ座標での射出が起きうるため必ずmemsetする）
+    emittersCB_ = renderer->CreateUploadBuffer(Align256_(sizeof(GPUEmitterArray)));
+    emittersCB_->SetName(L"GPUParticleManager::EmittersCB");
+    emittersCB_->Map(0, nullptr, reinterpret_cast<void**>(&emittersMapped_));
+    std::memset(emittersMapped_, 0, sizeof(GPUEmitterArray));
+
+    // Field[] CB（同様にゼロ初期化。type==0(None)がデフォルトで何も影響しない状態になる）
+    fieldsCB_ = renderer->CreateUploadBuffer(Align256_(sizeof(GPUFieldArray)));
+    fieldsCB_->SetName(L"GPUParticleManager::FieldsCB");
+    fieldsCB_->Map(0, nullptr, reinterpret_cast<void**>(&fieldsMapped_));
+    std::memset(fieldsMapped_, 0, sizeof(GPUFieldArray));
 
     // Load Texture
     texture_ = std::make_unique<TextureResource>();
@@ -396,27 +496,34 @@ void GPUParticleManager::CreateComputePipeline() {
         device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&computeRootSignature_));
     }
 
-    // Emit Root Signature
+    // Emit/Update共有 Root Signature
+    // （フレーム内でRootSignatureを切り替える構成にすると、D3D12デバッグレイヤーの
+    //  ValidateReferencedDeviceChildObjectsAreAlive検証に起因すると見られるDXGIDebug.dll内の
+    //  クラッシュ(CInfoQueue::AddMessage)を誘発することを確認したため、Emit/Updateで
+    //  1つのRootSignatureを共有し、Fieldもここに含める。Emit CS側はb2(Field)を単に参照しない。）
     {
         D3D12_DESCRIPTOR_RANGE uavRange{};
         uavRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
         uavRange.NumDescriptors = 3; // u0, u1, u2
         uavRange.BaseShaderRegister = 0;
 
-        D3D12_ROOT_PARAMETER params[3]{};
-        // 0: Emitter (b0)
+        D3D12_ROOT_PARAMETER params[4]{};
+        // 0: Emitter[] (b0)
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor.ShaderRegister = 0;
         // 1: PerFrame (b1)
         params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[1].Descriptor.ShaderRegister = 1;
-        // 2: UAVs (u0, u1, u2)
-        params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        params[2].DescriptorTable.NumDescriptorRanges = 1;
-        params[2].DescriptorTable.pDescriptorRanges = &uavRange;
+        // 2: Field[] (b2)
+        params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[2].Descriptor.ShaderRegister = 2;
+        // 3: UAVs (u0, u1, u2)
+        params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[3].DescriptorTable.NumDescriptorRanges = 1;
+        params[3].DescriptorTable.pDescriptorRanges = &uavRange;
 
         D3D12_ROOT_SIGNATURE_DESC rsDesc{};
-        rsDesc.NumParameters = 3;
+        rsDesc.NumParameters = 4;
         rsDesc.pParameters = params;
         rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
@@ -443,7 +550,7 @@ void GPUParticleManager::CreateComputePipeline() {
     {
         ComPtr<IDxcBlob> csBlob = CompileShader(L"resources/engine/shaders/UpdateParticle.CS.hlsl", L"cs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
         D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc{};
-        psoDesc.pRootSignature = emitRootSignature_.Get(); // emitRootSignature_ を使い回す
+        psoDesc.pRootSignature = emitRootSignature_.Get(); // Emitと共有（Fieldもこのシグネチャに含まれる）
         psoDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
         device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&updatePipelineState_));
     }

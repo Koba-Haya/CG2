@@ -1,6 +1,7 @@
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
 #include "AbsoluteEngine/scene/GameObject.h"
+#include "AbsoluteEngine/graphics/3d/model/ModelInstance.h"
 #include "Type/Vector.h"
 #include "LockOnSystem.h"
 #include <memory>
@@ -18,6 +19,7 @@ public:
 
   void Initialize();
   void Update(float deltaTime) override;
+  void Draw() override;
   void OnCollision(AbsoluteEngine::GameObject* other) override;
 
   std::string GetTypeName() const override { return "PlayerComponent"; }
@@ -60,4 +62,7 @@ private:
   int hp_ = 5;
   int maxHp_ = 5;
   float shootCooldown_ = 0.0f;
+
+  // 右手ボーンに追従させる武器モデル（仮モデル）
+  std::unique_ptr<ModelInstance> weaponModel_;
 };

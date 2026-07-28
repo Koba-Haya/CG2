@@ -29,7 +29,22 @@ bool TextureResource::CreateFromFile(DirectXCommon *dx,
     return false;
   }
 
-  return CreateFromMetadata(dx, mipImages, meta);
+  if (!CreateFromMetadata(dx, mipImages, meta)) {
+    return false;
+  }
+
+  // クラッシュ時にVisual Studioの出力/ライブオブジェクトウィンドウで
+  // "Unnamed Object" ではなくファイルパスが表示されるようにデバッグ名を付ける。
+  if (texture_) {
+    const std::wstring wName(filePath.begin(), filePath.end());
+    texture_->SetName(wName.c_str());
+  }
+  if (intermediateResource_) {
+    const std::wstring wUploadName = L"Upload:" + std::wstring(filePath.begin(), filePath.end());
+    intermediateResource_->SetName(wUploadName.c_str());
+  }
+
+  return true;
 }
 
 bool TextureResource::CreateFromMetadata(DirectXCommon *dx,

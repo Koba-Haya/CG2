@@ -31,6 +31,10 @@ struct ModelResource::Impl {
   
   std::shared_ptr<const ModelData> modelData;
   std::shared_ptr<TextureResource> texture;
+
+  // MultiMesh & MultiMaterial対応（meshes.size() > 1のモデルのみ設定される）
+  std::vector<SubMeshRange> subMeshRanges;
+  std::vector<std::shared_ptr<TextureResource>> subMeshTextures;
 };
 
 ModelResource::ModelResource() : pImpl_(std::make_unique<Impl>()) {}
@@ -61,6 +65,7 @@ bool ModelResource::Initialize(const CreateInfo &ci) {
   pImpl_->vbAddress = pImpl_->vb->GetGPUVirtualAddress();
   pImpl_->vbSize = static_cast<unsigned int>(vbBufferSize);
   pImpl_->vbStride = sizeof(VertexData);
+  pImpl_->vb->SetName(L"ModelResource::VertexBuffer");
 
   // Vertex SRV
   {
@@ -91,6 +96,32 @@ bool ModelResource::Initialize(const CreateInfo &ci) {
       }
       pImpl_->ibAddress = pImpl_->ib->GetGPUVirtualAddress();
       pImpl_->ibSize = static_cast<unsigned int>(ibBufferSize);
+      pImpl_->ib->SetName(L"ModelResource::IndexBuffer");
+    }
+  }
+
+  // MultiMesh & MultiMaterial対応：元のメッシュが複数ある場合のみサブメッシュ情報を構築する。
+  // 単一メッシュのモデル（大半の既存アセット）は subMeshRanges が空のままとなり、
+  // Renderer::DrawModel 側で従来通りの単一描画にフォールバックする。
+  if (ci.modelData->meshes.size() > 1) {
+    pImpl_->subMeshRanges = ComputeSubMeshRanges(*ci.modelData);
+    pImpl_->subMeshTextures.reserve(pImpl_->subMeshRanges.size());
+    for (const auto &range : pImpl_->subMeshRanges) {
+      std::string texPath;
+      if (range.materialIndex >= 0 &&
+          static_cast<size_t>(range.materialIndex) < ci.modelData->materials.size()) {
+        texPath = ci.modelData->materials[range.materialIndex].textureFilePath;
+      }
+      auto tex = AbsoluteEngine::AssetManager::GetInstance()->Load<TextureResource>(
+          texPath.empty() ? "resources/engine/textures/uvChecker.png" : texPath);
+      // 指定テクスチャの読み込みに失敗した場合、SRVハンドルが0のまま
+      // SetGraphicsRootDescriptorTableに渡るとD3D12がクラッシュするため、
+      // 必ず存在するエンジン既定のフォールバックテクスチャに差し替える。
+      if (!tex || tex->GetSrvGpu().ptr == 0) {
+        tex = AbsoluteEngine::AssetManager::GetInstance()->Load<TextureResource>(
+            "resources/engine/textures/uvChecker.png");
+      }
+      pImpl_->subMeshTextures.push_back(tex);
     }
   }
 
@@ -108,6 +139,7 @@ bool ModelResource::Initialize(const CreateInfo &ci) {
       pImpl_->vbBoneAddress = pImpl_->vbBone->GetGPUVirtualAddress();
       pImpl_->vbBoneSize = static_cast<unsigned int>(vbBoneBufferSize);
       pImpl_->vbBoneStride = sizeof(VertexBoneData);
+      pImpl_->vbBone->SetName(L"ModelResource::BoneVertexBuffer");
 
       // Bone SRV
       auto& srvAlloc = ci.dx->GetSrvAllocator();
@@ -160,4 +192,17 @@ uint32_t ModelResource::GetBoneSRVIndex() const { return pImpl_->boneSrvIndex; }
 
 unsigned long long ModelResource::GetTextureHandleGPUAsUInt64() const {
   return pImpl_->texture ? pImpl_->texture->GetSrvGpu().ptr : 0;
+}
+
+uint32_t ModelResource::GetSubMeshCount() const {
+  return static_cast<uint32_t>(pImpl_->subMeshRanges.size());
+}
+
+const SubMeshRange &ModelResource::GetSubMeshRange(uint32_t index) const {
+  return pImpl_->subMeshRanges[index];
+}
+
+unsigned long long ModelResource::GetSubMeshTextureHandleGPUAsUInt64(uint32_t index) const {
+  const auto &tex = pImpl_->subMeshTextures[index];
+  return tex ? tex->GetSrvGpu().ptr : 0;
 }
