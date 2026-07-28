@@ -478,16 +478,23 @@ void GameScene::Update() {
 
   // -----------------------------------------------------------------------
   // 画面歪み（RadialBlur）の更新
+  // タイマー・パラメータのみ更新し、モードの確定は後段のPostEffect優先度チェーンで行う
+  // （複数のゲームイベントがフルスクリーンPostProcessModeという単一スロットを取り合うため）
   // -----------------------------------------------------------------------
   if (hitDistortionTimer_ < hitDistortionDuration_) {
       hitDistortionTimer_ += deltaTime;
       float t = 1.0f - (hitDistortionTimer_ / hitDistortionDuration_);
       Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, hitDistortionIntensity_ * t);
-      Renderer::GetInstance()->SetPostProcessMode(Renderer::PostProcessMode::RadialBlur);
   } else if (hitDistortionDuration_ > 0.0f) {
       Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, 0.0f);
-      Renderer::GetInstance()->SetPostProcessMode(Renderer::PostProcessMode::Normal);
       hitDistortionDuration_ = 0.0f;
+  }
+
+  // ボス出現演出（GaussianFilter）のタイマー更新（k/sigmaはボス出現時に一度だけ設定済み）
+  if (bossIntroBlurTimer_ < bossIntroBlurDuration_) {
+      bossIntroBlurTimer_ += deltaTime;
+  } else if (bossIntroBlurDuration_ > 0.0f) {
+      bossIntroBlurDuration_ = 0.0f;
   }
 
   // プレイヤーを探す（ロード時などでポインタが切り替わった場合に対応）
@@ -509,6 +516,43 @@ void GameScene::Update() {
           playerObj_ = obj;
           break;
       }
+  }
+
+  // -----------------------------------------------------------------------
+  // PostEffect優先度チェーン（加点要素: Grayscale/DepthBasedOutline/GaussianFilter/
+  // LuminanceBasedOutline）
+  // フルスクリーンPostProcessModeは同時に1つしか有効にできないため、複数のゲーム
+  // イベントトリガーをここでまとめて調停し、SetPostProcessModeを1回だけ呼ぶ。
+  //   1. RadialBlur            : 雑魚敵ヒット時の画面歪み（既存）
+  //   2. GaussianFilter        : ボス出現演出（約1.2秒）
+  //   3. DepthBasedOutline     : ロックオン中
+  //   4. Grayscale             : プレイヤー瀕死（HP<=1）
+  //   5. LuminanceBasedOutline : ボス戦中
+  //   6. Normal
+  // -----------------------------------------------------------------------
+  {
+      bool isLockingMode = false;
+      bool isCriticalHp = false;
+      if (playerObj_) {
+          if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+              isLockingMode = pComp->lockon_.IsLockingMode();
+              isCriticalHp = pComp->GetHp() <= 1;
+          }
+      }
+
+      Renderer::PostProcessMode nextMode = Renderer::PostProcessMode::Normal;
+      if (hitDistortionTimer_ < hitDistortionDuration_) {
+          nextMode = Renderer::PostProcessMode::RadialBlur;
+      } else if (bossIntroBlurTimer_ < bossIntroBlurDuration_) {
+          nextMode = Renderer::PostProcessMode::GaussianFilter;
+      } else if (isLockingMode) {
+          nextMode = Renderer::PostProcessMode::DepthBasedOutline;
+      } else if (isCriticalHp) {
+          nextMode = Renderer::PostProcessMode::Grayscale;
+      } else if (phase_ == GamePhase::Boss) {
+          nextMode = Renderer::PostProcessMode::LuminanceBasedOutline;
+      }
+      Renderer::GetInstance()->SetPostProcessMode(nextMode);
   }
 
   UpdateEditor();
@@ -654,6 +698,12 @@ void GameScene::Update() {
 
   if (phase_ == GamePhase::InProgress && railProgress >= 1.0f) {
       phase_ = GamePhase::Boss;
+
+      // ボス出現演出（PostEffect加点要素: GaussianFilter）
+      bossIntroBlurTimer_ = 0.0f;
+      bossIntroBlurDuration_ = 1.2f;
+      Renderer::GetInstance()->SetGaussianFilterParam(5, 4.0f, { 1.0f, 0.0f });
+
       auto bossObj = std::make_shared<AbsoluteEngine::GameObject>("Boss");
       Vector3 eye = GetMainCamera()->GetEye();
       Vector3 forward = GetMainCamera()->GetForward();

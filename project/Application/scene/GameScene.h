@@ -124,6 +124,10 @@ private:
   float hitDistortionIntensity_ = 0.0f;
   Vector2 radialBlurCenter_ = { 0.5f, 0.5f };
 
+  // ボス出現演出（GaussianFilter）用
+  float bossIntroBlurTimer_ = 0.0f;
+  float bossIntroBlurDuration_ = 0.0f;
+
   // -----------------------------------------------------------------------
   // SpawnManager：データ駆動型の簡易ウェーブシステム
   // -----------------------------------------------------------------------
