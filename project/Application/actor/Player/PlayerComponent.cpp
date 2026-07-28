@@ -34,7 +34,7 @@ void PlayerComponent::Initialize() {
   bankRoll_  = 0.0f;
   bankPitch_ = 0.0f;
 
-  // 武器モデル（仮：cube.objを細長くスケールして武器として持たせる）の生成
+  // 武器モデル（仮：cube.objを武器として持たせる）の生成
   if (!weaponModel_) {
       auto* am = AbsoluteEngine::AssetManager::GetInstance();
       auto weaponRes = am->Load<ModelResource>("resources/app/cube/cube.obj");
@@ -449,12 +449,14 @@ void PlayerComponent::Draw() {
   if (!instance) return;
 
   // 武器（仮モデル）を毎フレーム右手ボーンに追従させる。
-  // cube.objをそのままだと武器らしくないため、細長くスケールしたオフセットを掛けて持たせる。
-  // （元は0.3/0.3/1.5だったが、レールシューティングのカメラ距離では小さすぎて
-  //   視認できなかったため一回り大きくしている）
+  // GetBoneWorldMatrix()が返す行列は、Mixamoリグのボーン階層に蓄積された
+  // （スキニング目的の）非常に小さいスケール成分を含んでおり、そのまま使うと
+  // 武器がほぼ見えないサイズまで縮んでしまう（座標自体は正しいため気づきにくい）。
+  // そのため位置（平行移動成分）だけを取り出し、スケールは自前で組み直す。
   Matrix4x4 handWorld = instance->GetBoneWorldMatrix(kRightHandBoneName);
-  Matrix4x4 offset = MakeAffineMatrix({ 0.4f, 0.4f, 2.0f }, Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.7f });
-  weaponModel_->SetWorld(Multiply(offset, handWorld));
+  Vector3 handPos = { handWorld.m[3][0], handWorld.m[3][1], handWorld.m[3][2] };
+  Matrix4x4 finalWorld = MakeAffineMatrix({ 0.3f, 0.3f, 0.3f }, Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f }, handPos);
+  weaponModel_->SetWorld(finalWorld);
   weaponModel_->Draw();
 }
 

@@ -255,13 +255,24 @@ void GameScene::Initialize(const SceneServices &services) {
   // Renderer::DrawModelのサブメッシュ描画パスをゲームシーン上で確認できるようにする。
   // -----------------------------------------------------------------------
   {
-      auto multiMaterialObj = std::make_shared<AbsoluteEngine::GameObject>("MultiMaterialDecoration");
-      multiMaterialObj->GetTransform().translate = { 8.0f, 1.0f, 5.0f };
-      multiMaterialObj->GetTransform().scale = { 2.0f, 2.0f, 2.0f };
-      auto multiMaterialModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-      multiMaterialModelComp->LoadModel("resources/app/multiMaterial/multiMaterial.obj");
-      multiMaterialObj->AddComponent(std::move(multiMaterialModelComp));
-      rootObjects_.push_back(multiMaterialObj);
+      // シーンJSONへのオートセーブで既に保存されている場合に毎回重複生成しないよう、
+      // 名前で既存チェックしてから生成する。
+      bool hasMultiMaterialDecoration = false;
+      for (const auto& obj : rootObjects_) {
+          if (obj && obj->GetName() == "MultiMaterialDecoration") {
+              hasMultiMaterialDecoration = true;
+              break;
+          }
+      }
+      if (!hasMultiMaterialDecoration) {
+          auto multiMaterialObj = std::make_shared<AbsoluteEngine::GameObject>("MultiMaterialDecoration");
+          multiMaterialObj->GetTransform().translate = { 8.0f, 1.0f, 5.0f };
+          multiMaterialObj->GetTransform().scale = { 2.0f, 2.0f, 2.0f };
+          auto multiMaterialModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+          multiMaterialModelComp->LoadModel("resources/app/multiMaterial/multiMaterial.obj");
+          multiMaterialObj->AddComponent(std::move(multiMaterialModelComp));
+          rootObjects_.push_back(multiMaterialObj);
+      }
   }
 
   // HUDの初期化
@@ -289,6 +300,14 @@ void GameScene::Initialize(const SceneServices &services) {
   // -----------------------------------------------------------------------
   spawnTimer_ = 0.0f;
   //InitSpawnEvents_();
+
+#ifndef USE_IMGUI
+  // ImGuiが無いビルド（Release）ではPlayボタンを押す手段が無いため、
+  // タイトルからゲームシーンに来た時点で自動的にPlayモードへ入る。
+  BackupScene();
+  SetPlayMode(PlayMode::Play);
+  timelineManager_.Play();
+#endif
 }
 
 // -----------------------------------------------------------------------
