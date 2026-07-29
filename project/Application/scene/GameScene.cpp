@@ -131,6 +131,13 @@ void GameScene::Initialize(const SceneServices &services) {
               Vector3 sp = TransformPoint(hitPos, vp);
               radialBlurCenter_ = { sp.x * 0.5f + 0.5f, -sp.y * 0.5f + 0.5f };
           }
+
+          // 5. キルストリーク演出（Random）：5体撃破ごとに発火
+          ++killCount_;
+          if (killCount_ % 5 == 0) {
+              killStreakGlitchTimer_ = 0.0f;
+              killStreakGlitchDuration_ = 0.4f;
+          }
       };
   }
 
@@ -404,6 +411,13 @@ void GameScene::AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) {
             Vector3 sp = TransformPoint(hitPos, vp);
             radialBlurCenter_ = { sp.x * 0.5f + 0.5f, -sp.y * 0.5f + 0.5f };
         }
+
+        // 5. キルストリーク演出（Random）：5体撃破ごとに発火
+        ++killCount_;
+        if (killCount_ % 5 == 0) {
+            killStreakGlitchTimer_ = 0.0f;
+            killStreakGlitchDuration_ = 0.4f;
+        }
     };
 }
 
@@ -497,6 +511,27 @@ void GameScene::Update() {
       bossIntroBlurDuration_ = 0.0f;
   }
 
+  // 被弾演出（Vignette）のタイマー更新（scale/powはトリガー時に一度だけ設定済み）
+  if (playerHitVignetteTimer_ < playerHitVignetteDuration_) {
+      playerHitVignetteTimer_ += deltaTime;
+  } else if (playerHitVignetteDuration_ > 0.0f) {
+      playerHitVignetteDuration_ = 0.0f;
+  }
+
+  // 敵出現演出（BoxFilter）のタイマー更新（kはトリガー時に一度だけ設定済み）
+  if (waveSpawnBlurTimer_ < waveSpawnBlurDuration_) {
+      waveSpawnBlurTimer_ += deltaTime;
+  } else if (waveSpawnBlurDuration_ > 0.0f) {
+      waveSpawnBlurDuration_ = 0.0f;
+  }
+
+  // キルストリーク演出（Random）のタイマー更新
+  if (killStreakGlitchTimer_ < killStreakGlitchDuration_) {
+      killStreakGlitchTimer_ += deltaTime;
+  } else if (killStreakGlitchDuration_ > 0.0f) {
+      killStreakGlitchDuration_ = 0.0f;
+  }
+
   // プレイヤーを探す（ロード時などでポインタが切り替わった場合に対応）
   playerObj_.reset();
   for (const auto& obj : rootObjects_) {
@@ -519,16 +554,19 @@ void GameScene::Update() {
   }
 
   // -----------------------------------------------------------------------
-  // PostEffect優先度チェーン（加点要素: Grayscale/DepthBasedOutline/GaussianFilter/
-  // LuminanceBasedOutline）
+  // PostEffect優先度チェーン（加点要素: Grayscale/Vignette/BoxFilter/GaussianFilter/
+  // LuminanceBasedOutline/DepthBasedOutline/Random）
   // フルスクリーンPostProcessModeは同時に1つしか有効にできないため、複数のゲーム
   // イベントトリガーをここでまとめて調停し、SetPostProcessModeを1回だけ呼ぶ。
   //   1. RadialBlur            : 雑魚敵ヒット時の画面歪み（既存）
-  //   2. GaussianFilter        : ボス出現演出（約1.2秒）
-  //   3. DepthBasedOutline     : ロックオン中
-  //   4. Grayscale             : プレイヤー瀕死（HP<=1）
-  //   5. LuminanceBasedOutline : ボス戦中
-  //   6. Normal
+  //   2. Vignette              : プレイヤー被弾時の画面フラッシュ
+  //   3. GaussianFilter        : ボス出現演出（約1.2秒）
+  //   4. Random                : 5体撃破ごとのキルストリーク演出
+  //   5. BoxFilter             : 敵出現（新ウェーブ）時のフォーカスぼかし
+  //   6. DepthBasedOutline     : ロックオン中
+  //   7. Grayscale             : プレイヤー瀕死（HP<=1）
+  //   8. LuminanceBasedOutline : ボス戦中
+  //   9. Normal
   // -----------------------------------------------------------------------
   {
       bool isLockingMode = false;
@@ -536,15 +574,31 @@ void GameScene::Update() {
       if (playerObj_) {
           if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
               isLockingMode = pComp->lockon_.IsLockingMode();
-              isCriticalHp = pComp->GetHp() <= 1;
+              int hp = pComp->GetHp();
+              isCriticalHp = hp <= 1;
+
+              // 被弾検知：前フレームよりHPが減っていたらVignetteを発火
+              if (lastPlayerHp_ >= 0 && hp < lastPlayerHp_) {
+                  playerHitVignetteTimer_ = 0.0f;
+                  playerHitVignetteDuration_ = 0.3f;
+                  Renderer::GetInstance()->SetVignetteParam(16.0f, 0.5f);
+              }
+              lastPlayerHp_ = hp;
           }
       }
 
       Renderer::PostProcessMode nextMode = Renderer::PostProcessMode::Normal;
       if (hitDistortionTimer_ < hitDistortionDuration_) {
           nextMode = Renderer::PostProcessMode::RadialBlur;
+      } else if (playerHitVignetteTimer_ < playerHitVignetteDuration_) {
+          nextMode = Renderer::PostProcessMode::Vignette;
       } else if (bossIntroBlurTimer_ < bossIntroBlurDuration_) {
           nextMode = Renderer::PostProcessMode::GaussianFilter;
+      } else if (killStreakGlitchTimer_ < killStreakGlitchDuration_) {
+          Renderer::GetInstance()->SetRandomParam(time_);
+          nextMode = Renderer::PostProcessMode::Random;
+      } else if (waveSpawnBlurTimer_ < waveSpawnBlurDuration_) {
+          nextMode = Renderer::PostProcessMode::BoxFilter;
       } else if (isLockingMode) {
           nextMode = Renderer::PostProcessMode::DepthBasedOutline;
       } else if (isCriticalHp) {
@@ -591,6 +645,11 @@ void GameScene::Update() {
           if (ev.spawned || spawnTimer_ < ev.triggerTime) continue;
 
           ev.spawned = true;
+
+          // 敵出現演出（BoxFilter）：新しい敵が出現した瞬間、一時的にフォーカスをぼかす
+          waveSpawnBlurTimer_ = 0.0f;
+          waveSpawnBlurDuration_ = 0.5f;
+          Renderer::GetInstance()->SetBoxFilterParam(4);
 
           // 敵のGameObjectを生成する
           auto newEnemy = std::make_shared<AbsoluteEngine::GameObject>("Enemy");
@@ -644,6 +703,13 @@ void GameScene::Update() {
                   Matrix4x4 vp = Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
                   Vector3 sp = TransformPoint(hitPos, vp);
                   radialBlurCenter_ = { sp.x * 0.5f + 0.5f, -sp.y * 0.5f + 0.5f };
+              }
+
+              // 5. キルストリーク演出（Random）：5体撃破ごとに発火
+              ++killCount_;
+              if (killCount_ % 5 == 0) {
+                  killStreakGlitchTimer_ = 0.0f;
+                  killStreakGlitchDuration_ = 0.4f;
               }
           };
           newEnemy->AddComponent(std::move(enemyComp));

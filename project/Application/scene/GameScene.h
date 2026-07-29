@@ -128,6 +128,20 @@ private:
   float bossIntroBlurTimer_ = 0.0f;
   float bossIntroBlurDuration_ = 0.0f;
 
+  // 被弾演出（Vignette）用
+  float playerHitVignetteTimer_ = 0.0f;
+  float playerHitVignetteDuration_ = 0.0f;
+  int lastPlayerHp_ = -1; // 前フレームのHP。減少を検知したらVignetteを発火させる
+
+  // 敵出現演出（BoxFilter）用：SpawnEventで新しい敵が出現した瞬間に発火
+  float waveSpawnBlurTimer_ = 0.0f;
+  float waveSpawnBlurDuration_ = 0.0f;
+
+  // キルストリーク演出（Random）用：一定数の敵を撃破するごとに発火
+  float killStreakGlitchTimer_ = 0.0f;
+  float killStreakGlitchDuration_ = 0.0f;
+  int killCount_ = 0;
+
   // -----------------------------------------------------------------------
   // SpawnManager：データ駆動型の簡易ウェーブシステム
   // -----------------------------------------------------------------------
