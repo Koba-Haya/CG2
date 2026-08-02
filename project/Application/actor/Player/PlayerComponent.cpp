@@ -8,8 +8,14 @@
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "AbsoluteEngine/scene/RigidbodyComponent.h"
+#include "AbsoluteEngine/resources/AssetManager.h"
+#include "ModelResource.h"
+#include "ParticleManager.h"
 #include "../Bullet/BulletComponent.h"
 #include "../Bullet/HomingBulletComponent.h"
+
+// 武器（右手に持たせる仮モデル）の右手ボーン名
+static const char* const kRightHandBoneName = "mixamorig:RightHand";
 
 // レティクルの距離設定（パンツァードラグーン風3重レティクル）
 static constexpr float kNearReticleDist  = 10.0f;  // 近レティクル
@@ -27,6 +33,21 @@ void PlayerComponent::Initialize() {
   hp_        = maxHp_;
   bankRoll_  = 0.0f;
   bankPitch_ = 0.0f;
+
+  // 武器モデル（仮：cube.objを武器として持たせる）の生成
+  if (!weaponModel_) {
+      auto* am = AbsoluteEngine::AssetManager::GetInstance();
+      auto weaponRes = am->Load<ModelResource>("resources/app/cube/cube.obj");
+      if (weaponRes) {
+          weaponModel_ = std::make_unique<ModelInstance>();
+          ModelInstance::CreateInfo ci{};
+          ci.resource = weaponRes;
+          // 明るく目立つ色にする（レールシューティングでカメラが自機から離れているため、
+          // 地味な灰色だと視認しづらい）
+          ci.baseColor = { 0.95f, 0.25f, 0.15f, 1.0f };
+          weaponModel_->Initialize(ci);
+      }
+  }
 }
 
 void PlayerComponent::Update(float deltaTime) {
@@ -295,6 +316,17 @@ void PlayerComponent::Update(float deltaTime) {
   }
 
   // -----------------------------------------------------------------------
+  // 弾の発射位置：右手ボーンのワールド座標（Skeletonが無い場合は自機中心にフォールバック）
+  // -----------------------------------------------------------------------
+  Vector3 handPos = t.translate;
+  if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+      if (auto* instance = modelComp->GetModelInstance()) {
+          Matrix4x4 handWorld = instance->GetBoneWorldMatrix(kRightHandBoneName);
+          handPos = { handWorld.m[3][0], handWorld.m[3][1], handWorld.m[3][2] };
+      }
+  }
+
+  // -----------------------------------------------------------------------
   // 弾の発射
   // -----------------------------------------------------------------------
   bool isReleased = input->ReleaseKey(DIK_SPACE)
@@ -302,6 +334,26 @@ void PlayerComponent::Update(float deltaTime) {
                  || input->WasMouseReleased(0);
 
   if (isReleased) {
+      // 手からのマズルフラッシュ（パーティクル）
+      {
+          static std::mt19937 muzzleRng(std::random_device{}());
+          std::uniform_real_distribution<float> muzzleDist(-1.0f, 1.0f);
+          for (int i = 0; i < 6; ++i) {
+              Vector3 vel = {
+                  muzzleDist(muzzleRng) * 3.0f,
+                  muzzleDist(muzzleRng) * 3.0f,
+                  muzzleDist(muzzleRng) * 3.0f
+              };
+              // レールシューティングでカメラが自機から離れているため、
+              // 元の scale 0.3 / lifeTime 0.15 だと画面上でほぼ視認できなかった。
+              // 視認性を上げるためスケールと寿命を引き上げる。
+              ParticleManager::GetInstance()->Emit(
+                  "default", handPos, vel,
+                  Vector3{ 0.6f, 0.6f, 0.6f }, Vector3{ 0, 0, 0 }, 0.3f,
+                  Vector4{ 1.0f, 0.9f, 0.4f, 1.0f });
+          }
+      }
+
       if (lockon_.IsLockingMode()) {
           // ロックオンモード → ホーミング弾（ベジェ曲線）を全ターゲットに発射
           const auto& targets = lockon_.GetLockedTargets();
@@ -326,7 +378,7 @@ void PlayerComponent::Update(float deltaTime) {
                   colliderComp->radius = 1.0f;
                   bulletObj->AddComponent(std::move(colliderComp));
 
-                  Vector3 p0 = t.translate;
+                  Vector3 p0 = handPos;
                   bulletObj->GetTransform().translate = p0;
 
                   Vector3 p2Initial = target->GetTransform().translate;
@@ -365,7 +417,7 @@ void PlayerComponent::Update(float deltaTime) {
               colliderComp->radius = 0.5f;
               bulletObj->AddComponent(std::move(colliderComp));
 
-              bulletObj->GetTransform().translate = t.translate;
+              bulletObj->GetTransform().translate = handPos;
 
               // 弾道：camDirCached_（最新カーソル方向）を直接使用
               // ※ farReticleWorldPos_ - t.translate の差分計算では
@@ -386,6 +438,26 @@ void PlayerComponent::Update(float deltaTime) {
       }
       lockon_.Initialize();
   }
+}
+
+void PlayerComponent::Draw() {
+  if (!owner_ || !weaponModel_) return;
+
+  auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>();
+  if (!modelComp) return;
+  auto* instance = modelComp->GetModelInstance();
+  if (!instance) return;
+
+  // 武器（仮モデル）を毎フレーム右手ボーンに追従させる。
+  // GetBoneWorldMatrix()が返す行列は、Mixamoリグのボーン階層に蓄積された
+  // （スキニング目的の）非常に小さいスケール成分を含んでおり、そのまま使うと
+  // 武器がほぼ見えないサイズまで縮んでしまう（座標自体は正しいため気づきにくい）。
+  // そのため位置（平行移動成分）だけを取り出し、スケールは自前で組み直す。
+  Matrix4x4 handWorld = instance->GetBoneWorldMatrix(kRightHandBoneName);
+  Vector3 handPos = { handWorld.m[3][0], handWorld.m[3][1], handWorld.m[3][2] };
+  Matrix4x4 finalWorld = MakeAffineMatrix({ 0.3f, 0.3f, 0.3f }, Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f }, handPos);
+  weaponModel_->SetWorld(finalWorld);
+  weaponModel_->Draw();
 }
 
 void PlayerComponent::TakeDamage(int damage) {

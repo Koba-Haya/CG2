@@ -28,6 +28,7 @@
 #include "graphics/particle/RingEffect.h"
 #include "graphics/particle/CylinderEffect.h"
 #include "graphics/particle/PlaneHitEffect.h"
+#include "graphics/particle/GPUParticleManager.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
@@ -340,7 +341,7 @@ void DevScene::Update() {
   
   if (ImGui::Button("Spawn Ring Effect")) {
       auto device = Renderer::GetInstance()->GetDX()->GetDevice();
-      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_.get(), transform_.translate));
+      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_, transform_.translate));
   }
   
   if (ImGui::Button("Spawn Cylinder Effect")) {
@@ -351,6 +352,36 @@ void DevScene::Update() {
   if (ImGui::Button("Spawn Plane Hit Effect")) {
       EffectManager::GetInstance()->AddEffect(std::make_unique<PlaneHitEffect>(resEffect_, transform_.translate));
   }
+
+  ImGui::SeparatorText("Score Features (Skinning/GPU Particle/MultiMaterial)");
+
+  if (ImGui::Button("Toggle Animation Blend (Walk / Sneak)")) {
+      isWalkAnim_ = !isWalkAnim_;
+      modelHuman_.PlayAnimation(isWalkAnim_ ? animHuman_ : animHumanAlt_, true, 0.3f);
+  }
+
+  if (ImGui::Button("Fire Muzzle Flash")) {
+      Matrix4x4 handWorld = RemoveScale(modelHuman_.GetBoneWorldMatrix("mixamorig:RightHand"));
+      Vector3 handPos = { handWorld.m[3][0], handWorld.m[3][1], handWorld.m[3][2] };
+      static std::mt19937 muzzleRng(std::random_device{}());
+      std::uniform_real_distribution<float> muzzleDist(-1.0f, 1.0f);
+      for (int i = 0; i < 6; ++i) {
+          Vector3 vel = {
+              muzzleDist(muzzleRng) * 3.0f,
+              muzzleDist(muzzleRng) * 3.0f,
+              muzzleDist(muzzleRng) * 3.0f
+          };
+          ParticleManager::GetInstance()->Emit(
+              "default", handPos, vel,
+              Vector3{ 0.9f, 0.9f, 0.9f }, Vector3{ 0, 0, 0 }, 0.25f,
+              Vector4{ 1.0f, 0.9f, 0.4f, 1.0f });
+      }
+  }
+
+  if (ImGui::Button("Spawn GPU Burst")) {
+      GPUParticleManager::GetInstance()->EmitBurst(transform_.translate, 20);
+  }
+
   ImGui::End();
 
   // --- 下パネル：オブジェクト・エフェクト設定 ---
@@ -440,7 +471,7 @@ void DevScene::Update() {
                       // ヒットエフェクトの発生
                       SpawnHitEffect(targetEnemyPos);
                       auto device = Renderer::GetInstance()->GetDX()->GetDevice();
-                      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_.get(), targetEnemyPos));
+                      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_, targetEnemyPos));
 
                       // カメラシェイク開始
                       cameraShakeDuration_ = 0.3f;
@@ -543,7 +574,14 @@ void DevScene::Update() {
       modelSimpleSkin_.UpdateAnimation(deltaTime);
       modelHuman_.UpdateAnimation(deltaTime);
 
-
+      // --- 加点要素デモ: 武器(cube)を人型モデルの右手ボーンに追従させる ---
+      // GetBoneWorldMatrixが返す行列にはリグ由来のスケールが含まれることがあるため、
+      // RemoveScaleで平行移動・回転のみを取り出してから武器専用のオフセットを合成する。
+      {
+          Matrix4x4 handWorld = RemoveScale(modelHuman_.GetBoneWorldMatrix("mixamorig:RightHand"));
+          Matrix4x4 offset = MakeAffineMatrix({ 0.15f, 0.15f, 0.6f }, Vector3{ 0.0f, 0.0f, 0.0f }, Vector3{ 0.0f, 0.0f, 0.3f });
+          weaponModel_.SetWorld(Multiply(offset, handWorld));
+      }
   }
 }
 
@@ -568,6 +606,22 @@ void DevScene::Draw() {
     obj->Draw();
   }
 
+  // --- 加点要素デモ: Skinningモデル(人型・アニメーション再生中)の描画 ---
+  modelHuman_.SetWorld(MakeAffineMatrix(transformHuman_.scale, transformHuman_.rotate, transformHuman_.translate));
+  modelHuman_.Draw();
+
+  // 骨のデバッグ表示（Show Skeletonチェックボックス）
+  if (showSkeleton_) {
+      modelHuman_.DrawSkeleton();
+  }
+
+  // --- 加点要素デモ: 武器(cube)の手追従 ---
+  weaponModel_.Draw();
+
+  // --- 加点要素デモ: MultiMesh & MultiMaterial ---
+  modelMultiMaterial_.SetWorld(MakeAffineMatrix(transformMultiMaterial_.scale, transformMultiMaterial_.rotate, transformMultiMaterial_.translate));
+  modelMultiMaterial_.Draw();
+
   renderer->RenderPrimitives();
   skybox_.Draw();
 
@@ -576,6 +630,9 @@ void DevScene::Draw() {
 
   // パーティクルの描画
   ParticleManager::GetInstance()->Draw(static_cast<BlendMode>(particleBlendMode_ + 1));
+
+  // --- 加点要素デモ: GPU Particle拡張の描画 ---
+  Renderer::GetInstance()->DrawGPUParticles(BlendMode::Add);
 
   // --- レティクルの描画 ---
   reticleSprite_.Draw();
@@ -615,6 +672,35 @@ void DevScene::InitResources_() {
   animHuman_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/human", "walk.gltf");
   modelHuman_.Initialize({resHuman_, {1, 1, 1, 1}, 1});
   if (animHuman_) modelHuman_.PlayAnimation(animHuman_, true);
+  // Animation補間（クロスフェード）実演用：歩行⇔忍び足を切り替えるための別アニメーション
+  animHumanAlt_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/human", "sneakWalk.gltf");
+
+  // --- 加点要素デモ: 武器(cube)の手追従（resCube_を流用） ---
+  weaponModel_.Initialize({resCube_, {0.6f, 0.6f, 0.65f, 1.0f}, 0});
+
+  // --- 加点要素デモ: MultiMesh & MultiMaterial ---
+  resMultiMaterial_ = am->Load<ModelResource>("resources/app/multiMaterial/multiMaterial.obj");
+  modelMultiMaterial_.Initialize({resMultiMaterial_, {1, 1, 1, 1}, 1});
+  transformMultiMaterial_.translate = {10.0f, 0.0f, 0.0f};
+  transformMultiMaterial_.scale = {2.0f, 2.0f, 2.0f};
+
+  // --- 加点要素デモ: GPU Particle拡張（常駐Box型エミッタ + Vortex Field） ---
+  {
+      GPUParticleManager::EmitterDesc desc;
+      desc.shape = GPUParticleManager::EmitterShape::Box;
+      desc.translate = {-6.0f, 2.0f, 0.0f};
+      desc.halfExtents = {2.0f, 2.0f, 2.0f};
+      desc.count = 12;
+      desc.frequency = 0.3f;
+      GPUParticleManager::GetInstance()->CreateEmitter(desc);
+
+      GPUParticleManager::FieldDesc fieldDesc;
+      fieldDesc.type = GPUParticleManager::FieldType::Vortex;
+      fieldDesc.target = {-6.0f, 2.0f, 0.0f};
+      fieldDesc.direction = {0.0f, 1.0f, 0.0f};
+      fieldDesc.strength = 10.0f; // GameSceneでの検証結果を踏まえ、渦がはっきり見える強さに設定
+      GPUParticleManager::GetInstance()->SetField(0, fieldDesc);
+  }
 
   sprite_.Initialize({"resources/app/plane/uvChecker.png", {640, 360}, {1, 1, 1, 1}});
   skybox_.Initialize("resources/app/dds/dds.dds");

@@ -98,6 +98,22 @@ std::vector<VertexBoneData> FlattenSkinningData(const ModelData &model) {
   return out;
 }
 
+std::vector<SubMeshRange> ComputeSubMeshRanges(const ModelData &model) {
+  std::vector<SubMeshRange> out;
+  out.reserve(model.meshes.size());
+
+  uint32_t indexStart = 0;
+  for (const auto &m : model.meshes) {
+    SubMeshRange range;
+    range.indexStart = indexStart;
+    range.indexCount = static_cast<uint32_t>(m.indices.size());
+    range.materialIndex = m.materialIndex;
+    out.push_back(range);
+    indexStart += range.indexCount;
+  }
+  return out;
+}
+
 std::string PickDiffuseTexturePath(const ModelData &model) {
   for (const auto &mat : model.materials) {
     if (!mat.textureFilePath.empty()) {

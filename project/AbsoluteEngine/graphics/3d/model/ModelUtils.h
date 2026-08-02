@@ -90,3 +90,13 @@ std::vector<VertexData> FlattenVertices(const ModelData &model);
 std::vector<uint32_t> FlattenIndices(const ModelData &model);
 std::vector<VertexBoneData> FlattenSkinningData(const ModelData &model);
 std::string PickDiffuseTexturePath(const ModelData &model);
+
+// MultiMesh & MultiMaterial対応：FlattenIndicesで1本にまとめたIndexBuffer上での
+// サブメッシュ(=元のメッシュ)ごとの範囲とマテリアルインデックスを返す。
+struct SubMeshRange {
+  uint32_t indexStart = 0;
+  uint32_t indexCount = 0;
+  int32_t materialIndex = -1;
+};
+
+std::vector<SubMeshRange> ComputeSubMeshRanges(const ModelData &model);

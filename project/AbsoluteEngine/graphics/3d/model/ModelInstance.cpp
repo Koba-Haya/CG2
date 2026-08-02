@@ -23,6 +23,15 @@ struct ModelInstance::Impl {
   std::shared_ptr<Animation> currentAnimation;
   float animationTime = 0.0f;
   bool animationLoop = true;
+
+  // アニメーション補間（クロスフェード）用の状態。
+  // 遷移開始時点のジョイントローカルポーズをスナップショットし、blendDuration秒かけて
+  // 新アニメーションのポーズへLerp/Slerpでブレンドする。
+  bool isBlending = false;
+  float blendTimer = 0.0f;
+  float blendDuration = 0.0f;
+  std::vector<QuaternionTransform> blendFromPose;
+
   std::unique_ptr<Skeleton> skeleton;
   std::unique_ptr<SkinCluster> skinCluster;
   std::shared_ptr<TextureResource> overrideTexture;
@@ -178,6 +187,14 @@ Skeleton* ModelInstance::GetSkeleton() const {
   return pImpl_->skeleton.get();
 }
 
+Matrix4x4 ModelInstance::GetBoneWorldMatrix(const std::string &boneName) const {
+  if (!pImpl_->skeleton) return world_;
+  auto it = pImpl_->skeleton->jointMap.find(boneName);
+  if (it == pImpl_->skeleton->jointMap.end()) return world_;
+  const Joint &joint = pImpl_->skeleton->joints[it->second];
+  return Multiply(joint.skeletonSpaceMatrix, world_);
+}
+
 template<typename T>
 T CalculateValue(const std::vector<Keyframe<T>>& keyframes, float time) {
   assert(!keyframes.empty());
@@ -198,7 +215,26 @@ T CalculateValue(const std::vector<Keyframe<T>>& keyframes, float time) {
   return (*keyframes.rbegin()).value;
 }
 
-void ModelInstance::PlayAnimation(std::shared_ptr<Animation> animation, bool loop) {
+void ModelInstance::PlayAnimation(std::shared_ptr<Animation> animation, bool loop, float blendDuration) {
+  // 既に同じアニメーションを再生中なら何もしない（ブレンドの再トリガーを防ぐ）
+  if (pImpl_->currentAnimation == animation) {
+    pImpl_->animationLoop = loop;
+    return;
+  }
+
+  if (blendDuration > 0.0f && pImpl_->currentAnimation && pImpl_->skeleton) {
+    // 現在のジョイントローカルポーズをスナップショットしてブレンド元にする
+    pImpl_->blendFromPose.resize(pImpl_->skeleton->joints.size());
+    for (const auto& joint : pImpl_->skeleton->joints) {
+      pImpl_->blendFromPose[joint.index] = joint.transform;
+    }
+    pImpl_->isBlending = true;
+    pImpl_->blendTimer = 0.0f;
+    pImpl_->blendDuration = blendDuration;
+  } else {
+    pImpl_->isBlending = false;
+  }
+
   pImpl_->currentAnimation = animation;
   pImpl_->animationTime = 0.0f;
   pImpl_->animationLoop = loop;
@@ -206,7 +242,7 @@ void ModelInstance::PlayAnimation(std::shared_ptr<Animation> animation, bool loo
 
 void ModelInstance::UpdateAnimation(float deltaTime) {
   if (!pImpl_->currentAnimation || !pImpl_->skeleton) return;
-  
+
   pImpl_->animationTime += deltaTime;
   if (pImpl_->animationLoop) {
     pImpl_->animationTime = std::fmod(pImpl_->animationTime, pImpl_->currentAnimation->duration);
@@ -214,14 +250,35 @@ void ModelInstance::UpdateAnimation(float deltaTime) {
     pImpl_->animationTime = std::min(pImpl_->animationTime, pImpl_->currentAnimation->duration);
   }
 
+  // ブレンド係数 t（0=旧ポーズ, 1=新アニメーションのみ）。t(B) + (1-t)(A) の式に対応する。
+  float t = 1.0f;
+  if (pImpl_->isBlending) {
+    pImpl_->blendTimer += deltaTime;
+    t = std::min(pImpl_->blendTimer / pImpl_->blendDuration, 1.0f);
+  }
+
   for (auto& joint : pImpl_->skeleton->joints) {
-    if (pImpl_->currentAnimation->nodeAnimations.find(joint.name) != pImpl_->currentAnimation->nodeAnimations.end()) {
-      const auto& nodeAnim = pImpl_->currentAnimation->nodeAnimations[joint.name];
-      
-      if (!nodeAnim.translate.keyframes.empty()) joint.transform.translate = CalculateValue(nodeAnim.translate.keyframes, pImpl_->animationTime);
-      if (!nodeAnim.rotate.keyframes.empty()) joint.transform.rotate = CalculateValue(nodeAnim.rotate.keyframes, pImpl_->animationTime);
-      if (!nodeAnim.scale.keyframes.empty()) joint.transform.scale = CalculateValue(nodeAnim.scale.keyframes, pImpl_->animationTime);
+    QuaternionTransform target = joint.transform; // カーブが無いジョイントは現在のポーズを保持
+    auto it = pImpl_->currentAnimation->nodeAnimations.find(joint.name);
+    if (it != pImpl_->currentAnimation->nodeAnimations.end()) {
+      const auto& nodeAnim = it->second;
+      if (!nodeAnim.translate.keyframes.empty()) target.translate = CalculateValue(nodeAnim.translate.keyframes, pImpl_->animationTime);
+      if (!nodeAnim.rotate.keyframes.empty()) target.rotate = CalculateValue(nodeAnim.rotate.keyframes, pImpl_->animationTime);
+      if (!nodeAnim.scale.keyframes.empty()) target.scale = CalculateValue(nodeAnim.scale.keyframes, pImpl_->animationTime);
     }
+
+    if (pImpl_->isBlending && static_cast<size_t>(joint.index) < pImpl_->blendFromPose.size()) {
+      const QuaternionTransform& from = pImpl_->blendFromPose[joint.index];
+      joint.transform.translate = Lerp(from.translate, target.translate, t);
+      joint.transform.rotate = Slerp(from.rotate, target.rotate, t);
+      joint.transform.scale = Lerp(from.scale, target.scale, t);
+    } else {
+      joint.transform = target;
+    }
+  }
+
+  if (pImpl_->isBlending && t >= 1.0f) {
+    pImpl_->isBlending = false;
   }
 
   UpdateSkeleton(*pImpl_->skeleton);

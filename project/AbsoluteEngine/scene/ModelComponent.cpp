@@ -11,6 +11,14 @@ void ModelComponent::LoadModel(const std::string& path) {
     if (!res) return;
 
     modelPath_ = path;
+    // 既存のmodelInstance_をここで即座に破棄しない。読み込み直後にLoadModel()が
+    // 連続で呼ばれるケース（例：シーンJSONでロードされたモデルを起動直後に別モデルへ
+    // 強制差し替えする処理）では、直前のモデルのテクスチャアップロードコマンドがまだ
+    // クローズされていないコマンドリストに記録されたままのことがある。そこで即解放すると
+    // D3D12がその場でリソースを破棄し、Close()時にOBJECT_DELETED_WHILE_STILL_IN_USEで
+    // クラッシュする。次のUpdate()（＝次のフレーム、EndFrame()でのフェンス待機後）まで
+    // 解放を遅延させることで、コマンドリストが安全に消費された後に破棄する。
+    pendingDestroyModelInstance_ = std::move(modelInstance_);
     modelInstance_ = std::make_unique<ModelInstance>();
     ModelInstance::CreateInfo ci{};
     ci.resource = res;
@@ -31,6 +39,17 @@ void ModelComponent::LoadTexture(const std::string& path) {
         if (tex) {
             modelInstance_->SetOverrideTexture(tex);
         }
+    }
+}
+
+void ModelComponent::Update(float deltaTime) {
+    // 前フレームまでに置き換えられた古いモデルをここで解放する。
+    // このUpdate()が呼ばれる時点で前フレームのコマンドリストはEndFrame()の
+    // フェンス待機によって実行完了済みのため、安全に破棄できる。
+    pendingDestroyModelInstance_.reset();
+
+    if (modelInstance_) {
+        modelInstance_->UpdateAnimation(deltaTime);
     }
 }
 

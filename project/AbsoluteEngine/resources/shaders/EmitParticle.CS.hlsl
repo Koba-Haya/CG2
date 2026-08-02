@@ -1,47 +1,62 @@
 #include "GPUParticle.hlsli"
 
-ConstantBuffer<EmitterSphere> gEmitter : register(b0);
+ConstantBuffer<EmitterArray> gEmitters : register(b0);
 ConstantBuffer<PerFrame> gPerFrame : register(b1);
 RWStructuredBuffer<GPUParticle> gParticles : register(u0);
 RWStructuredBuffer<int32_t> gFreeListIndex : register(u1);
 RWStructuredBuffer<uint32_t> gFreeList : register(u2);
 
 static const uint32_t kMaxParticles = 1024;
+static const uint32_t kThreadsPerEmitter = 64;
 
-[numthreads(1, 1, 1)]
+// エミッタ1つにつき1スレッドグループ(64スレッド)を割り当てて並列化する。
+// 1グループのスレッド数を超えるcountはストライドループで担当する。
+[numthreads(kThreadsPerEmitter, 1, 1)]
 void main(uint32_t3 DTid : SV_DispatchThreadID) {
-    if (gEmitter.emit != 0) {
-        RandomGenerator generator;
-        // シード値の設定（スレッドIDと時間を組み合わせる）
-        generator.seed = (float32_t3(DTid) + gPerFrame.time) * gPerFrame.time;
-        
-        for (uint32_t countIndex = 0; countIndex < gEmitter.count; ++countIndex) {
-            int32_t freeListIndex;
-            // FreeListのIndexを1つ前に設定し、現在のIndexを取得する
-            InterlockedAdd(gFreeListIndex[0], -1, freeListIndex);
-            
-            if (0 <= freeListIndex && freeListIndex < kMaxParticles) {
-                uint32_t particleIndex = gFreeList[freeListIndex];
-                
-                // 取得できたparticleIndexに対してParticleの初期値を入れていく
-                gParticles[particleIndex].scale = generator.Generate3d() * 0.3f + 0.1f;
-                
-                // エミッターの範囲（球状）内にランダム配置
-                float32_t3 randPos = generator.Generate3d() * 2.0f - 1.0f;
-                gParticles[particleIndex].translate = gEmitter.translate + randPos * gEmitter.radius;
-                
-                gParticles[particleIndex].color.rgb = generator.Generate3d();
-                gParticles[particleIndex].color.a = 1.0f;
-                
-                // ランダムな速度と寿命
-                gParticles[particleIndex].velocity = (generator.Generate3d() * 2.0f - 1.0f) * 2.0f;
-                gParticles[particleIndex].lifeTime = 1.0f + generator.Generate1d() * 2.0f;
-                gParticles[particleIndex].currentTime = 0.0f;
+    uint32_t emitterIndex = DTid.x / kThreadsPerEmitter;
+    uint32_t localIndex = DTid.x % kThreadsPerEmitter;
+
+    Emitter e = gEmitters.emitters[emitterIndex];
+    if (e.enabled == 0 || e.emit == 0) {
+        return;
+    }
+
+    RandomGenerator generator;
+    // シード値の設定（グローバルスレッドIDと時間を組み合わせる）
+    generator.seed = (float32_t3(DTid) + gPerFrame.time) * gPerFrame.time;
+
+    for (uint32_t countIndex = localIndex; countIndex < e.count; countIndex += kThreadsPerEmitter) {
+        int32_t freeListIndex;
+        // FreeListのIndexを1つ前に設定し、現在のIndexを取得する
+        InterlockedAdd(gFreeListIndex[0], -1, freeListIndex);
+
+        if (0 <= freeListIndex && freeListIndex < kMaxParticles) {
+            uint32_t particleIndex = gFreeList[freeListIndex];
+
+            // 取得できたparticleIndexに対してParticleの初期値を入れていく
+            gParticles[particleIndex].scale = generator.Generate3d() * 0.3f + 0.1f;
+
+            // エミッターの形状に応じてランダム配置
+            float32_t3 randPos = generator.Generate3d() * 2.0f - 1.0f;
+            if (e.shape == 1) {
+                // Box: 半径ではなく半径ベクトル(halfExtents)でスケールする
+                gParticles[particleIndex].translate = e.translate + randPos * e.halfExtents;
             } else {
-                // 発生させられなかったので、減らしてしまった分もとに戻す
-                InterlockedAdd(gFreeListIndex[0], 1);
-                break;
+                // Sphere
+                gParticles[particleIndex].translate = e.translate + randPos * e.radius;
             }
+
+            gParticles[particleIndex].color.rgb = generator.Generate3d();
+            gParticles[particleIndex].color.a = 1.0f;
+
+            // ランダムな速度と寿命
+            gParticles[particleIndex].velocity = (generator.Generate3d() * 2.0f - 1.0f) * 2.0f;
+            gParticles[particleIndex].lifeTime = 1.0f + generator.Generate1d() * 2.0f;
+            gParticles[particleIndex].currentTime = 0.0f;
+        } else {
+            // 発生させられなかったので、減らしてしまった分もとに戻す
+            InterlockedAdd(gFreeListIndex[0], 1);
+            break;
         }
     }
 }

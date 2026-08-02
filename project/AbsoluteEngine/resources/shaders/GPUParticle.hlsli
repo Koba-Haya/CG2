@@ -7,13 +7,40 @@ struct GPUParticle {
     float32_t4 color;
 };
 
-struct EmitterSphere {
+// GPUEmitter(GPUParticle.h)とレイアウトを1:1で一致させること
+struct Emitter {
     float32_t3 translate;
     float32_t radius;
+    float32_t3 halfExtents;
+    float32_t pad0;
+    uint32_t shape; // 0:Sphere 1:Box
     uint32_t count;
     float32_t frequency;
     float32_t frequencyTime;
     uint32_t emit;
+    uint32_t enabled;
+    float32_t2 pad1;
+};
+
+static const uint32_t kMaxEmitters = 8;
+
+struct EmitterArray {
+    Emitter emitters[kMaxEmitters];
+};
+
+// GPUField(GPUParticle.h)とレイアウトを1:1で一致させること
+struct Field {
+    float32_t3 target;
+    float32_t strength;
+    float32_t3 direction;
+    uint32_t type; // 0:None 1:Attractor 2:Wind 3:Vortex
+};
+
+static const uint32_t kMaxFields = 4;
+
+struct FieldArray {
+    Field fields[kMaxFields];
+    uint32_t count;
 };
 
 struct PerFrame {

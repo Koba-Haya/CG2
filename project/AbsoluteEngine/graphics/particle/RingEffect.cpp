@@ -5,8 +5,8 @@
 #include "graphics/texture/TextureResource.h"
 #include "math/Method.h"
 
-RingEffect::RingEffect(ID3D12Device* device, TextureResource* texture, const Vector3& position)
-    : texture_(texture) {
+RingEffect::RingEffect(ID3D12Device* device, std::shared_ptr<TextureResource> texture, const Vector3& position)
+    : texture_(std::move(texture)) {
     transform_.translate = position;
     transform_.scale = {1.0f, 1.0f, 1.0f};
     transform_.rotate = {0.0f, 0.0f, 0.0f};

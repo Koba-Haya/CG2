@@ -82,10 +82,15 @@ public:
   void DrawSkeleton();
 
   void UpdateAnimation(float deltaTime);
-  void PlayAnimation(std::shared_ptr<Animation> animation, bool loop = true);
+  // blendDuration > 0 の場合、現在再生中のポーズから新しいアニメーションへ
+  // blendDuration秒かけてクロスフェード（Lerp/Slerp補間）しながら遷移する。
+  void PlayAnimation(std::shared_ptr<Animation> animation, bool loop = true, float blendDuration = 0.0f);
   
   SkinCluster* GetSkinCluster() const;
   Skeleton* GetSkeleton() const;
+
+  // 指定したボーン名の現在のワールド行列を取得する。ボーンが存在しない場合はモデルのワールド行列を返す。
+  Matrix4x4 GetBoneWorldMatrix(const std::string &boneName) const;
 
   unsigned long long GetMaterialCBAddress() const;
   unsigned long long GetTransformCBAddress() const;

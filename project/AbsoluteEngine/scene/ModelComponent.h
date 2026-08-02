@@ -48,12 +48,18 @@ public:
     }
     float GetEnvironmentCoefficient() const { return environmentCoefficient_; }
 
+    void Update(float deltaTime) override;
     void Draw() override;
 
 private:
     std::string modelPath_;
     std::string texturePath_;
     std::unique_ptr<ModelInstance> modelInstance_;
+    // LoadModel()で置き換えられた直前のモデル（とそのテクスチャ）を1フレームだけ延命させる。
+    // 同一フレーム内（コマンドリストがCloseされる前）に破棄すると、直前のロード処理で
+    // 記録されたテクスチャアップロードコマンドが参照するリソースが消え、
+    // D3D12 ERROR: OBJECT_DELETED_WHILE_STILL_IN_USE でクラッシュするため。
+    std::unique_ptr<ModelInstance> pendingDestroyModelInstance_;
     float environmentCoefficient_ = 0.0f;
 };
 
