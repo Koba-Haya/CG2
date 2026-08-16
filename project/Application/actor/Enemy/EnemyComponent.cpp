@@ -38,13 +38,25 @@ void EnemyComponent::Update(float deltaTime) {
     }
 }
 
-void EnemyComponent::OnHit() {
-    if (!isDead_) {
+void EnemyComponent::OnHit(int damage) {
+    if (isDead_) return;
+
+    hp_ -= damage;
+    if (hp_ <= 0) {
         isDead_    = true;
         isActive_  = false;
         dissolveTimer_ = 0.0f;
         // コールバックは Update 内で 1 回だけ発火する（タイミング保証のため）
     }
+}
+
+void EnemyComponent::Serialize(nlohmann::json& j) const {
+    j["maxHp"] = maxHp_;
+}
+
+void EnemyComponent::Deserialize(const nlohmann::json& j) {
+    maxHp_ = j.value("maxHp", 1);
+    hp_ = maxHp_; // ロード時は常に満タンから開始する
 }
 
 void EnemyComponent::OnCollision(AbsoluteEngine::GameObject* other) {

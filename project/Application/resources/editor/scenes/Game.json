@@ -42,108 +42,6 @@
             "children": [],
             "components": [
                 {
-                    "environmentCoefficient": 0.0,
-                    "modelPath": "resources/cube/cube.obj",
-                    "texturePath": "resources/cube/white100x100.png",
-                    "type": "ModelComponent"
-                },
-                {
-                    "centerOffset": {
-                        "x": 0.0,
-                        "y": 0.0,
-                        "z": 0.0
-                    },
-                    "colliderType": 2,
-                    "radius": 1.0,
-                    "size": {
-                        "x": 0.5,
-                        "y": 0.5,
-                        "z": 0.5
-                    },
-                    "type": "ColliderComponent"
-                },
-                {
-                    "type": "EnemyComponent"
-                },
-                {
-                    "type": "EnemyShootComponent"
-                }
-            ],
-            "name": "Enemy",
-            "tag": "Enemy",
-            "transform": {
-                "rotate": {
-                    "x": 0.0,
-                    "y": -0.0,
-                    "z": 0.0
-                },
-                "scale": {
-                    "x": 1.0,
-                    "y": 1.0,
-                    "z": 1.0
-                },
-                "translate": {
-                    "x": 2.0,
-                    "y": 0.0,
-                    "z": 40.0
-                }
-            }
-        },
-        {
-            "children": [],
-            "components": [
-                {
-                    "environmentCoefficient": 0.0,
-                    "modelPath": "resources/cube/cube.obj",
-                    "texturePath": "resources/cube/white100x100.png",
-                    "type": "ModelComponent"
-                },
-                {
-                    "centerOffset": {
-                        "x": 0.0,
-                        "y": 0.0,
-                        "z": 0.0
-                    },
-                    "colliderType": 2,
-                    "radius": 1.0,
-                    "size": {
-                        "x": 0.5,
-                        "y": 0.5,
-                        "z": 0.5
-                    },
-                    "type": "ColliderComponent"
-                },
-                {
-                    "type": "EnemyComponent"
-                },
-                {
-                    "type": "EnemyShootComponent"
-                }
-            ],
-            "name": "Enemy",
-            "tag": "Enemy",
-            "transform": {
-                "rotate": {
-                    "x": 0.0,
-                    "y": -0.0,
-                    "z": 0.0
-                },
-                "scale": {
-                    "x": 1.0,
-                    "y": 1.0,
-                    "z": 1.0
-                },
-                "translate": {
-                    "x": -0.9095292687416077,
-                    "y": 2.8107712268829346,
-                    "z": 20.000001907348633
-                }
-            }
-        },
-        {
-            "children": [],
-            "components": [
-                {
                     "type": "RailCameraComponent",
                     "waypoints": [
                         {
@@ -191,57 +89,6 @@
                     "x": 0.0,
                     "y": 0.0,
                     "z": 70.0
-                }
-            }
-        },
-        {
-            "children": [],
-            "components": [
-                {
-                    "environmentCoefficient": 0.0,
-                    "modelPath": "resources/cube/cube.obj",
-                    "texturePath": "resources/cube/white100x100.png",
-                    "type": "ModelComponent"
-                },
-                {
-                    "centerOffset": {
-                        "x": 0.0,
-                        "y": 0.0,
-                        "z": 0.0
-                    },
-                    "colliderType": 2,
-                    "radius": 1.0,
-                    "size": {
-                        "x": 0.5,
-                        "y": 0.5,
-                        "z": 0.5
-                    },
-                    "type": "ColliderComponent"
-                },
-                {
-                    "type": "EnemyComponent"
-                },
-                {
-                    "type": "EnemyShootComponent"
-                }
-            ],
-            "name": "Enemy",
-            "tag": "Enemy",
-            "transform": {
-                "rotate": {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0
-                },
-                "scale": {
-                    "x": 1.0,
-                    "y": 1.0,
-                    "z": 1.0
-                },
-                "translate": {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 89.99860382080078
                 }
             }
         },
@@ -332,6 +179,33 @@
                     "x": 0.0,
                     "y": -0.5,
                     "z": -28.0
+                }
+            }
+        },
+        {
+            "children": [],
+            "components": [
+                {
+                    "type": "BossComponent"
+                }
+            ],
+            "name": "Boss",
+            "tag": "Untagged",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 0.9698279500007629,
+                    "y": 3.9224414825439453,
+                    "z": 36.23249816894531
                 }
             }
         }

@@ -5,8 +5,10 @@
 // ============================================================
 #pragma once
 #include "TimelineManager.h"
+#include "ITimelineEvent.h"
 #include <string>
 #include <functional>
+#include <memory>
 
 // 前方宣言（CommandManagerの完全定義は.cppでのみインクルードする）
 namespace AbsoluteEngine { class CommandManager; }
@@ -57,6 +59,10 @@ private:
     // イベント追加ポップアップを描画する（プレハブID選択付き）
     void DrawAddEventPopup();
 
+    // Formation Event追加ポップアップを描画する（TimelineEventFactory経由で生成し、
+    // ITimelineEvent::DrawInspectorUI()をそのまま流用して型固有の入力を行う）
+    void DrawAddFormationEventPopup();
+
     // トラックインデックスに応じた固定パレット色を返す（重なり識別用、戻り値はImU32と同一表現）
     static unsigned int GetTrackColor(size_t trackIndex);
 #endif
@@ -89,6 +95,12 @@ private:
 
     // 選択中のプレハブIDのインデックス（ドロップダウン用）
     int selectedPrefabIndex_ = 0;
+
+    // Formation Event追加ポップアップの状態
+    // TimelineEventFactory経由で生成した、まだトラックに追加していないインスタンス
+    // （ポップアップ表示中はこの実体に対してDrawInspectorUI()でフィールドを編集する）
+    std::unique_ptr<ITimelineEvent> pendingFormationEvent_;
+    float addFormationEventTime_ = 0.0f;
 
     // トラックのラベル列（名前+ボタン）の固定幅（ピクセル）
     // ルーラー・シークバー・各トラックレーンはこの幅ぶんオフセットして座標系を揃える

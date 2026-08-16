@@ -70,6 +70,13 @@ private:
   // タイムラインイベント選択時のインスペクタ専用UI（タスク15）
   void DrawTimelineEventInspector();
 
+  // オブジェクト選択の一元窓口。selectedObject_を更新するのと同時に、
+  // タイムラインイベント選択（timelineManager_->GetSelectedEvent()）をクリアする。
+  // DrawInspector()はイベント選択を優先して早期リターンするため、これを経由せずに
+  // selectedObject_だけを更新すると、Hierarchy/Viewportでオブジェクトを選び直しても
+  // インスペクタがタイムラインイベント側に固定されたまま切り替わらないバグになる。
+  void SelectObject(const std::shared_ptr<GameObject>& obj);
+
   // Post process params
   int postProcessMode_ = 0;
   float vignetteScale_ = 16.0f;

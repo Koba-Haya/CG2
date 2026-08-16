@@ -48,6 +48,9 @@ public:
     void Serialize(nlohmann::json& j) const override;
     void Deserialize(const nlohmann::json& j) override;
 
+    void DrawInspectorUI(bool& activated, bool& deactivatedAfterEdit) override;
+    void SetSpawnAnchorTransform(const Transform& t) override { spawnTransform_ = t; }
+
 private:
     // Fire()でスポーンしたオブジェクトへの弱参照
     // shared_ptr を直接持つと所有権の衝突が起きるため weak_ptr を使用する

@@ -19,11 +19,17 @@
 #include <imgui.h>
 #endif
 #include "AbsoluteEngine/scene/ComponentFactory.h"
+#include "AbsoluteEngine/scene/timeline/TimelineEventFactory.h"
 #include "AbsoluteEngine/editor/EditorUIManager.h"
 #include "../actor/Enemy/StraightMoveComponent.h"
 #include "../actor/Enemy/EnemyComponent.h"
 #include "../actor/Enemy/EnemyShootComponent.h"
 #include "../actor/Enemy/BossComponent.h"
+#include "../actor/Enemy/FormationMemberComponent.h"
+#include "../actor/Enemy/FormationSpawnEvent.h"
+#include "../actor/Enemy/TurretShootComponent.h"
+#include "../actor/Enemy/ChargeOnApproachComponent.h"
+#include "../actor/Enemy/RamAttackComponent.h"
 #include "SceneIds.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
@@ -35,6 +41,12 @@
 #include "graphics/particle/EffectManager.h"
 #include "graphics/particle/RingEffect.h"
 #include "component/ExplosionLightComponent.h"
+
+namespace {
+// スコア関連の定数（内部カウンタのみ。表示はImGuiデバッグ表示で仮置き。本番UI化は別タスク）
+constexpr int kScorePerKill = 100;             // 1体撃破ごとの基礎点（編隊メンバーも同様に加算される）
+constexpr int kFormationBonusMultiplier = 2;   // 編隊を画面内で全滅させた場合の倍率
+} // namespace
 
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
@@ -92,6 +104,15 @@ void GameScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BossComponent", []() { return std::make_unique<BossComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("TurretShootComponent", []() { return std::make_unique<TurretShootComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("ChargeOnApproachComponent", []() { return std::make_unique<ChargeOnApproachComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("RamAttackComponent", []() { return std::make_unique<RamAttackComponent>(); });
+
+  // タイムラインイベントファクトリの登録（編隊敵: FormationSpawnEventはApplication層の
+  // イベント種別のため、エンジン組み込みのSpawnEventとは別にここで実行時登録する）
+  AbsoluteEngine::TimelineEventFactory::GetInstance().Register("FormationSpawnEvent", []() {
+      return std::make_unique<FormationSpawnEvent>();
+  });
 
   // オートロード：保存されたシーンを読み込む
   LoadEditorScene();
@@ -102,43 +123,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // JSON/エディタからロードした敵にはその処理が走らないため、ここで補完する。
   // -----------------------------------------------------------------------
   for (const auto& obj : rootObjects_) {
-      if (!obj) continue;
-      auto* enemyComp = obj->GetComponent<EnemyComponent>();
-      if (!enemyComp) continue;
-      // 既にコールバックが登録済みの場合は上書きしない
-      if (enemyComp->onDestroyed) continue;
-
-      enemyComp->onDestroyed = [this](const Vector3& hitPos) {
-          // 1. ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
-          SpawnHitEffect(hitPos);
-
-          // 2. カメラシェイク開始
-          cameraShakeDuration_  = 0.3f;
-          cameraShakeTimer_     = 0.0f;
-          cameraShakeIntensity_ = 0.2f;
-
-          // 3. 画面歪み（RadialBlur）開始
-          hitDistortionDuration_  = 0.25f;
-          hitDistortionTimer_     = 0.0f;
-          hitDistortionIntensity_ = 0.06f;
-
-          // 4. RadialBlur の中心を敵のスクリーン座標に設定
-          auto* cam = isDebugCamera_
-              ? static_cast<Camera*>(debugCamera_.get())
-              : static_cast<Camera*>(GetMainCamera());
-          if (cam) {
-              Matrix4x4 vp = Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
-              Vector3 sp = TransformPoint(hitPos, vp);
-              radialBlurCenter_ = { sp.x * 0.5f + 0.5f, -sp.y * 0.5f + 0.5f };
-          }
-
-          // 5. キルストリーク演出（Random）：5体撃破ごとに発火
-          ++killCount_;
-          if (killCount_ % 5 == 0) {
-              killStreakGlitchTimer_ = 0.0f;
-              killStreakGlitchDuration_ = 0.4f;
-          }
-      };
+      RegisterEnemyCallbacks(obj);
   }
 
   // シーン開始直後の初期視点がワープしないように1度更新して位置を確定させる
@@ -378,17 +363,38 @@ void GameScene::AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) {
     // まず基底クラスの処理でリストに追加する
     BaseScene::AddRootObject(obj);
 
+    RegisterEnemyCallbacks(obj);
+}
+
+// -----------------------------------------------------------------------
+// RegisterEnemyCallbacks
+// EnemyComponent::onDestroyed の登録を1箇所に集約したもの。
+// 以前は Initialize / AddRootObject / Update(SpawnManager) の3箇所に
+// 全く同じ内容のラムダが重複していた。
+// FormationMemberComponent を持つ場合は編隊トラッキングの初期カウントも行う。
+// -----------------------------------------------------------------------
+void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
     if (!obj) return;
 
-    // EnemyComponent を持っているか確認する
     auto* enemyComp = obj->GetComponent<EnemyComponent>();
     if (!enemyComp) return;
 
     // 既にコールバックが登録済みの場合は上書きしない（二重登録防止）
     if (enemyComp->onDestroyed) return;
 
-    // GameScene 固有の撃破コールバックを注入する
-    enemyComp->onDestroyed = [this](const Vector3& hitPos) {
+    // 編隊メンバーなら初期カウントを積んでおく。
+    // 生ポインタをラムダにキャプチャするが、FormationMemberComponentはEnemyComponentと
+    // 同じGameObjectがunique_ptrで所有しているため、EnemyComponent（=このラムダ自身の所有者）が
+    // 生きている間は必ず有効。shared_ptr<GameObject>を直接キャプチャすると
+    // GameObject→EnemyComponent→(このラムダ)→GameObjectの循環参照でリークするため、
+    // あえてGameObjectそのものは持たない。
+    FormationMemberComponent* formationComp = obj->GetComponent<FormationMemberComponent>();
+    if (formationComp) {
+        ++formationRemaining_[formationComp->GetFormationId()];
+        ++formationTotal_[formationComp->GetFormationId()];
+    }
+
+    enemyComp->onDestroyed = [this, formationComp](const Vector3& hitPos) {
         // 1. ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
         SpawnHitEffect(hitPos);
 
@@ -418,7 +424,47 @@ void GameScene::AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) {
             killStreakGlitchTimer_ = 0.0f;
             killStreakGlitchDuration_ = 0.4f;
         }
+
+        // 6. スコア加算（内部カウンタのみ。表示はImGuiデバッグ表示で仮置き）
+        // 編隊メンバーかどうかに関わらず、1体倒すごとに基礎点を加算する。
+        // 編隊全滅時のボーナスはOnFormationCleared側でこれとは別に上乗せする。
+        score_ += kScorePerKill;
+
+        // 7. 編隊トラッキング：編隊メンバーなら残数を減らし、0になったら全滅ボーナスを発火
+        if (formationComp) {
+            HandleFormationMemberDestroyed(formationComp->GetFormationId(), hitPos);
+        }
     };
+}
+
+// -----------------------------------------------------------------------
+// HandleFormationMemberDestroyed / OnFormationCleared
+// 編隊（FormationSpawnEvent）の全滅ボーナス判定。
+// -----------------------------------------------------------------------
+void GameScene::HandleFormationMemberDestroyed(int formationId, const Vector3& pos) {
+    auto it = formationRemaining_.find(formationId);
+    if (it == formationRemaining_.end()) return;
+
+    --it->second;
+    if (it->second <= 0) {
+        const auto totalIt = formationTotal_.find(formationId);
+        const int total = (totalIt != formationTotal_.end()) ? totalIt->second : 0;
+
+        formationRemaining_.erase(it);
+        formationTotal_.erase(formationId);
+
+        OnFormationCleared(pos, total);
+    }
+}
+
+void GameScene::OnFormationCleared(const Vector3& pos, int memberCount) {
+    // 編隊メンバーは撃破のたびに既にkScorePerKillずつ加算済みなので、
+    // ここでは「倍率を適用した場合との差分」だけを追加ボーナスとして上乗せする。
+    // （合計は memberCount * kScorePerKill * kFormationBonusMultiplier になる）
+    score_ += kScorePerKill * memberCount * (kFormationBonusMultiplier - 1);
+
+    // 強化版の撃破エフェクト（通常撃破時のEmitBurst(pos, 20)より大幅増量）
+    GPUParticleManager::GetInstance()->EmitBurst(pos, 60, 0.6f);
 }
 
 // -----------------------------------------------------------------------
@@ -673,48 +719,13 @@ void GameScene::Update() {
           newEnemy->AddComponent(std::move(colliderComp));
 
           // EnemyComponent（死亡状態・ディゾルブ演出の制御）
-          auto enemyComp = std::make_unique<EnemyComponent>();
-
-          // -----------------------------------------------------------------------
-          // Observer（イベントコールバック）の登録
-          // Spawn 時点で GameScene 側の演出処理をラムダで登録する。
-          // これにより EnemyComponent は演出の詳細を一切知らなくて済む（疎結合）。
-          // -----------------------------------------------------------------------
-          EnemyComponent* rawComp = enemyComp.get();
-          enemyComp->onDestroyed = [this](const Vector3& hitPos) {
-              // 1. ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
-              SpawnHitEffect(hitPos);
-
-              // 2. カメラシェイク開始
-              cameraShakeDuration_  = 0.3f;
-              cameraShakeTimer_     = 0.0f;
-              cameraShakeIntensity_ = 0.2f;
-
-              // 3. 画面歪み（RadialBlur）開始
-              hitDistortionDuration_  = 0.25f;
-              hitDistortionTimer_     = 0.0f;
-              hitDistortionIntensity_ = 0.06f;
-
-              // 4. RadialBlur の中心を敵のスクリーン座標に設定
-              auto* cam = isDebugCamera_
-                  ? static_cast<Camera*>(debugCamera_.get())
-                  : static_cast<Camera*>(GetMainCamera());
-              if (cam) {
-                  Matrix4x4 vp = Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
-                  Vector3 sp = TransformPoint(hitPos, vp);
-                  radialBlurCenter_ = { sp.x * 0.5f + 0.5f, -sp.y * 0.5f + 0.5f };
-              }
-
-              // 5. キルストリーク演出（Random）：5体撃破ごとに発火
-              ++killCount_;
-              if (killCount_ % 5 == 0) {
-                  killStreakGlitchTimer_ = 0.0f;
-                  killStreakGlitchDuration_ = 0.4f;
-              }
-          };
-          newEnemy->AddComponent(std::move(enemyComp));
+          newEnemy->AddComponent(std::make_unique<EnemyComponent>());
 
           rootObjects_.push_back(newEnemy);
+
+          // Observer（イベントコールバック）の登録は共通ヘルパーに集約している
+          // （Initialize/AddRootObjectと同じRegisterEnemyCallbacks）。
+          RegisterEnemyCallbacks(newEnemy);
       }
   }
 
@@ -1044,6 +1055,9 @@ void GameScene::DrawEditorUI() {
         }
     }
     ImGui::Text("Player HP: %d / %d", hp, maxHp);
+
+    // スコア（内部カウンタのみ。編隊全滅ボーナスで倍率加算される。本番UI表示は別タスクのため仮置き）
+    ImGui::Text("Score: %d", score_);
 
     // SpawnManagerのデバッグ情報
     ImGui::SeparatorText("SpawnManager");
