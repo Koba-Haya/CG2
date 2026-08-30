@@ -29,6 +29,9 @@ public:
   int GetHp() const { return hp_; }
   int GetMaxHp() const { return maxHp_; }
 
+  // 回避行動（バレルロール）中は無敵
+  bool IsInvincible() const { return dodgeTimer_ > 0.0f; }
+
   // カーソル（照準）のスクリーン座標を取得
   const Vector2& GetCursorPos() const { return cursorPos_; }
 
@@ -62,6 +65,11 @@ private:
   int hp_ = 5;
   int maxHp_ = 5;
   float shootCooldown_ = 0.0f;
+
+  // 回避行動（バレルロール）：残り無敵時間・クールダウン・ロール方向（+1/-1）
+  float dodgeTimer_ = 0.0f;
+  float dodgeCooldownTimer_ = 0.0f;
+  float dodgeRollSign_ = 1.0f;
 
   // 右手ボーンに追従させる武器モデル（仮モデル）
   std::unique_ptr<ModelInstance> weaponModel_;

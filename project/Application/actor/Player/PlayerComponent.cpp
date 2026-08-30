@@ -27,12 +27,21 @@ static constexpr float kMaxBankRoll  = 0.6f;  // 最大ロール角（ラジア�
 static constexpr float kMaxBankPitch = 0.15f; // 最大ピッチ追加角（ラジアン）
 static constexpr float kBankSpeed    = 8.0f;  // バンク補間速度：素早く傾き、素早く戻るように倍速
 
+// 回避行動（バレルロール）のパラメータ
+static constexpr float kDodgeDuration     = 0.35f;  // 無敵＋ロール演出の時間（秒）
+static constexpr float kDodgeCooldown     = 0.8f;   // 再発動までのクールダウン（秒）
+static constexpr float kDodgeCursorOffset = 220.0f; // 回避時にカーソルを瞬間移動させる距離（ピクセル）
+static constexpr float kTwoPi             = 6.28318530718f;
+
 void PlayerComponent::Initialize() {
   cursorPos_ = { 640.0f, 360.0f };
   localPos_  = { 0.0f, -0.5f };
   hp_        = maxHp_;
   bankRoll_  = 0.0f;
   bankPitch_ = 0.0f;
+  dodgeTimer_ = 0.0f;
+  dodgeCooldownTimer_ = 0.0f;
+  dodgeRollSign_ = 1.0f;
 
   // 武器モデル（仮：cube.objを武器として持たせる）の生成
   if (!weaponModel_) {
@@ -103,6 +112,59 @@ void PlayerComponent::Update(float deltaTime) {
 
   bankRoll_  += (targetRoll  - bankRoll_)  * kBankSpeed * deltaTime;
   bankPitch_ += (targetPitch - bankPitch_) * kBankSpeed * deltaTime;
+
+  // -----------------------------------------------------------------------
+  // 回避行動（バレルロール）
+  // スターフォックス64風に、入力方向へカーソルを瞬間的にずらしつつ機体を
+  // 1回転（0→2π）させる。ロール角は2πでちょうど元の姿勢に戻るため、
+  // 演出が終わった瞬間に見た目上の違和感なく通常制御へ復帰する。
+  // 発動中（dodgeTimer_ > 0）は IsInvincible() が true になり、
+  // OnCollision 側の被ダメージ判定を無効化する。
+  // -----------------------------------------------------------------------
+  if (dodgeCooldownTimer_ > 0.0f) dodgeCooldownTimer_ -= deltaTime;
+  if (dodgeTimer_ > 0.0f) dodgeTimer_ -= deltaTime;
+
+  if (scene->GetPlayMode() == PlayMode::Play &&
+      dodgeTimer_ <= 0.0f && dodgeCooldownTimer_ <= 0.0f) {
+      bool dodgeTriggered = input->TriggerKey(DIK_LSHIFT)
+                         || input->WasPadPressed(XINPUT_GAMEPAD_B);
+      if (dodgeTriggered) {
+          float dodgeDirX = inputX;
+          float dodgeDirY = inputY;
+          float dodgeDirLen = std::sqrt(dodgeDirX * dodgeDirX + dodgeDirY * dodgeDirY);
+          if (dodgeDirLen > 0.0001f) {
+              // 方向入力があればその方向へカーソルを瞬間移動させる
+              dodgeDirX /= dodgeDirLen;
+              dodgeDirY /= dodgeDirLen;
+              cursorPos_.x = std::clamp(cursorPos_.x + dodgeDirX * kDodgeCursorOffset, 0.0f, 1280.0f);
+              cursorPos_.y = std::clamp(cursorPos_.y + dodgeDirY * kDodgeCursorOffset, 0.0f,  720.0f);
+          } else {
+              // 無入力時はその場でロールするだけ（位置は変えない）
+              dodgeDirX = 1.0f;
+          }
+
+          dodgeRollSign_ = (dodgeDirX < 0.0f) ? -1.0f : 1.0f;
+          dodgeTimer_ = kDodgeDuration;
+          dodgeCooldownTimer_ = kDodgeCooldown;
+
+          // 回避エフェクト（発光パーティクル）
+          static std::mt19937 dodgeRng(std::random_device{}());
+          std::uniform_real_distribution<float> dodgeDist(-2.0f, 2.0f);
+          for (int i = 0; i < 10; ++i) {
+              Vector3 vel = { dodgeDist(dodgeRng), dodgeDist(dodgeRng), dodgeDist(dodgeRng) };
+              ParticleManager::GetInstance()->Emit(
+                  "default", owner_->GetTransform().translate, vel,
+                  Vector3{ 0.4f, 0.4f, 0.4f }, Vector3{ 0, 0, 0 }, 0.25f,
+                  Vector4{ 0.4f, 0.8f, 1.0f, 1.0f });
+          }
+      }
+  }
+
+  float dodgeRollOffset = 0.0f;
+  if (dodgeTimer_ > 0.0f) {
+      float dodgeProgress = 1.0f - (dodgeTimer_ / kDodgeDuration);
+      dodgeRollOffset = dodgeRollSign_ * kTwoPi * dodgeProgress;
+  }
 
   // -----------------------------------------------------------------------
   // カーソル座標 → 自機の目標ローカル座標
@@ -203,8 +265,8 @@ void PlayerComponent::Update(float deltaTime) {
   float xzLen = std::sqrt(forward.x * forward.x + forward.z * forward.z);
   float pitch = std::atan2(-forward.y, xzLen);
 
-  // ピッチにバンクピッチを加算、ロールをバンクロールに設定
-  t.rotate = { pitch + bankPitch_, yaw, bankRoll_ };
+  // ピッチにバンクピッチを加算、ロールをバンクロール＋回避ロールに設定
+  t.rotate = { pitch + bankPitch_, yaw, bankRoll_ + dodgeRollOffset };
 
   // -----------------------------------------------------------------------
   // 3D レティクルのワールド座標を計算・キャッシュする（射線パース方式・修正版）
@@ -470,7 +532,7 @@ bool PlayerComponent::IsDead() const {
 }
 
 void PlayerComponent::OnCollision(AbsoluteEngine::GameObject* other) {
-    if (IsDead()) return;
+    if (IsDead() || IsInvincible()) return;
 
     if (other->GetName().find("Enemy") != std::string::npos || other->GetTag() == "Enemy" ||
         other->GetName().find("Boss")  != std::string::npos || other->GetTag() == "Boss") {
