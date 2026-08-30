@@ -9,6 +9,10 @@
 #include "../GameObject.h"
 #include <iostream>
 
+#ifdef USE_IMGUI
+#include <imgui.h>
+#endif
+
 // JSON変換用ヘルパー（同一ファイル内ローカル定義）
 static nlohmann::json TransformToJson(const Transform& t) {
     return {
@@ -103,6 +107,40 @@ void SpawnEvent::Deserialize(const nlohmann::json& j) {
     if (j.contains("spawnTransform")) {
         spawnTransform_ = JsonToTransform(j["spawnTransform"]);
     }
+}
+
+void SpawnEvent::DrawInspectorUI(bool& activated, bool& deactivatedAfterEdit) {
+#ifdef USE_IMGUI
+    // プレハブID（表示のみ、変更不可）
+    ImGui::Text("Prefab: %s", prefabId_.c_str());
+
+    ImGui::Separator();
+
+    // スポーン位置 (Spawn Offset) の編集 - XYZ個別のDragFloat
+    ImGui::Text("Spawn Offset:");
+    float pos[3] = { spawnTransform_.translate.x, spawnTransform_.translate.y, spawnTransform_.translate.z };
+    if (ImGui::DragFloat3("Position##SpawnOffset", pos, 0.1f)) {
+        spawnTransform_.translate = { pos[0], pos[1], pos[2] };
+    }
+    activated |= ImGui::IsItemActivated();
+    deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+    float rot[3] = { spawnTransform_.rotate.x, spawnTransform_.rotate.y, spawnTransform_.rotate.z };
+    if (ImGui::DragFloat3("Rotation##SpawnOffset", rot, 0.01f)) {
+        spawnTransform_.rotate = { rot[0], rot[1], rot[2] };
+    }
+    activated |= ImGui::IsItemActivated();
+    deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+    float scl[3] = { spawnTransform_.scale.x, spawnTransform_.scale.y, spawnTransform_.scale.z };
+    if (ImGui::DragFloat3("Scale##SpawnOffset", scl, 0.1f, 0.001f, 100.0f)) {
+        spawnTransform_.scale = { scl[0], scl[1], scl[2] };
+    }
+    activated |= ImGui::IsItemActivated();
+    deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+    ImGui::Separator();
+#endif
 }
 
 } // namespace AbsoluteEngine

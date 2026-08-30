@@ -184,6 +184,10 @@
     <ClCompile Include="actor\Enemy\EnemyComponent.cpp" />
     <ClCompile Include="actor\Enemy\EnemyShootComponent.cpp" />
     <ClCompile Include="actor\Enemy\StraightMoveComponent.cpp" />
+    <ClCompile Include="actor\Enemy\FormationSpawnEvent.cpp" />
+    <ClCompile Include="actor\Enemy\TurretShootComponent.cpp" />
+    <ClCompile Include="actor\Enemy\ChargeOnApproachComponent.cpp" />
+    <ClCompile Include="actor\Enemy\RamAttackComponent.cpp" />
     <ClCompile Include="hud\GameHUD.cpp" />
     <ClCompile Include="actor\Player\LockOnSystem.cpp" />
     <ClCompile Include="actor\Player\PlayerComponent.cpp" />
@@ -207,6 +211,11 @@
     <ClInclude Include="actor\Enemy\EnemyComponent.h" />
     <ClInclude Include="actor\Enemy\EnemyShootComponent.h" />
     <ClInclude Include="actor\Enemy\StraightMoveComponent.h" />
+    <ClInclude Include="actor\Enemy\FormationMemberComponent.h" />
+    <ClInclude Include="actor\Enemy\FormationSpawnEvent.h" />
+    <ClInclude Include="actor\Enemy\TurretShootComponent.h" />
+    <ClInclude Include="actor\Enemy\ChargeOnApproachComponent.h" />
+    <ClInclude Include="actor\Enemy\RamAttackComponent.h" />
     <ClInclude Include="hud\GameHUD.h" />
     <ClInclude Include="actor\Player\LockOnSystem.h" />
     <ClInclude Include="actor\Player\PlayerComponent.h" />

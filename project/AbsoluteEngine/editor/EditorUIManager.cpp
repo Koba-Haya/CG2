@@ -12,7 +12,7 @@
 #include "../scene/DissolveComponent.h"
 #include "../graphics/Renderer.h"
 // タイムラインイベントインスペクタ用（タスク15）
-#include "../scene/timeline/SpawnEvent.h"
+#include "../scene/timeline/ITimelineEvent.h"
 #include "../scene/timeline/PrefabRegistry.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -154,7 +154,7 @@ void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>
                   rootObjects.push_back(prefabInstance);
                   SetSceneModified();
               }
-                selectedObject_ = prefabInstance;
+                SelectObject(prefabInstance);
             }
         }
 
@@ -228,7 +228,7 @@ void EditorUIManager::HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& 
         cmd = std::make_shared<CreateObjectCommand>(newObj, &rootObjects);
       }
       if (commandManager_) commandManager_->ExecuteCommand(cmd);
-      selectedObject_ = newObj; // ペーストしたものを選択状態に
+      SelectObject(newObj); // ペーストしたものを選択状態に
     }
   }
 }
@@ -379,7 +379,7 @@ void EditorUIManager::HandleMousePicking(const std::vector<std::shared_ptr<GameO
 
     // 選択状態を更新
     if (hitObject) {
-      selectedObject_ = hitObject;
+      SelectObject(hitObject);
     } else {
       selectedObject_.reset();
     }
@@ -579,7 +579,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
           rootObjects.push_back(prefabInstance);
           SetSceneModified();
         }
-        selectedObject_ = prefabInstance;
+        SelectObject(prefabInstance);
       }
     }
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
@@ -600,7 +600,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
         rootObjects.push_back(newObj);
         SetSceneModified();
       }
-      selectedObject_ = newObj;
+      SelectObject(newObj);
     }
     ImGui::EndDragDropTarget();
   }
@@ -620,7 +620,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               rootObjects.push_back(newObj);
               SetSceneModified();
           }
-          selectedObject_ = newObj;
+          SelectObject(newObj);
       }
       if (ImGui::BeginMenu("Create Light")) {
           if (ImGui::Selectable("Directional Light")) {
@@ -630,7 +630,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               newObj->AddComponent(std::move(lightComp));
               newObj->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
               if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); SetSceneModified(); }
-              selectedObject_ = newObj;
+              SelectObject(newObj);
           }
           if (ImGui::Selectable("Point Light")) {
               auto newObj = std::make_shared<GameObject>("Point Light");
@@ -638,7 +638,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               lightComp->type = LightNodeComponent::Type::Point;
               newObj->AddComponent(std::move(lightComp));
               if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); SetSceneModified(); }
-              selectedObject_ = newObj;
+              SelectObject(newObj);
           }
           if (ImGui::Selectable("Spot Light")) {
               auto newObj = std::make_shared<GameObject>("Spot Light");
@@ -646,7 +646,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               lightComp->type = LightNodeComponent::Type::Spot;
               newObj->AddComponent(std::move(lightComp));
               if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); SetSceneModified(); }
-              selectedObject_ = newObj;
+              SelectObject(newObj);
           }
           ImGui::EndMenu();
       }
@@ -654,6 +654,16 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
   }
 
   ImGui::End();
+}
+
+void EditorUIManager::SelectObject(const std::shared_ptr<GameObject>& obj) {
+    selectedObject_ = obj;
+    // オブジェクトを選び直したら、タイムラインイベント側の選択状態は解除する。
+    // DrawInspector()はイベント選択があると常にそちらを優先表示するため、
+    // ここでクリアしないとHierarchy/Viewportでの選び直しがインスペクタに反映されない。
+    if (timelineManager_) {
+        timelineManager_->SetSelectedEvent(nullptr);
+    }
 }
 
 void EditorUIManager::DrawGameObjectNode(std::shared_ptr<GameObject> obj, std::vector<std::shared_ptr<GameObject>>& rootObjects) {
@@ -674,7 +684,7 @@ void EditorUIManager::DrawGameObjectNode(std::shared_ptr<GameObject> obj, std::v
   bool isOpen = ImGui::TreeNodeEx((void*)obj.get(), flags, "%s", obj->GetName().c_str());
 
   if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-    selectedObject_ = obj;
+    SelectObject(obj);
   }
 
   if (isOpen && !obj->GetChildren().empty()) {
@@ -1039,55 +1049,13 @@ void EditorUIManager::DrawTimelineEventInspector() {
 
     ImGui::Separator();
 
-    // --- SpawnEvent 専用プロパティ ---
-    // dynamic_cast でキャストが成功した場合のみSpawnEvent固有UIを表示する
-    if (auto* spawnEv = dynamic_cast<AbsoluteEngine::SpawnEvent*>(selectedEvent)) {
-        // プレハブID（表示のみ、変更不可）
-        ImGui::Text("Prefab: %s", spawnEv->prefabId_.c_str());
-
-        ImGui::Separator();
-
-        // スポーン位置 (Spawn Offset) の編集 - XYZ個別のDragFloat
-        ImGui::Text("Spawn Offset:");
-        float pos[3] = {
-            spawnEv->spawnTransform_.translate.x,
-            spawnEv->spawnTransform_.translate.y,
-            spawnEv->spawnTransform_.translate.z
-        };
-        if (ImGui::DragFloat3("Position##SpawnOffset", pos, 0.1f)) {
-            spawnEv->spawnTransform_.translate = { pos[0], pos[1], pos[2] };
-        }
-        activated |= ImGui::IsItemActivated();
-        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-        float rot[3] = {
-            spawnEv->spawnTransform_.rotate.x,
-            spawnEv->spawnTransform_.rotate.y,
-            spawnEv->spawnTransform_.rotate.z
-        };
-        if (ImGui::DragFloat3("Rotation##SpawnOffset", rot, 0.01f)) {
-            spawnEv->spawnTransform_.rotate = { rot[0], rot[1], rot[2] };
-        }
-        activated |= ImGui::IsItemActivated();
-        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-        float scl[3] = {
-            spawnEv->spawnTransform_.scale.x,
-            spawnEv->spawnTransform_.scale.y,
-            spawnEv->spawnTransform_.scale.z
-        };
-        if (ImGui::DragFloat3("Scale##SpawnOffset", scl, 0.1f, 0.001f, 100.0f)) {
-            spawnEv->spawnTransform_.scale = { scl[0], scl[1], scl[2] };
-        }
-        activated |= ImGui::IsItemActivated();
-        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-        ImGui::Separator();
-    } else {
-        // SpawnEvent 以外の汎用イベント
-        ImGui::Text("Type: %s", selectedEvent->GetEventType().c_str());
-        ImGui::Separator();
-    }
+    // --- イベント種別ごとの固有プロパティ ---
+    // dynamic_castでの型分岐はせず、ITimelineEvent::DrawInspectorUI()をポリモーフィックに
+    // 呼び出す（IComponent::DrawInspectorUI()と同じ考え方）。これにより、エディタ側は
+    // 具象イベント型（Application層に置かれるものも含む）を一切知らなくてよい。
+    ImGui::Text("Type: %s", selectedEvent->GetEventType().c_str());
+    ImGui::Separator();
+    selectedEvent->DrawInspectorUI(activated, deactivatedAfterEdit);
 
     // --- Undo/Redo用スナップショットの取得・コマンド発行（タスクF） ---
     // 毎フレームスタックが積まれるのを防ぐため、編集開始時(Activated)にスナップショットを取り、
@@ -1185,7 +1153,7 @@ void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObj
           } else {
             rootObjects.push_back(prefabInstance);
           }
-          selectedObject_ = prefabInstance;
+          SelectObject(prefabInstance);
         }
       }
     }
@@ -1207,7 +1175,7 @@ void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObj
         } else {
           rootObjects.push_back(newObj);
         }
-        selectedObject_ = newObj;
+        SelectObject(newObj);
       }
     }
     ImGui::EndDragDropTarget();

@@ -3,7 +3,7 @@
 // イベントコンテナとスイープ判定ロジックの実装
 // ============================================================
 #include "TimelineTrack.h"
-#include "SpawnEvent.h"
+#include "TimelineEventFactory.h"
 #include <algorithm>
 #include <iostream>
 
@@ -88,15 +88,11 @@ void TimelineTrack::Deserialize(const nlohmann::json& j) {
     for (const auto& eventJson : j["events"]) {
         const std::string eventType = eventJson.value("eventType", "");
 
-        // イベント種別に応じてインスタンスを生成する
-        // 将来の拡張時はここに分岐を追加するだけでよい
-        std::unique_ptr<ITimelineEvent> event;
-
-        if (eventType == "SpawnEvent") {
-            event = std::make_unique<SpawnEvent>();
-        }
-        // 将来の拡張例:
-        // else if (eventType == "AudioEvent") { event = std::make_unique<AudioEvent>(); }
+        // イベント種別に応じてインスタンスを生成する。
+        // TimelineEventFactory にエンジン組み込み種別（SpawnEvent）と
+        // Application層が実行時にRegister()した種別（FormationSpawnEvent等）が
+        // 両方登録されているため、ここでは名前解決するだけでよい。
+        std::unique_ptr<ITimelineEvent> event = TimelineEventFactory::GetInstance().Create(eventType);
 
         if (event) {
             event->triggerTime_ = eventJson.value("triggerTime", 0.0f);

@@ -264,6 +264,7 @@
     <ClInclude Include="scene\timeline\ITimelineEvent.h" />
     <ClInclude Include="scene\timeline\PrefabRegistry.h" />
     <ClInclude Include="scene\timeline\SpawnEvent.h" />
+    <ClInclude Include="scene\timeline\TimelineEventFactory.h" />
     <ClInclude Include="scene\timeline\TimelineTrack.h" />
     <ClInclude Include="scene\timeline\TimelineManager.h" />
     <ClInclude Include="scene\timeline\TimelineEditorWindow.h" />

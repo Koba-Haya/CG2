@@ -1,0 +1,57 @@
+{
+    "children": [],
+    "components": [
+        {
+            "environmentCoefficient": 0.0,
+            "modelPath": "resources/cube/cube.obj",
+            "texturePath": "resources/cube/white100x100.png",
+            "type": "ModelComponent"
+        },
+        {
+            "centerOffset": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "colliderType": 2,
+            "radius": 1.0,
+            "size": {
+                "x": 0.5,
+                "y": 0.5,
+                "z": 0.5
+            },
+            "type": "ColliderComponent"
+        },
+        {
+            "type": "EnemyComponent"
+        },
+        {
+            "type": "StraightMoveComponent"
+        },
+        {
+            "type": "ChargeOnApproachComponent"
+        },
+        {
+            "type": "RamAttackComponent"
+        }
+    ],
+    "name": "EnemyHoming",
+    "tag": "Enemy",
+    "transform": {
+        "rotate": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "scale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+        },
+        "translate": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        }
+    }
+}

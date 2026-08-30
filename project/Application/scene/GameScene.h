@@ -16,6 +16,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 enum class GamePhase {
   InProgress,
@@ -66,6 +67,18 @@ private:
 
   // ウェーブデータの初期化（デモ用ハードコードデータを登録する）
   //void InitSpawnEvents_();
+
+  // EnemyComponent::onDestroyed コールバックの登録を1箇所に集約する。
+  // 以前は Initialize / AddRootObject / Update(SpawnManager) の3箇所に
+  // 全く同じ内容のラムダが重複していたため、ここに統合した。
+  // FormationMemberComponentを持つ場合は編隊トラッキングの初期カウントも行う。
+  void RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::GameObject>& obj);
+
+  // 編隊メンバーが1体撃破されるたびに呼ばれる。残数が0になったら編隊全滅ボーナスを発火する。
+  void HandleFormationMemberDestroyed(int formationId, const Vector3& pos);
+
+  // 編隊全滅ボーナス（スコア倍率＋強化演出）
+  void OnFormationCleared(const Vector3& pos, int memberCount);
 
 private:
   std::unique_ptr<DebugCamera> debugCamera_;
@@ -147,6 +160,17 @@ private:
   // -----------------------------------------------------------------------
   float spawnTimer_ = 0.0f;           // ゲーム開始からの経過時間（スポーン判定用）
   std::vector<SpawnEvent> spawnEvents_; // 全スポーンイベントリスト
+
+  // -----------------------------------------------------------------------
+  // 編隊（Formation）トラッキング用
+  // -----------------------------------------------------------------------
+  // 編隊ID -> 残存メンバー数。0になった時点でOnFormationCleared()を発火してmapから削除する
+  std::unordered_map<int, int> formationRemaining_;
+  // 編隊ID -> 初期メンバー数（ボーナス計算用。全滅時にformationRemaining_と一緒に削除する）
+  std::unordered_map<int, int> formationTotal_;
+
+  // スコア（内部カウンタのみ。本番UI表示は別タスク。現状はImGuiデバッグ表示で仮置き）
+  int score_ = 0;
 
   float time_ = 0.0f;
 
