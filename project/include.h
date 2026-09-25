@@ -21,7 +21,7 @@
 #include <wrl.h>
 #include <xaudio2.h>
 #define DIRECTINPUT_VERSION 0x0800
-#include "DebugCamera.h"
+#include "AbsoluteEngine/editor/EditorCamera.h"
 #include "Input.h"
 #include "Matrix.h"
 #include "Method.h"

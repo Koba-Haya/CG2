@@ -2,7 +2,7 @@
 #include "BaseScene.h"
 #include "GameCamera.h"
 #include "Skybox.h"
-#include "DebugCamera.h"
+#include "AbsoluteEngine/editor/EditorCamera.h"
 #include "ModelInstance.h"
 #include "ModelResource.h"
 #include "Renderer.h"
@@ -81,13 +81,11 @@ private:
   void OnFormationCleared(const Vector3& pos, int memberCount);
 
 private:
-  std::unique_ptr<DebugCamera> debugCamera_;
+  std::unique_ptr<AbsoluteEngine::EditorCamera> debugCamera_;
 
   bool isDebugCamera_ = false;
   bool showDebugRail_ = true;
   bool showDebugSkeleton_ = false; // Bキーでトグル：プレイヤーの骨をデバッグ表示
-
-  std::string sceneFilePath_ = "C:/Users/haya2/source/repos/CG2/project/Application/resources/editor/scene.json";
 
   Skybox skybox_;
 

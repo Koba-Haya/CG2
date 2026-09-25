@@ -16,6 +16,8 @@ public:
 
 private:
     static std::string applicationRoot_;
+    // SetApplicationRoot()が一度でも呼ばれたか（呼ばれる前にResolve()が使われた場合の警告用）
+    static bool isRootSet_;
 };
 
 } // namespace AbsoluteEngine

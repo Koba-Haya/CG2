@@ -6,15 +6,13 @@
 #pragma once
 #include "TimelineTrack.h"
 #include "ITimelineEvent.h"
+#include "../../camera/ITimelineCamera.h"
 #include "../../Type/Transform.h"
 #include "../../../externals/nlohmann/json.hpp"
 #include <vector>
 #include <memory>
 #include <string>
 #include <functional>
-
-// 前方宣言（Application層との結合を最小限に抑えるため、完全定義は.cppでのみインクルード）
-class RailCameraComponent;
 
 namespace AbsoluteEngine {
 
@@ -35,9 +33,9 @@ public:
     // -----------------------------------------------------------
 
     // タイムライン全体の長さ（秒）を取得する
-    // レール（RailCameraComponent）を最初から最後まで等速で走破するのに必要な秒数
-    // （弧長 ÷ speed）を毎回動的に算出する。手動設定は廃止し、レールの形状・速度に完全追従させる
-    // RailCameraComponent未接続、またはレール長・速度が0の場合はフォールバック値を返す
+    // ITimelineCamera（レール実装）を最初から最後まで等速で走破するのに必要な秒数を
+    // 毎回動的に算出する。手動設定は廃止し、レールの形状・速度に完全追従させる
+    // カメラ未接続、またはレール長・速度が0の場合はフォールバック値を返す
     float GetDuration() const;
 
     // -----------------------------------------------------------
@@ -50,9 +48,14 @@ public:
     // 未保存の変更があるか確認する
     bool IsDirty() const { return isDirty_; }
 
-    // シーン読み込み時に RailCameraComponent を関連付ける
+    // シーン読み込み時にタイムラインカメラ（ITimelineCamera実装）を関連付ける
     // タイムラインはカメラの進行度をこのポインタ経由で同期する
-    void SetRailCamera(RailCameraComponent* camera) { railCamera_ = camera; }
+    void SetCamera(ITimelineCamera* camera) { timelineCamera_ = camera; }
+
+    // ComputeSpawnAnchorTransform()でカメラ前方に自動配置する際の距離（ワールド単位）を設定する
+    // プレイヤーとカメラの位置関係・狙わせたい距離感はゲームごとに異なるため、
+    // 既定値（80.0f）はあくまで暫定値。ゲーム側の実際のプレイヤー/照準距離に合わせて呼び出すこと
+    void SetSpawnAheadDistance(float distance) { spawnAheadDistance_ = distance; }
 
     // -----------------------------------------------------------
     // スポーン位置の自動算出
@@ -60,7 +63,7 @@ public:
 
     // 発火時刻に対応するレール上の想定プレイヤー位置から、前方向へ少し奥へ進めた位置を算出する
     // SpawnEvent追加時のデフォルト出現位置に使う（座標を手入力する代わりに自動配置する）
-    // RailCameraComponent未接続の場合は原点のTransformを返す
+    // カメラ未接続の場合は原点のTransformを返す
     Transform ComputeSpawnAnchorTransform(float triggerTime) const;
 
     // -----------------------------------------------------------
@@ -174,8 +177,11 @@ private:
     // トラックのリスト
     std::vector<std::unique_ptr<TimelineTrack>> tracks_;
 
-    // カメラへの非所有ポインタ（BaseSceneが寿命を管理）
-    RailCameraComponent* railCamera_ = nullptr;
+    // カメラへの非所有ポインタ（実体の寿命はBaseSceneが管理）
+    ITimelineCamera* timelineCamera_ = nullptr;
+
+    // ComputeSpawnAnchorTransform()で使う、カメラ前方への配置距離（SetSpawnAheadDistanceで変更可）
+    float spawnAheadDistance_ = 80.0f;
 
     // 現在選択中のイベントへの非所有ポインタ（タスク14）
     // 所有権は各 TimelineTrack が持つ。削除時は ClearSelectedEventIfMatch で nullptr に戻す

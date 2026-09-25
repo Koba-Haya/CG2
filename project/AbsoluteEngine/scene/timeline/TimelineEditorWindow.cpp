@@ -4,7 +4,6 @@
 // ============================================================
 #include "TimelineEditorWindow.h"
 #include "PrefabRegistry.h"
-#include "SpawnEvent.h"
 #include "TimelineEventFactory.h"
 #include "../../base/EnginePath.h"
 // CommandManagerとTimelineCommandのインクルード（Undo/Redo: タスクF）
@@ -28,7 +27,6 @@ void TimelineEditorWindow::Draw(const std::string& timelineFilePath) {
     // トップレベル（トラックのPushIDに包まれていない）のAddEventPopupを処理する
     // DrawTracks内の各トラックの"+"ボタンが開くポップアップとはIDスタックが異なるため独立して開閉できる
     DrawAddEventPopup();
-    DrawAddFormationEventPopup();
     ImGui::Separator();
     DrawSeekBar();
     ImGui::Separator();
@@ -107,9 +105,10 @@ void TimelineEditorWindow::DrawToolbar(const std::string& timelineFilePath) {
 
     ImGui::SameLine();
 
-    // プレハブ選択付きのスポーンイベント追加を、トラックの存在を意識せずワンクリックで行えるようにする
+    // トラックの存在を意識せずワンクリックでイベント追加できるようにする
     // （トラックが1つも無いとDrawTracks側の per-track "+" ボタンが出てこず、機能が見つけにくかったため）
-    if (ImGui::Button("+ Add Spawn Event")) {
+    // 追加できるイベント種別はTimelineEventFactoryに登録されているもの全て（ポップアップ内で選択）
+    if (ImGui::Button("+ Add Event")) {
         if (manager_->GetTracks().empty()) {
             // トラックが無ければデフォルトトラックを自動作成する（Undo対応）
             const std::string beforeSnapshot = manager_->SerializeToString();
@@ -128,40 +127,9 @@ void TimelineEditorWindow::DrawToolbar(const std::string& timelineFilePath) {
         }
         addEventTargetTrackIndex_ = static_cast<int>(manager_->GetTracks().size()) - 1;
         addEventTime_ = manager_->GetCurrentTime();
-        selectedPrefabIndex_ = 0;
+        selectedEventTypeIndex_ = -1; // DrawAddEventPopup側で既定種別を選び直させる
+        pendingEvent_.reset();
         ImGui::OpenPopup("AddEventPopup");
-    }
-
-    ImGui::SameLine();
-
-    // 編隊敵（3〜5体をクラスタ状にまとめてスポーンする）を追加するボタン。
-    // FormationSpawnEventはApplication層のイベント種別のためTimelineEventFactory経由で生成する
-    // （エディタ側はSpawnEventと違いFormationSpawnEventの具象型を一切知らない）。
-    if (ImGui::Button("+ Add Formation Event")) {
-        if (manager_->GetTracks().empty()) {
-            const std::string beforeSnapshot = manager_->SerializeToString();
-            auto track = std::make_unique<TimelineTrack>();
-            track->trackName_ = "Main";
-            manager_->AddTrack(std::move(track));
-            if (commandManager_) {
-                const std::string afterSnapshot = manager_->SerializeToString();
-                auto cmd = std::make_shared<TimelineCommand>(
-                    [mgr = manager_, beforeSnapshot]() { mgr->LoadFromString(beforeSnapshot); },
-                    [mgr = manager_, afterSnapshot]() { mgr->LoadFromString(afterSnapshot); }
-                );
-                commandManager_->AddCommand(cmd);
-            }
-            if (onModified_) onModified_();
-        }
-        addEventTargetTrackIndex_ = static_cast<int>(manager_->GetTracks().size()) - 1;
-        addFormationEventTime_ = manager_->GetCurrentTime();
-        pendingFormationEvent_ = TimelineEventFactory::GetInstance().Create("FormationSpawnEvent");
-        // 初期位置を(0,0,0)のままにせず、その発火時刻のレールカメラ前方アンカーに合わせておく
-        // （SpawnEventの「追加」フローと同じ仕組み。ポップアップ内でさらに微調整も可能）
-        if (pendingFormationEvent_) {
-            pendingFormationEvent_->SetSpawnAnchorTransform(manager_->ComputeSpawnAnchorTransform(addFormationEventTime_));
-        }
-        ImGui::OpenPopup("AddFormationEventPopup");
     }
 }
 
@@ -250,7 +218,8 @@ void TimelineEditorWindow::DrawTracks() {
                 if (ImGui::SmallButton("+")) {
                     addEventTargetTrackIndex_ = static_cast<int>(i);
                     addEventTime_ = manager_->GetCurrentTime(); // 現在位置にデフォルト設定
-                    selectedPrefabIndex_ = 0;
+                    selectedEventTypeIndex_ = -1; // DrawAddEventPopup側で既定種別を選び直させる
+                    pendingEvent_.reset();
                     ImGui::OpenPopup("AddEventPopup");
                 }
             }
@@ -484,50 +453,72 @@ void TimelineEditorWindow::DrawAddEventPopup() {
     ImGui::Text("新規イベントを追加");
     ImGui::Separator();
 
-    // 発火時刻
-    ImGui::InputFloat("発火時刻 (s)", &addEventTime_, 0.1f, 1.0f, "%.2f");
-
-    // プレハブID選択（PrefabRegistryから一覧を取得）
-    const std::vector<std::string> prefabIds = PrefabRegistry::GetInstance().GetAllIds();
-
-    if (prefabIds.empty()) {
-        ImGui::TextColored({ 1.0f, 0.5f, 0.5f, 1.0f },
-            "プレハブが登録されていません。[Reload Prefabs]を押してください。");
-    } else {
-        // ドロップダウンリスト
-        if (selectedPrefabIndex_ >= static_cast<int>(prefabIds.size())) {
-            selectedPrefabIndex_ = 0;
-        }
-
-        // ImGui::Combo に渡す用のCスタイル文字列配列を生成する
-        std::vector<const char*> idCStrs;
-        idCStrs.reserve(prefabIds.size());
-        for (const auto& id : prefabIds) {
-            idCStrs.push_back(id.c_str());
-        }
-
-        ImGui::Combo("プレハブID", &selectedPrefabIndex_,
-            idCStrs.data(), static_cast<int>(idCStrs.size()));
+    // イベント種別を選択する。選択肢はTimelineEventFactoryに登録されている全種別
+    // （エンジン組み込みのSpawnEventも、ゲーム側がRegister()した独自種別も同列に並ぶ）
+    const std::vector<std::string> eventTypeNames = TimelineEventFactory::GetInstance().GetRegisteredEventNames();
+    if (eventTypeNames.empty()) {
+        ImGui::TextColored({ 1.0f, 0.5f, 0.5f, 1.0f }, "登録されているイベント種別がありません。");
+        ImGui::EndPopup();
+        return;
     }
 
+    if (selectedEventTypeIndex_ < 0 || selectedEventTypeIndex_ >= static_cast<int>(eventTypeNames.size())) {
+        // 未初期化(-1)、または前回より種別数が減った場合はSpawnEventを既定選択にする
+        // （従来の「+Add Spawn Event」の使用感を踏襲する）
+        selectedEventTypeIndex_ = 0;
+        for (size_t i = 0; i < eventTypeNames.size(); ++i) {
+            if (eventTypeNames[i] == "SpawnEvent") {
+                selectedEventTypeIndex_ = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    std::vector<const char*> typeCStrs;
+    typeCStrs.reserve(eventTypeNames.size());
+    for (const auto& name : eventTypeNames) {
+        typeCStrs.push_back(name.c_str());
+    }
+
+    const int prevTypeIndex = selectedEventTypeIndex_;
+    ImGui::Combo("種別", &selectedEventTypeIndex_, typeCStrs.data(), static_cast<int>(typeCStrs.size()));
+
+    // 初回描画時、または種別を選び直した時は新しくインスタンスを生成し直す
+    if (!pendingEvent_ || selectedEventTypeIndex_ != prevTypeIndex) {
+        pendingEvent_ = TimelineEventFactory::GetInstance().Create(eventTypeNames[static_cast<size_t>(selectedEventTypeIndex_)]);
+        if (pendingEvent_) {
+            pendingEvent_->SetSpawnAnchorTransform(manager_->ComputeSpawnAnchorTransform(addEventTime_));
+        }
+    }
+
+    // 発火時刻を変更したら、その時刻のタイムラインカメラ前方アンカーに位置を追従させる
+    if (ImGui::InputFloat("発火時刻 (s)", &addEventTime_, 0.1f, 1.0f, "%.2f")) {
+        if (pendingEvent_) {
+            pendingEvent_->SetSpawnAnchorTransform(manager_->ComputeSpawnAnchorTransform(addEventTime_));
+        }
+    }
     ImGui::Separator();
 
-    // 追加ボタン
-    if (!prefabIds.empty() && ImGui::Button("追加")) {
+    // 型固有の入力フィールドは ITimelineEvent::DrawCreationUI() をポリモーフィックに呼んで描画する
+    // （エディタ側はSpawnEvent以外の具象型を一切知らなくてよい）。まだトラックに追加していない
+    // 一時インスタンスの編集なのでUndo判定用の出力は捨てる。
+    bool dummyActivated = false;
+    bool dummyDeactivated = false;
+    if (pendingEvent_) {
+        pendingEvent_->DrawCreationUI(dummyActivated, dummyDeactivated);
+    }
+    ImGui::Separator();
+
+    if (ImGui::Button("追加") && pendingEvent_) {
         if (addEventTargetTrackIndex_ >= 0 &&
             addEventTargetTrackIndex_ < static_cast<int>(manager_->GetTracks().size())) {
 
-            auto event = std::make_unique<SpawnEvent>();
-            event->triggerTime_ = addEventTime_;
-            event->prefabId_ = prefabIds[static_cast<size_t>(selectedPrefabIndex_)];
-            // 座標を手入力させる代わりに、発火時刻に対応するレール上の想定プレイヤー位置から
-            // 前方向へ少し奥へ進めた位置に自動配置する（追加後もギズモで微調整可能）
-            event->SetSpawnAnchorTransform(manager_->ComputeSpawnAnchorTransform(addEventTime_));
+            pendingEvent_->triggerTime_ = addEventTime_;
 
             // Undo用に変更前のスナップショットを保存する（トラック追加等と同じパターン）
             const std::string beforeSnapshot = manager_->SerializeToString();
             manager_->GetTracksRef()[static_cast<size_t>(addEventTargetTrackIndex_)]
-                ->AddEvent(std::move(event));
+                ->AddEvent(std::move(pendingEvent_));
             if (commandManager_) {
                 const std::string afterSnapshot = manager_->SerializeToString();
                 auto cmd = std::make_shared<TimelineCommand>(
@@ -538,75 +529,12 @@ void TimelineEditorWindow::DrawAddEventPopup() {
             }
             if (onModified_) onModified_();
         }
+        pendingEvent_.reset();
         ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();
     if (ImGui::Button("キャンセル")) {
-        ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
-}
-
-void TimelineEditorWindow::DrawAddFormationEventPopup() {
-    if (!ImGui::BeginPopup("AddFormationEventPopup")) return;
-
-    // ポップアップが開いているのにインスタンスが無い場合（想定外だが念のため）は生成しておく
-    if (!pendingFormationEvent_) {
-        pendingFormationEvent_ = TimelineEventFactory::GetInstance().Create("FormationSpawnEvent");
-        if (pendingFormationEvent_) {
-            pendingFormationEvent_->SetSpawnAnchorTransform(manager_->ComputeSpawnAnchorTransform(addFormationEventTime_));
-        }
-    }
-
-    ImGui::Text("新規 Formation Event を追加");
-    ImGui::Separator();
-
-    // 発火時刻を変更したら、その時刻のレールカメラ前方アンカーに位置を追従させる
-    // （ボタンを押した瞬間の時刻のまま固定されてしまい、ここで時刻を変えても
-    //   位置に反映されないという指摘の修正）
-    if (ImGui::InputFloat("発火時刻 (s)", &addFormationEventTime_, 0.1f, 1.0f, "%.2f")) {
-        if (pendingFormationEvent_) {
-            pendingFormationEvent_->SetSpawnAnchorTransform(manager_->ComputeSpawnAnchorTransform(addFormationEventTime_));
-        }
-    }
-    ImGui::Separator();
-
-    // 型固有の入力フィールド（prefabId/memberCount/clusterRadius/basePosition）は
-    // FormationSpawnEvent::DrawInspectorUI() をそのまま流用して描画する。
-    // まだトラックに追加していない一時インスタンスの編集なのでUndo判定用の出力は捨てる。
-    bool dummyActivated = false;
-    bool dummyDeactivated = false;
-    if (pendingFormationEvent_) {
-        pendingFormationEvent_->DrawInspectorUI(dummyActivated, dummyDeactivated);
-    }
-
-    if (ImGui::Button("追加")) {
-        if (pendingFormationEvent_ &&
-            addEventTargetTrackIndex_ >= 0 &&
-            addEventTargetTrackIndex_ < static_cast<int>(manager_->GetTracks().size())) {
-
-            pendingFormationEvent_->triggerTime_ = addFormationEventTime_;
-
-            const std::string beforeSnapshot = manager_->SerializeToString();
-            manager_->GetTracksRef()[static_cast<size_t>(addEventTargetTrackIndex_)]
-                ->AddEvent(std::move(pendingFormationEvent_));
-            if (commandManager_) {
-                const std::string afterSnapshot = manager_->SerializeToString();
-                auto cmd = std::make_shared<TimelineCommand>(
-                    [mgr = manager_, beforeSnapshot]() { mgr->LoadFromString(beforeSnapshot); },
-                    [mgr = manager_, afterSnapshot]() { mgr->LoadFromString(afterSnapshot); }
-                );
-                commandManager_->AddCommand(cmd);
-            }
-            if (onModified_) onModified_();
-        }
-        pendingFormationEvent_.reset();
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("キャンセル")) {
-        pendingFormationEvent_.reset();
+        pendingEvent_.reset();
         ImGui::CloseCurrentPopup();
     }
 

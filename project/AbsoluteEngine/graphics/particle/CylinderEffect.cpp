@@ -5,8 +5,8 @@
 #include "graphics/texture/TextureResource.h"
 #include "math/Method.h"
 
-CylinderEffect::CylinderEffect(ID3D12Device* device, TextureResource* texture, const Vector3& position)
-    : texture_(texture) {
+CylinderEffect::CylinderEffect(std::shared_ptr<TextureResource> texture, const Vector3& position)
+    : texture_(std::move(texture)) {
     transform_.translate = position;
     transform_.scale = {1.0f, 1.0f, 1.0f};
     transform_.rotate = {0.0f, 0.0f, 0.0f};
@@ -23,7 +23,7 @@ CylinderEffect::CylinderEffect(ID3D12Device* device, TextureResource* texture, c
     cylinderParams_.colorTop = {1.0f, 1.0f, 1.0f, 1.0f};
     cylinderParams_.colorBottom = {1.0f, 1.0f, 1.0f, 1.0f};
     
-    cylinder_.Initialize(device, cylinderParams_);
+    cylinder_.Initialize(Renderer::GetInstance()->GetDX()->GetDevice(), cylinderParams_);
 }
 
 void CylinderEffect::Update(float deltaTime, const Camera* camera) {

@@ -62,6 +62,14 @@ public:
     // 呼び出し元に伝えるための出力引数（Undo用スナップショットのタイミング判定に使う）。
     virtual void DrawInspectorUI(bool& activated, bool& deactivatedAfterEdit) {}
 
+    // 新規追加ポップアップ内で、型固有の作成時入力（例: SpawnEventのプレハブ選択）を描画する。
+    // 既定ではDrawInspectorUI()をそのまま流用する（作成時と編集時で見た目を変える必要が無い
+    // 型はこれをオーバーライドしなくてよい）。プレハブ選択のように「配置後は変更不可だが
+    // 作成時だけ選ばせたい」ような項目がある型だけオーバーライドする
+    virtual void DrawCreationUI(bool& activated, bool& deactivatedAfterEdit) {
+        DrawInspectorUI(activated, deactivatedAfterEdit);
+    }
+
     // -----------------------------------------------------------
     // スポーン位置の自動配置（エディタの「追加」操作から呼ばれる）
     // -----------------------------------------------------------

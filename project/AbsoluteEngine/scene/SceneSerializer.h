@@ -3,8 +3,6 @@
 #include <string>
 #include <vector>
 
-
-
 namespace AbsoluteEngine {
 
 class SceneSerializer {

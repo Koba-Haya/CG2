@@ -346,8 +346,8 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
                                D3D12_APPEND_ALIGNED_ELEMENT,
                                D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
-  d.vsPath = L"resources/app/shaders/Object3D.VS.hlsl";
-  d.psPath = L"resources/app/shaders/Object3D.PS.hlsl";
+  d.vsPath = L"resources/engine/shaders/Object3D.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Object3D.PS.hlsl";
   d.usePSMaterial_b0 = true;
   d.useVSTransform_b0 = true;
   d.usePSTextureTable_t0 = true;
@@ -367,7 +367,7 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
 
 PipelineDesc UnifiedPipeline::MakeSkinnedObject3DDesc() {
   PipelineDesc d = MakeObject3DDesc();
-  d.vsPath = L"resources/app/shaders/SkinnedObject3D.VS.hlsl";
+  d.vsPath = L"resources/engine/shaders/SkinnedObject3D.VS.hlsl";
   d.useVSSkinning_t2 = true;
   
   d.inputElements.push_back({"BONEIDS", 0, DXGI_FORMAT_R32G32B32A32_UINT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0});

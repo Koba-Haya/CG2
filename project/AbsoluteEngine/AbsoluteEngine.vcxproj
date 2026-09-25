@@ -128,7 +128,6 @@
     <ClCompile Include="base\WinApp.cpp" />
     <ClCompile Include="base\input\Input.cpp" />
     <ClCompile Include="camera\Camera.cpp" />
-    <ClCompile Include="camera\DebugCamera.cpp" />
     <ClCompile Include="camera\GameCamera.cpp" />
     <ClCompile Include="editor\EditorCamera.cpp" />
     <ClCompile Include="editor\EditorUIManager.cpp" />
@@ -196,7 +195,6 @@
     <ClInclude Include="base\WinApp.h" />
     <ClInclude Include="base\input\Input.h" />
     <ClInclude Include="camera\Camera.h" />
-    <ClInclude Include="camera\DebugCamera.h" />
     <ClInclude Include="camera\GameCamera.h" />
     <ClInclude Include="camera\ICameraController.h" />
     <ClInclude Include="editor\EditorCamera.h" />

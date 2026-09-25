@@ -1,11 +1,18 @@
 #define NOMINMAX
 #include "GameApp.h"
 
+#include "AbsoluteEngine/base/EnginePath.h"
 #include "Logger.h"
 #include "Renderer.h"
 #include "SceneFactory.h"
 #include "SceneIds.h"
 #include "SceneManager.h"
+
+#ifndef APPLICATION_ROOT_DIR
+// Application.vcxprojでビルドしなかった場合のフォールバック（本来は常にプロジェクトの
+// ビルド設定で定義される。マシンやクローン場所に依存しないよう、ユーザー名等は埋め込まない）
+#define APPLICATION_ROOT_DIR "Application/"
+#endif
 
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -16,6 +23,9 @@ GameApp::GameApp() = default;
 GameApp::~GameApp() = default;
 
 void GameApp::Initialize() {
+  // マシンやクローン先のパスに関わらずリソースを解決できるよう、ビルド時のプロジェクトパスで初期化する
+  AbsoluteEngine::EnginePath::SetApplicationRoot(APPLICATION_ROOT_DIR);
+
   Logger::GetInstance().Initialize();
 
   sceneManager_ = std::make_unique<SceneManager>();

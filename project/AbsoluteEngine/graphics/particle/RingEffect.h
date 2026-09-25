@@ -10,7 +10,8 @@ public:
     // texture は shared_ptr で受け取り、Effect自身が生存期間だけ参照を保持する。
     // EffectManagerはシーンをまたいで生存するシングルトンのため、呼び出し元(GameScene等)が
     // 破棄された後もこのEffectが生きている間はテクスチャが解放されないようにするため。
-    RingEffect(ID3D12Device* device, std::shared_ptr<TextureResource> texture, const Vector3& position);
+    // デバイスはUpdate()同様、内部でRenderer::GetInstance()から取得するため引数に取らない
+    RingEffect(std::shared_ptr<TextureResource> texture, const Vector3& position);
     ~RingEffect() override = default;
 
     void Update(float deltaTime, const Camera* camera) override;
