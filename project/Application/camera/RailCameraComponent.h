@@ -3,11 +3,15 @@
 #include "../../AbsoluteEngine/Type/Matrix.h"
 #include "../../AbsoluteEngine/Type/Vector.h"
 #include "../../AbsoluteEngine/math/Spline.h"
+#include "../../AbsoluteEngine/camera/ITimelineCamera.h"
 #include <vector>
 #include <string>
 
 class GameCamera;
-class RailCameraComponent : public AbsoluteEngine::IComponent {
+
+// AbsoluteEngine::ITimelineCameraを実装することで、エンジンのTimelineManager/BaseSceneが
+// このApplication固有のクラスを直接知らなくても（インターフェース越しに）レール進行を制御できる
+class RailCameraComponent : public AbsoluteEngine::IComponent, public AbsoluteEngine::ITimelineCamera {
 public:
     RailCameraComponent();
     ~RailCameraComponent() override = default;
@@ -45,18 +49,18 @@ public:
     // タイムラインからカメラ進行度を直接設定するセッター（シーク同期用）
     // progress_ を書き換えるだけでなく、即座にカメラ位置を再計算して反映する
     // これによりエディットモードでのスライダー操作が即座に画面に反映される
-    void SetProgress(float progress);
+    void SetProgress(float progress) override;
 
     // レール上の指定progress(0-1)における位置・前方向ベクトルを計算する（読み取り専用、カメラは動かさない）
     // タイムラインエディタでのスポーンイベント初期位置の自動配置などに使う
-    void GetPointAndForward(float progress, Vector3& outPos, Vector3& outForward) const;
+    void GetPointAndForward(float progress, Vector3& outPos, Vector3& outForward) const override;
 
     // レール全体の弧長（実距離）を取得する
     float GetTotalLength() const { return arcLengthTable_.GetTotalLength(); }
 
     // レールを最初から最後まで等速で走破するのに必要な秒数を取得する（TimelineManagerのDuration算出に使用）
     // speed_ が0以下、またはウェイポイントが不足している場合は0を返す
-    float GetDuration() const {
+    float GetDuration() const override {
         const float length = GetTotalLength();
         if (speed_ <= 0.0f || length <= 0.0f) return 0.0f;
         return length / speed_;

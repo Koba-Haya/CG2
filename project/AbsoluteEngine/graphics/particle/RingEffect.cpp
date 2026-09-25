@@ -5,7 +5,7 @@
 #include "graphics/texture/TextureResource.h"
 #include "math/Method.h"
 
-RingEffect::RingEffect(ID3D12Device* device, std::shared_ptr<TextureResource> texture, const Vector3& position)
+RingEffect::RingEffect(std::shared_ptr<TextureResource> texture, const Vector3& position)
     : texture_(std::move(texture)) {
     transform_.translate = position;
     transform_.scale = {1.0f, 1.0f, 1.0f};
@@ -21,7 +21,7 @@ RingEffect::RingEffect(ID3D12Device* device, std::shared_ptr<TextureResource> te
     ringParams_.colorInner = {1.0f, 1.0f, 1.0f, 1.0f};
     ringParams_.uvVertical = true; // 放射状テクスチャを想定
     
-    ring_.Initialize(device, ringParams_);
+    ring_.Initialize(Renderer::GetInstance()->GetDX()->GetDevice(), ringParams_);
 }
 
 void RingEffect::Update(float deltaTime, const Camera* camera) {

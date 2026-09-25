@@ -143,4 +143,42 @@ void SpawnEvent::DrawInspectorUI(bool& activated, bool& deactivatedAfterEdit) {
 #endif
 }
 
+void SpawnEvent::DrawCreationUI(bool& activated, bool& deactivatedAfterEdit) {
+#ifdef USE_IMGUI
+    // 作成時のみプレハブIDを選択可能にする（配置後はDrawInspectorUI()側で表示のみになる）
+    const std::vector<std::string> prefabIds = PrefabRegistry::GetInstance().GetAllIds();
+    if (prefabIds.empty()) {
+        ImGui::TextColored({ 1.0f, 0.5f, 0.5f, 1.0f },
+            "プレハブが登録されていません。[Reload Prefabs]を押してください。");
+        return;
+    }
+
+    // 現在のprefabId_に対応するインデックスを毎回探す（このインスタンスは
+    // ポップアップ表示中だけ生存する一時オブジェクトのため専用の状態を持つ必要がない）
+    int currentIndex = 0;
+    if (prefabId_.empty()) {
+        prefabId_ = prefabIds[0];
+    } else {
+        for (size_t i = 0; i < prefabIds.size(); ++i) {
+            if (prefabIds[i] == prefabId_) {
+                currentIndex = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    std::vector<const char*> idCStrs;
+    idCStrs.reserve(prefabIds.size());
+    for (const auto& id : prefabIds) {
+        idCStrs.push_back(id.c_str());
+    }
+
+    if (ImGui::Combo("プレハブID", &currentIndex, idCStrs.data(), static_cast<int>(idCStrs.size()))) {
+        prefabId_ = prefabIds[static_cast<size_t>(currentIndex)];
+    }
+    activated |= ImGui::IsItemActivated();
+    deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+#endif
+}
+
 } // namespace AbsoluteEngine

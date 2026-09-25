@@ -10,7 +10,6 @@
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "../actor/Bullet/BulletComponent.h"
 #include "Enemy/EnemyComponent.h"
-#include "DebugCamera.h"
 #include "AbsoluteEngine/editor/Command.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "graphics/Renderer.h"
@@ -340,13 +339,11 @@ void DevScene::Update() {
   ImGui::Text("Click to spawn effects:");
   
   if (ImGui::Button("Spawn Ring Effect")) {
-      auto device = Renderer::GetInstance()->GetDX()->GetDevice();
-      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_, transform_.translate));
+      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(texRing_, transform_.translate));
   }
-  
+
   if (ImGui::Button("Spawn Cylinder Effect")) {
-      auto device = Renderer::GetInstance()->GetDX()->GetDevice();
-      EffectManager::GetInstance()->AddEffect(std::make_unique<CylinderEffect>(device, texCylinder_.get(), transform_.translate));
+      EffectManager::GetInstance()->AddEffect(std::make_unique<CylinderEffect>(texCylinder_, transform_.translate));
   }
   
   if (ImGui::Button("Spawn Plane Hit Effect")) {
@@ -470,8 +467,7 @@ void DevScene::Update() {
                       
                       // ヒットエフェクトの発生
                       SpawnHitEffect(targetEnemyPos);
-                      auto device = Renderer::GetInstance()->GetDX()->GetDevice();
-                      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_, targetEnemyPos));
+                      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(texRing_, targetEnemyPos));
 
                       // カメラシェイク開始
                       cameraShakeDuration_ = 0.3f;

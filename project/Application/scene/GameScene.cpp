@@ -84,10 +84,13 @@ void GameScene::Initialize(const SceneServices &services) {
   camera->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
   SetMainCamera(camera);
 
-  // デバッグカメラ初期化
-  debugCamera_ = std::make_unique<DebugCamera>();
+  // デバッグカメラ初期化（EditorCameraを、右ドラッグ不要で常時動ける自由視点モードで使う）
+  debugCamera_ = std::make_unique<AbsoluteEngine::EditorCamera>();
   debugCamera_->Initialize();
   debugCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
+  debugCamera_->SetRequireMouseForMovement(false);
+  debugCamera_->SetKeyboardRotationEnabled(true);
+  debugCamera_->SetMovementSpeeds(0.5f, 0.02f, 0.005f);
 
   AbsoluteEngine::ComponentFactory::GetInstance().Register("RailCameraComponent", []() {
       auto comp = std::make_unique<RailCameraComponent>();
@@ -280,10 +283,13 @@ void GameScene::Initialize(const SceneServices &services) {
       if (!obj) continue;
       auto* railComp = obj->GetComponent<RailCameraComponent>();
       if (railComp) {
-          SetTimelineRailCamera(railComp);
+          SetTimelineCamera(railComp);
           break; // レールカメラは1つだけなので最初に見つかったものを使う
       }
   }
+  // SpawnEventの自動配置距離: このゲームではプレイヤーはカメラから約22ユニット前方、
+  // 遠レティクルはさらに約60ユニット先にあるため、その付近に出現するよう80ユニットにする
+  SetTimelineSpawnAheadDistance(80.0f);
   // タイムラインデータを読み込む（ファイルが無ければ空の状態で開始）
   LoadTimeline();
 
@@ -298,7 +304,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // タイトルからゲームシーンに来た時点で自動的にPlayモードへ入る。
   BackupScene();
   SetPlayMode(PlayMode::Play);
-  timelineManager_.Play();
+  timelineManager_->Play();
 #endif
 }
 
@@ -489,8 +495,7 @@ void GameScene::SpawnHitEffect(const Vector3 &pos) {
 
   // 2. リングエフェクト
   if (texRing_) {
-      auto device = Renderer::GetInstance()->GetDX()->GetDevice();
-      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(device, texRing_, pos));
+      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(texRing_, pos));
   }
 
   // 3. 爆発のポイントライト（寿命付き）を生成
@@ -1113,7 +1118,8 @@ void GameScene::DrawEditorUI() {
                 break;
             }
         }
-        CameraContext ctx{ 1.0f / 60.0f };
+        CameraContext ctx{};
+        ctx.deltaTime = 1.0f / 60.0f;
         GetMainCamera()->SetContext(ctx);
         if (services_.input) GetMainCamera()->Update(*services_.input);
     }

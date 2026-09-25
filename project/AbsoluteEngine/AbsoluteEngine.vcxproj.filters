@@ -102,9 +102,6 @@
     <ClCompile Include="camera\Camera.cpp">
       <Filter>engine\camera</Filter>
     </ClCompile>
-    <ClCompile Include="camera\DebugCamera.cpp">
-      <Filter>engine\camera</Filter>
-    </ClCompile>
     <ClCompile Include="camera\GameCamera.cpp">
       <Filter>engine\camera</Filter>
     </ClCompile>
@@ -272,9 +269,6 @@
       <Filter>engine\base\input</Filter>
     </ClInclude>
     <ClInclude Include="camera\Camera.h">
-      <Filter>engine\camera</Filter>
-    </ClInclude>
-    <ClInclude Include="camera\DebugCamera.h">
       <Filter>engine\camera</Filter>
     </ClInclude>
     <ClInclude Include="camera\GameCamera.h">

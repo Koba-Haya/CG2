@@ -14,6 +14,7 @@ namespace AbsoluteEngine {
     class EditorUIManager;
     class EditorCamera;
     class CommandManager;
+    class ITimelineCamera;
 }
 
 class SceneManager;
@@ -26,7 +27,7 @@ enum class PlayMode {
 
 class BaseScene {
 public:
-  virtual ~BaseScene() = default;
+  virtual ~BaseScene();
 
   void SetSceneManager(SceneManager *sm) { sceneManager_ = sm; }
   void SetSceneId(const std::string& id) { sceneId_ = id; }
@@ -70,9 +71,13 @@ protected:
   void SaveTimeline();
   void LoadTimeline();
 
-  // タイムラインのカメラを設定する（RailCameraComponentへの参照を渡す）
-  // 派生クラスのInitializeでRailCameraComponentを設定後に呼ぶ
-  void SetTimelineRailCamera(class RailCameraComponent* camera);
+  // タイムラインのカメラを設定する（ITimelineCameraを実装するコンポーネントへの参照を渡す）
+  // 派生クラスのInitializeでカメラコンポーネントを設定後に呼ぶ
+  void SetTimelineCamera(AbsoluteEngine::ITimelineCamera* camera);
+
+  // SpawnEvent自動配置(カメラ前方へのオフセット)の距離を設定する。
+  // 既定値はエンジン側の暫定値なので、ゲームのプレイヤー/照準距離に合わせて派生クラスから呼ぶ
+  void SetTimelineSpawnAheadDistance(float distance);
 
   // タイムラインを更新する（プレイモード中に毎フレーム呼ぶ）
   void UpdateTimeline(float deltaTime);
@@ -98,6 +103,14 @@ protected:
   // デフォルトはnullptrで、その場合Timeline Editorはトグルボタンを表示しない
   virtual bool* GetDebugCameraFlag() { return nullptr; }
 
+  // このシーンがタイムライン機能(TimelineManager/TimelineEditorWindow、および
+  // シーンごとの "<sceneId>_timeline.json" の自動保存/読み込み)を使うかどうか。
+  // レール演出を持たないシーン（タイトル/クリア/ゲームオーバー等）や、
+  // タイムラインという概念自体を持たない別ジャンルのゲームではfalseにオーバーライドする。
+  // falseの場合、timelineManager_/timelineEditorWindow_はInitialize()で生成されず、
+  // Timeline EditorパネルもJSON書き出しも一切発生しない。
+  virtual bool UsesTimeline() const { return true; }
+
   // エディタのギズモ操作・マウスピッキングに使う view/projection 行列を提供するカメラを返す
   // 派生クラス（GameScene等）は実際に画面に描画しているカメラ（Draw()内の分岐）と
   // 必ず一致させるようオーバーライドすること。ここが描画カメラとズレると、
@@ -119,8 +132,9 @@ protected:
   std::string backupSceneJson_ = "";
 
   // タイムラインシステム（シーン独立のため BaseScene が所有する）
-  AbsoluteEngine::TimelineManager timelineManager_;
-  AbsoluteEngine::TimelineEditorWindow timelineEditorWindow_;
+  // UsesTimeline()がfalseのシーンでは生成されない（nullptrのまま）
+  std::unique_ptr<AbsoluteEngine::TimelineManager> timelineManager_;
+  std::unique_ptr<AbsoluteEngine::TimelineEditorWindow> timelineEditorWindow_;
 
   // タイムラインプレビューオブジェクト（タスク16）
   // イベント選択時に生成した仮のオブジェクトへの弱参照

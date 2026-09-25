@@ -3,8 +3,6 @@
 // タイムライン再生・シーク・シリアライズの実装
 // ============================================================
 #include "TimelineManager.h"
-// RailCameraComponent はApplication層にあるため完全定義をインクルード
-#include "../../../Application/camera/RailCameraComponent.h"
 #include "../../base/EnginePath.h"
 #include <fstream>
 #include <iostream>
@@ -17,9 +15,9 @@ namespace AbsoluteEngine {
 // -----------------------------------------------------------
 
 float TimelineManager::GetDuration() const {
-    if (railCamera_) {
-        const float railDuration = railCamera_->GetDuration();
-        if (railDuration > 0.0f) return railDuration;
+    if (timelineCamera_) {
+        const float camDuration = timelineCamera_->GetDuration();
+        if (camDuration > 0.0f) return camDuration;
     }
     return kFallbackDuration_;
 }
@@ -30,23 +28,21 @@ float TimelineManager::GetDuration() const {
 
 Transform TimelineManager::ComputeSpawnAnchorTransform(float triggerTime) const {
     Transform t{};
-    if (!railCamera_) return t;
+    if (!timelineCamera_) return t;
 
     const float duration = GetDuration();
     const float progress = (duration > 0.0f) ? std::clamp(triggerTime / duration, 0.0f, 1.0f) : 0.0f;
 
     Vector3 pos{};
     Vector3 forward{};
-    railCamera_->GetPointAndForward(progress, pos, forward);
+    timelineCamera_->GetPointAndForward(progress, pos, forward);
 
-    // レール（想定プレイヤー位置）から前方向へ少し奥へ進めた位置に出現させる
-    // プレイヤーはカメラから約22ユニット前方、遠レティクルはさらに約60ユニット先にあるため、
-    // その付近（プレイヤーが狙う先）に出現するよう80ユニットを既定値とする
-    constexpr float kSpawnAheadDistance = 80.0f;
+    // カメラ位置から前方向へ spawnAheadDistance_ だけ進めた位置に出現させる
+    // （距離の妥当な値はゲームのプレイヤー/照準距離次第なので SetSpawnAheadDistance() で調整する）
     t.translate = {
-        pos.x + forward.x * kSpawnAheadDistance,
-        pos.y + forward.y * kSpawnAheadDistance,
-        pos.z + forward.z * kSpawnAheadDistance
+        pos.x + forward.x * spawnAheadDistance_,
+        pos.y + forward.y * spawnAheadDistance_,
+        pos.z + forward.z * spawnAheadDistance_
     };
     return t;
 }
@@ -240,14 +236,14 @@ bool TimelineManager::LoadFromFile(const std::string& filePath) {
 // -----------------------------------------------------------
 
 void TimelineManager::SyncCameraProgress() {
-    if (!railCamera_) return;
+    if (!timelineCamera_) return;
     const float duration = GetDuration();
     if (duration <= 0.0f) return;
 
     // 現在時間の全体に対する割合を計算してカメラに直接設定する
     // クランプして 0.0～1.0 の範囲に収める
     const float progress = std::clamp(currentTime_ / duration, 0.0f, 1.0f);
-    railCamera_->SetProgress(progress);
+    timelineCamera_->SetProgress(progress);
 }
 
 void TimelineManager::RewindAllEvents() {

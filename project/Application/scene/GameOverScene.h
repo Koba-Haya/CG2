@@ -10,4 +10,8 @@ public:
   void Finalize() override;
   void Update() override;
   void Draw() override;
+
+protected:
+  // ゲームオーバー画面はレール演出を持たないためタイムライン機能は不要
+  bool UsesTimeline() const override { return false; }
 };

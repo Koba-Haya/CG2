@@ -49,6 +49,11 @@ public:
     void Deserialize(const nlohmann::json& j) override;
 
     void DrawInspectorUI(bool& activated, bool& deactivatedAfterEdit) override;
+
+    // 作成時のみ、プレハブIDを選択可能なコンボとして描画する
+    // （DrawInspectorUI()では配置後の誤操作防止のため表示のみ・変更不可にしている）
+    void DrawCreationUI(bool& activated, bool& deactivatedAfterEdit) override;
+
     void SetSpawnAnchorTransform(const Transform& t) override { spawnTransform_ = t; }
 
 private:
