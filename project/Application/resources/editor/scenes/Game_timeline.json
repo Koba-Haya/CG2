@@ -12,9 +12,9 @@
                             "z": 0.0
                         },
                         "scale": {
-                            "x": 1.0,
-                            "y": 1.0,
-                            "z": 1.0
+                            "x": 0.6000000238418579,
+                            "y": 0.6000000238418579,
+                            "z": 1.7999999523162842
                         },
                         "translate": {
                             "x": 0.0,
@@ -32,9 +32,9 @@
                             "z": 0.0
                         },
                         "scale": {
-                            "x": 1.0,
-                            "y": 1.0,
-                            "z": 1.0
+                            "x": 1.5,
+                            "y": 1.5,
+                            "z": 1.5
                         },
                         "translate": {
                             "x": 0.0,
@@ -93,6 +93,348 @@
                     "memberCount": 4,
                     "prefabId": "Enemy",
                     "triggerTime": 14.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyTurret",
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.5,
+                            "y": 1.5,
+                            "z": 1.5
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 230.0
+                        }
+                    },
+                    "triggerTime": 18.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "Enemy",
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 260.0
+                        }
+                    },
+                    "triggerTime": 22.0
+                },
+                {
+                    "basePosition": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 310.0
+                        }
+                    },
+                    "clusterRadius": 3.0,
+                    "eventType": "FormationSpawnEvent",
+                    "memberCount": 3,
+                    "prefabId": "Enemy",
+                    "triggerTime": 26.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyHoming",
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 0.6000000238418579,
+                            "y": 0.6000000238418579,
+                            "z": 1.7999999523162842
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 360.0
+                        }
+                    },
+                    "triggerTime": 30.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyTurret",
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.5,
+                            "y": 1.5,
+                            "z": 1.5
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 380.0
+                        }
+                    },
+                    "triggerTime": 34.0
+                },
+                {
+                    "basePosition": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.5,
+                            "y": 1.5,
+                            "z": 1.5
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 430.0
+                        }
+                    },
+                    "clusterRadius": 3.0,
+                    "eventType": "FormationSpawnEvent",
+                    "memberCount": 4,
+                    "prefabId": "EnemyTurret",
+                    "triggerTime": 38.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyHoming",
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 0.6000000238418579,
+                            "y": 0.6000000238418579,
+                            "z": 1.7999999523162842
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 470.0
+                        }
+                    },
+                    "triggerTime": 42.0
+                },
+                {
+                    "basePosition": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 510.0
+                        }
+                    },
+                    "clusterRadius": 3.0,
+                    "eventType": "FormationSpawnEvent",
+                    "memberCount": 3,
+                    "prefabId": "Enemy",
+                    "triggerTime": 46.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyHoming",
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 0.6000000238418579,
+                            "y": 0.6000000238418579,
+                            "z": 1.7999999523162842
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 560.0
+                        }
+                    },
+                    "triggerTime": 50.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyTurret",
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.5,
+                            "y": 1.5,
+                            "z": 1.5
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 570.0
+                        }
+                    },
+                    "triggerTime": 53.0
+                },
+                {
+                    "basePosition": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 620.0
+                        }
+                    },
+                    "clusterRadius": 3.0,
+                    "eventType": "FormationSpawnEvent",
+                    "memberCount": 5,
+                    "prefabId": "Enemy",
+                    "triggerTime": 56.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyHoming",
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 0.6000000238418579,
+                            "y": 0.6000000238418579,
+                            "z": 1.7999999523162842
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 640.0
+                        }
+                    },
+                    "triggerTime": 59.0
+                },
+                {
+                    "basePosition": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.5,
+                            "y": 1.5,
+                            "z": 1.5
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 670.0
+                        }
+                    },
+                    "clusterRadius": 3.0,
+                    "eventType": "FormationSpawnEvent",
+                    "memberCount": 4,
+                    "prefabId": "EnemyTurret",
+                    "triggerTime": 62.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyHoming",
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 0.6000000238418579,
+                            "y": 0.6000000238418579,
+                            "z": 1.7999999523162842
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 690.0
+                        }
+                    },
+                    "triggerTime": 65.0
+                },
+                {
+                    "basePosition": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 730.0
+                        }
+                    },
+                    "clusterRadius": 3.0,
+                    "eventType": "FormationSpawnEvent",
+                    "memberCount": 3,
+                    "prefabId": "Enemy",
+                    "triggerTime": 68.0
                 }
             ],
             "trackName": "Main"

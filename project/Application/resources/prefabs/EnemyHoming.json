@@ -2,6 +2,12 @@
     "children": [],
     "components": [
         {
+            "color": {
+                "x": 1.0,
+                "y": 0.65,
+                "z": 0.05,
+                "w": 1.0
+            },
             "environmentCoefficient": 0.0,
             "modelPath": "resources/cube/cube.obj",
             "texturePath": "resources/cube/white100x100.png",
