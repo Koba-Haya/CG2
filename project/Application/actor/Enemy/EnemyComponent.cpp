@@ -1,10 +1,26 @@
 #include "EnemyComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/DissolveComponent.h"
+#include "AbsoluteEngine/scene/ModelComponent.h"
 #include <algorithm>
+
+namespace {
+constexpr float kHitFlashDuration = 0.12f; // 被弾フラッシュの継続時間（秒）
+}
 
 void EnemyComponent::Update(float deltaTime) {
     if (!owner_) return;
+
+    // 被弾フラッシュの経過処理（生きている間の被弾リアクション）
+    if (hitFlashTimer_ > 0.0f) {
+        hitFlashTimer_ -= deltaTime;
+        if (hitFlashTimer_ <= 0.0f) {
+            hitFlashTimer_ = 0.0f;
+            if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+                modelComp->SetColor(colorBeforeFlash_);
+            }
+        }
+    }
 
     if (isDead_) {
         // -----------------------------------------------------------------------
@@ -47,6 +63,15 @@ void EnemyComponent::OnHit(int damage) {
         isActive_  = false;
         dissolveTimer_ = 0.0f;
         // コールバックは Update 内で 1 回だけ発火する（タイミング保証のため）
+    } else if (owner_) {
+        // 即死しなかった場合の被弾リアクション（タレット等、複数発耐える敵向け）
+        if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+            if (hitFlashTimer_ <= 0.0f) {
+                colorBeforeFlash_ = modelComp->GetColor(); // 多重被弾で元の色を上書きしないよう最初の1回だけ保存
+            }
+            modelComp->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+            hitFlashTimer_ = kHitFlashDuration;
+        }
     }
 }
 

@@ -257,6 +257,9 @@ void BaseScene::DrawEditorUI() {
     ImGui::End();
 
     // エディタUIの描画
+    // 「Viewport##GameView」の描画（ゲーム画面のプレビュー表示）はPlay中も必要なため、
+    // DrawUI()自体は常に呼ぶ（Editモード限定にすると、Playモード中に編集ツール一式ごと
+    // ゲーム画面まで消えてしまう）。
     if (editorUIManager_ && editorCamera_) {
         auto* edCam = dynamic_cast<AbsoluteEngine::EditorCamera*>(editorCamera_.get());
         // ギズモ・マウスピッキングは「実際に画面に描画されているカメラ」の行列を使う
@@ -267,7 +270,12 @@ void BaseScene::DrawEditorUI() {
         editorUIManager_->DrawUI(rootObjects_, viewCam->GetViewMatrix(), viewCam->GetProjectionMatrix(), edCam);
 
         // オートセーブの実行
-        if (editorUIManager_->ConsumeSceneModifiedFlag()) {
+        // 【バグ修正】ここにplayMode_のガードが無かったため、GameScene（常にPlayModeで
+        // 起動）を実際にプレイ中でもマウス操作が偶然ギズモ等に当たって isModified_ が立つと、
+        // 「プレイ中に動的生成された敵・弾・ボスを含む今の状態」がそのままシーンJSONへ
+        // 上書き保存されてしまっていた（＝二度と正常にロードできない壊れたレベルになる）。
+        // 保存はEditモードでの編集結果に対してのみ行う。
+        if (playMode_ == PlayMode::Edit && editorUIManager_->ConsumeSceneModifiedFlag()) {
             SaveEditorScene();
         }
     }

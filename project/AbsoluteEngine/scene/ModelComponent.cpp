@@ -22,7 +22,7 @@ void ModelComponent::LoadModel(const std::string& path) {
     modelInstance_ = std::make_unique<ModelInstance>();
     ModelInstance::CreateInfo ci{};
     ci.resource = res;
-    ci.baseColor = {1, 1, 1, 1};
+    ci.baseColor = {color_.x, color_.y, color_.z, color_.w};
     ci.lightingMode = 1;
     ci.environmentCoefficient = environmentCoefficient_;
     modelInstance_->Initialize(ci);

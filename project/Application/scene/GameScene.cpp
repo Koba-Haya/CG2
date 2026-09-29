@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>  // rand()
+#include "Logger.h"
 
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -762,6 +763,34 @@ void GameScene::Update() {
       }
   }
 
+  // -----------------------------------------------------------------------
+  // プレイヤーより十分後方に離れた敵を削除する。
+  // 【バグ修正】敵は撃破以外で消える手段が無く、自機が通り過ぎた後もずっと
+  // 生き残ってカメラ視錐台に入り続け、タレット等が背後から撃ち続けていた。
+  // -----------------------------------------------------------------------
+  if (playerObj_) {
+      const Vector3 playerPos = playerObj_->GetTransform().translate;
+      const Vector3 forward = GetMainCamera()->GetForward();
+      constexpr float kEnemyDespawnBehindDistance = 15.0f;
+      for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
+          auto& obj = *it;
+          bool shouldDelete = false;
+          if (obj && obj->GetTag() == "Enemy") {
+              const Vector3& enemyPos = obj->GetTransform().translate;
+              const Vector3 toEnemy = { enemyPos.x - playerPos.x, enemyPos.y - playerPos.y, enemyPos.z - playerPos.z };
+              const float behindDistance = -(toEnemy.x * forward.x + toEnemy.y * forward.y + toEnemy.z * forward.z);
+              if (behindDistance > kEnemyDespawnBehindDistance) {
+                  shouldDelete = true;
+              }
+          }
+          if (shouldDelete) {
+              it = rootObjects_.erase(it);
+          } else {
+              ++it;
+          }
+      }
+  }
+
   // パーティクルの更新（爆発エフェクト等）
   ParticleManager::GetInstance()->Update(deltaTime);
 
@@ -781,22 +810,34 @@ void GameScene::Update() {
   if (phase_ == GamePhase::InProgress && railProgress >= 1.0f) {
       phase_ = GamePhase::Boss;
 
+      // 【調査用の一時ログ】原因が分かったら削除する。
+      Logger::GetInstance().Log("[BossPhase] start");
+
       // ボス出現演出（PostEffect加点要素: GaussianFilter）
       bossIntroBlurTimer_ = 0.0f;
       bossIntroBlurDuration_ = 1.2f;
       Renderer::GetInstance()->SetGaussianFilterParam(5, 4.0f, { 1.0f, 0.0f });
 
       auto bossObj = std::make_shared<AbsoluteEngine::GameObject>("Boss");
-      Vector3 eye = GetMainCamera()->GetEye();
       Vector3 forward = GetMainCamera()->GetForward();
-      bossObj->GetTransform().translate = { eye.x + forward.x * 20.0f, eye.y + forward.y * 20.0f, eye.z + forward.z * 20.0f };
-      bossObj->GetTransform().scale = {3.0f, 3.0f, 3.0f};
+      // 初期出現位置。以降はBossComponent::UpdateMovement()が毎フレーム
+      // 自機のちょっと前(距離14)に追従＋左右上下の揺れを加えて上書きするため、
+      // ここは最初の1フレーム分の暫定位置（BossComponent::kHoverDistanceFromPlayerと合わせておく）。
+      constexpr float kBossInitialDistanceFromPlayer = 14.0f;
+      Vector3 playerPos = playerObj_ ? playerObj_->GetTransform().translate : GetMainCamera()->GetEye();
+      bossObj->GetTransform().translate = {
+          playerPos.x + forward.x * kBossInitialDistanceFromPlayer,
+          playerPos.y + forward.y * kBossInitialDistanceFromPlayer,
+          playerPos.z + forward.z * kBossInitialDistanceFromPlayer
+      };
+      bossObj->GetTransform().scale = {4.0f, 4.0f, 4.0f};
       auto bossModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
       bossModelComp->LoadModel("resources/app/cube/cube.obj");
       bossModelComp->SetEnvironmentCoefficient(1.0f);
+      bossModelComp->SetColor({0.7f, 0.1f, 0.9f, 1.0f}); // ザコ敵と見分けられるようボスは紫に
       bossObj->AddComponent(std::move(bossModelComp));
+      // 攻撃パターンはBossComponent自身が専用ロジックで管理する（汎用EnemyShootComponentには依存しない）
       bossObj->AddComponent(std::make_unique<BossComponent>());
-      bossObj->AddComponent(std::make_unique<EnemyShootComponent>());
 
       auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
       colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
@@ -894,17 +935,21 @@ void GameScene::Update() {
   } // end of if (playMode_ == PlayMode::Play)
 
 
-  // シーンの自動セーブ
-  bool shouldSave = false;
-  for (const auto& obj : rootObjects_) {
-      if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
-          if (rComp->ConsumeModifiedFlag()) {
-              shouldSave = true;
+  // シーンの自動セーブ（Editモード専用。Play中に動的スポーンされた敵/弾/ボスを含む
+  // 現在の rootObjects_ をそのまま保存してしまうとレベルデータが壊れるため、
+  // 実プレイ中（常にPlayMode::Play）は絶対に走らせない）
+  if (playMode_ == PlayMode::Edit) {
+      bool shouldSave = false;
+      for (const auto& obj : rootObjects_) {
+          if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
+              if (rComp->ConsumeModifiedFlag()) {
+                  shouldSave = true;
+              }
           }
       }
-  }
-  if (shouldSave) {
-      SaveEditorScene();
+      if (shouldSave) {
+          SaveEditorScene();
+      }
   }
 }
 
@@ -1063,6 +1108,24 @@ void GameScene::DrawEditorUI() {
 
     // スコア（内部カウンタのみ。編隊全滅ボーナスで倍率加算される。本番UI表示は別タスクのため仮置き）
     ImGui::Text("Score: %d", score_);
+
+    // ボスHP（ボス出現中のみ表示。フェーズも併記して状況が伝わるようにする）
+    if (phase_ == GamePhase::Boss) {
+        for (const auto& obj : rootObjects_) {
+            if (!obj) continue;
+            if (auto* bComp = obj->GetComponent<BossComponent>()) {
+                const char* phaseName = "1";
+                switch (bComp->GetPhase()) {
+                    case BossPhase::Phase1: phaseName = "1"; break;
+                    case BossPhase::Phase2: phaseName = "2"; break;
+                    case BossPhase::Phase3: phaseName = "3"; break;
+                }
+                ImGui::TextColored(ImVec4(0.8f, 0.3f, 1.0f, 1.0f), "BOSS HP: %d / %d  (Phase %s)",
+                    bComp->GetHp(), bComp->GetMaxHp(), phaseName);
+                break;
+            }
+        }
+    }
 
     // SpawnManagerのデバッグ情報
     ImGui::SeparatorText("SpawnManager");

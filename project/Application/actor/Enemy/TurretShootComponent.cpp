@@ -87,6 +87,17 @@ bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
     if (toPlayerLen < 0.001f) return false;
 
     outToPlayerDir = { toPlayer.x / toPlayerLen, toPlayer.y / toPlayerLen, toPlayer.z / toPlayerLen };
+
+    // --- 自機がもう通り過ぎて後方にいる場合は撃たない ---
+    // タレットは移動しないため進行方向(facingDir_)を持てないが、レールの進行方向＝カメラの
+    // 前方向と一致するため、それを基準に「自機への方向が進行方向寄りかどうか」で判定する。
+    // 自機が接近中〜横に並ぶ間はtoPlayerが進行方向の逆〜直角寄りになり、
+    // 通り過ぎると進行方向寄り（内積が大きく正）に転じる。
+    Vector3 forward = camera->GetForward();
+    const float towardBehind = outToPlayerDir.x * forward.x + outToPlayerDir.y * forward.y + outToPlayerDir.z * forward.z;
+    constexpr float kMaxForwardAlignment = 0.3f;
+    if (towardBehind > kMaxForwardAlignment) return false;
+
     return true;
 }
 

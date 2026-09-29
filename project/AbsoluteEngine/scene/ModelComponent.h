@@ -1,6 +1,7 @@
 #pragma once
 #include "Component.h"
 #include "../graphics/3d/model/ModelInstance.h"
+#include "Type/Vector.h"
 #include <string>
 #include <memory>
 
@@ -17,6 +18,7 @@ public:
         j["modelPath"] = modelPath_;
         j["texturePath"] = texturePath_;
         j["environmentCoefficient"] = environmentCoefficient_;
+        j["color"] = { {"x", color_.x}, {"y", color_.y}, {"z", color_.z}, {"w", color_.w} };
     }
     void Deserialize(const nlohmann::json& j) override {
         if (j.contains("modelPath")) {
@@ -30,6 +32,11 @@ public:
         if (j.contains("environmentCoefficient")) {
             SetEnvironmentCoefficient(j["environmentCoefficient"].get<float>());
         }
+        // 敵種別を見た目で区別するための色味（テクスチャを増やさずデータ駆動で差をつける）
+        if (j.contains("color")) {
+            const auto& c = j["color"];
+            SetColor({ c.value("x", 1.0f), c.value("y", 1.0f), c.value("z", 1.0f), c.value("w", 1.0f) });
+        }
     }
 
     void LoadModel(const std::string& path);
@@ -39,14 +46,23 @@ public:
     const std::string& GetTexturePath() const { return texturePath_; }
 
     ModelInstance* GetModelInstance() const { return modelInstance_.get(); }
-    
-    void SetEnvironmentCoefficient(float c) { 
-        environmentCoefficient_ = c; 
+
+    void SetEnvironmentCoefficient(float c) {
+        environmentCoefficient_ = c;
         if (modelInstance_) {
             modelInstance_->SetEnvironmentCoefficient(c);
         }
     }
     float GetEnvironmentCoefficient() const { return environmentCoefficient_; }
+
+    // モデルの単色ティント（RGBA）。LoadModel()で作り直しても保持される。
+    void SetColor(const Vector4& c) {
+        color_ = c;
+        if (modelInstance_) {
+            modelInstance_->SetColor(c);
+        }
+    }
+    const Vector4& GetColor() const { return color_; }
 
     void Update(float deltaTime) override;
     void Draw() override;
@@ -61,6 +77,7 @@ private:
     // D3D12 ERROR: OBJECT_DELETED_WHILE_STILL_IN_USE でクラッシュするため。
     std::unique_ptr<ModelInstance> pendingDestroyModelInstance_;
     float environmentCoefficient_ = 0.0f;
+    Vector4 color_{1.0f, 1.0f, 1.0f, 1.0f};
 };
 
 } // namespace AbsoluteEngine
