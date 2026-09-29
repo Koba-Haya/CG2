@@ -13,6 +13,7 @@
 #include "ParticleManager.h"
 #include "../Bullet/BulletComponent.h"
 #include "../Bullet/HomingBulletComponent.h"
+#include "Logger.h"
 
 // 武器（右手に持たせる仮モデル）の右手ボーン名
 static const char* const kRightHandBoneName = "mixamorig:RightHand";
@@ -537,5 +538,10 @@ void PlayerComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (other->GetName().find("Enemy") != std::string::npos || other->GetTag() == "Enemy" ||
         other->GetName().find("Boss")  != std::string::npos || other->GetTag() == "Boss") {
         TakeDamage(1);
+        // 【調査用の一時ログ】「HPが見えないまま急に死ぬ」現象の原因特定用。
+        // どの相手との接触で何回ダメージが入ったかをフレーム単位で記録する。
+        // 原因が分かったら削除する。
+        Logger::GetInstance().Log("[PlayerDamage] hit by name=%s tag=%s -> hp=%d/%d",
+            other->GetName().c_str(), other->GetTag().c_str(), hp_, maxHp_);
     }
 }

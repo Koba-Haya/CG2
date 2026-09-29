@@ -98,6 +98,31 @@
                             "x": 0.0,
                             "y": 0.0,
                             "z": 750.0
+                        },
+                        {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 840.0
+                        },
+                        {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 930.0
+                        },
+                        {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 1020.0
+                        },
+                        {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 1110.0
+                        },
+                        {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 1200.0
                         }
                     ]
                 }
@@ -126,6 +151,12 @@
             "children": [],
             "components": [
                 {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
                     "environmentCoefficient": 0.0,
                     "modelPath": "resources/app/multiMaterial/multiMaterial.obj",
                     "texturePath": "",
@@ -156,6 +187,12 @@
             "children": [],
             "components": [
                 {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
                     "environmentCoefficient": 0.0,
                     "modelPath": "resources/app/human/walk.gltf",
                     "texturePath": "resources/player/player.png",

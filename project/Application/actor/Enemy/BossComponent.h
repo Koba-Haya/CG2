@@ -1,6 +1,8 @@
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
+#include "AbsoluteEngine/scene/GameObject.h"
 #include "Type/Vector.h"
+#include <memory>
 #include <string>
 
 // ボスの攻撃パターン。文字列比較ではなくenumで管理する
@@ -34,6 +36,11 @@ public:
 private:
     void UpdatePhase();
     void UpdateAttack(float deltaTime);
+    // 自機のちょっと前に留まりつつ左右上下にゆっくり揺れる（レール終端に鎮座して見えないようにする）
+    void UpdateMovement(float deltaTime);
+
+    // アクティブシーンから自機のGameObjectを探す（Fire*/UpdateMovementで共用）
+    std::shared_ptr<AbsoluteEngine::GameObject> FindPlayer() const;
 
     // 自機へ向かう単発弾を1発発射する
     void FireAimedShot(float speed);
@@ -52,4 +59,10 @@ private:
 
     // 存在をアピールするための緩やかな自転（静止した箱に見えないようにする程度の演出）
     float spinTimer_ = 0.0f;
+    // 左右上下の揺れ用タイマー
+    float weaveTimer_ = 0.0f;
+
+    // 被弾リアクション（即死しなかった時に一瞬白く光らせる）
+    float hitFlashTimer_ = 0.0f;
+    Vector4 colorBeforeFlash_{1.0f, 1.0f, 1.0f, 1.0f};
 };

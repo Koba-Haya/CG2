@@ -52,4 +52,8 @@ private:
 
     float dissolveTimer_ = 0.0f;
     float dissolveDuration_ = 1.0f; // 1秒かけてディゾルブ消滅
+
+    // 被弾リアクション（即死しなかった時に一瞬白く光らせる）
+    float hitFlashTimer_ = 0.0f;
+    Vector4 colorBeforeFlash_{1.0f, 1.0f, 1.0f, 1.0f};
 };

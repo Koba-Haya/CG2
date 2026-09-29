@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>  // rand()
+#include "Logger.h"
 
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -762,6 +763,34 @@ void GameScene::Update() {
       }
   }
 
+  // -----------------------------------------------------------------------
+  // プレイヤーより十分後方に離れた敵を削除する。
+  // 【バグ修正】敵は撃破以外で消える手段が無く、自機が通り過ぎた後もずっと
+  // 生き残ってカメラ視錐台に入り続け、タレット等が背後から撃ち続けていた。
+  // -----------------------------------------------------------------------
+  if (playerObj_) {
+      const Vector3 playerPos = playerObj_->GetTransform().translate;
+      const Vector3 forward = GetMainCamera()->GetForward();
+      constexpr float kEnemyDespawnBehindDistance = 15.0f;
+      for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
+          auto& obj = *it;
+          bool shouldDelete = false;
+          if (obj && obj->GetTag() == "Enemy") {
+              const Vector3& enemyPos = obj->GetTransform().translate;
+              const Vector3 toEnemy = { enemyPos.x - playerPos.x, enemyPos.y - playerPos.y, enemyPos.z - playerPos.z };
+              const float behindDistance = -(toEnemy.x * forward.x + toEnemy.y * forward.y + toEnemy.z * forward.z);
+              if (behindDistance > kEnemyDespawnBehindDistance) {
+                  shouldDelete = true;
+              }
+          }
+          if (shouldDelete) {
+              it = rootObjects_.erase(it);
+          } else {
+              ++it;
+          }
+      }
+  }
+
   // パーティクルの更新（爆発エフェクト等）
   ParticleManager::GetInstance()->Update(deltaTime);
 
@@ -781,6 +810,9 @@ void GameScene::Update() {
   if (phase_ == GamePhase::InProgress && railProgress >= 1.0f) {
       phase_ = GamePhase::Boss;
 
+      // 【調査用の一時ログ】原因が分かったら削除する。
+      Logger::GetInstance().Log("[BossPhase] start");
+
       // ボス出現演出（PostEffect加点要素: GaussianFilter）
       bossIntroBlurTimer_ = 0.0f;
       bossIntroBlurDuration_ = 1.2f;
@@ -788,17 +820,15 @@ void GameScene::Update() {
 
       auto bossObj = std::make_shared<AbsoluteEngine::GameObject>("Boss");
       Vector3 forward = GetMainCamera()->GetForward();
-      // 【バグ修正】以前は「カメラのeyeから20ユニット前方」を基準にしていたが、
-      // 自機はカメラのeyeから常にcameraDistance_(22ユニット)前方に居るため、
-      // ボスが自機よりむしろ後方～ほぼ同じ深度に出現してしまい、
-      // 「奥に鎮座していて距離感がおかしい／攻撃が届かない」状態になっていた。
-      // 自機の実位置を基準に、明確に前方(距離28)へ配置する。
-      constexpr float kBossDistanceFromPlayer = 28.0f;
+      // 初期出現位置。以降はBossComponent::UpdateMovement()が毎フレーム
+      // 自機のちょっと前(距離14)に追従＋左右上下の揺れを加えて上書きするため、
+      // ここは最初の1フレーム分の暫定位置（BossComponent::kHoverDistanceFromPlayerと合わせておく）。
+      constexpr float kBossInitialDistanceFromPlayer = 14.0f;
       Vector3 playerPos = playerObj_ ? playerObj_->GetTransform().translate : GetMainCamera()->GetEye();
       bossObj->GetTransform().translate = {
-          playerPos.x + forward.x * kBossDistanceFromPlayer,
-          playerPos.y + forward.y * kBossDistanceFromPlayer,
-          playerPos.z + forward.z * kBossDistanceFromPlayer
+          playerPos.x + forward.x * kBossInitialDistanceFromPlayer,
+          playerPos.y + forward.y * kBossInitialDistanceFromPlayer,
+          playerPos.z + forward.z * kBossInitialDistanceFromPlayer
       };
       bossObj->GetTransform().scale = {4.0f, 4.0f, 4.0f};
       auto bossModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();

@@ -5,6 +5,7 @@
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "../Bullet/BulletComponent.h"
 #include "../Player/PlayerComponent.h"
+#include "GameCamera.h"
 #include <cmath>
 
 namespace {
@@ -22,6 +23,16 @@ constexpr int   kSpreadCountPhase3 = 8;
 constexpr float kSpreadAngleDeg = 12.0f;
 
 constexpr float kSpinSpeed = 0.6f; // rad/sec
+
+// 自機のちょっと前に留まる距離・左右上下の揺れ幅と速さ
+// （レール終端に鎮座して見えないよう、常に自機基準の近い位置に追従させる）
+constexpr float kHoverDistanceFromPlayer = 14.0f;
+constexpr float kWeaveAmplitudeX = 6.0f;  // 左右の振れ幅
+constexpr float kWeaveAmplitudeY = 3.0f;  // 上下の振れ幅
+constexpr float kWeaveSpeedX = 0.5f;      // rad/sec
+constexpr float kWeaveSpeedY = 0.7f;      // rad/sec（Xと素数っぽい比率にして周期がズレるようにする）
+
+constexpr float kHitFlashDuration = 0.12f; // 被弾フラッシュの継続時間（秒）
 }
 
 void BossComponent::Update(float deltaTime) {
@@ -31,8 +42,56 @@ void BossComponent::Update(float deltaTime) {
     spinTimer_ += deltaTime * kSpinSpeed;
     owner_->GetTransform().rotate.y = spinTimer_;
 
+    // 被弾フラッシュの経過処理
+    if (hitFlashTimer_ > 0.0f) {
+        hitFlashTimer_ -= deltaTime;
+        if (hitFlashTimer_ <= 0.0f) {
+            hitFlashTimer_ = 0.0f;
+            if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+                modelComp->SetColor(colorBeforeFlash_);
+            }
+        }
+    }
+
+    UpdateMovement(deltaTime);
     UpdatePhase();
     UpdateAttack(deltaTime);
+}
+
+std::shared_ptr<AbsoluteEngine::GameObject> BossComponent::FindPlayer() const {
+    auto scene = BaseScene::GetActiveScene();
+    if (!scene) return nullptr;
+
+    for (const auto& obj : scene->GetRootObjects()) {
+        if (obj && obj->GetComponent<PlayerComponent>()) {
+            return obj;
+        }
+    }
+    return nullptr;
+}
+
+void BossComponent::UpdateMovement(float deltaTime) {
+    auto scene = BaseScene::GetActiveScene();
+    if (!scene) return;
+    auto* camera = scene->GetMainCamera();
+    auto playerObj = FindPlayer();
+    if (!camera || !playerObj) return;
+
+    weaveTimer_ += deltaTime;
+
+    const Vector3 playerPos = playerObj->GetTransform().translate;
+    const Vector3 forward = camera->GetForward();
+    const Vector3 right    = camera->GetRight();
+    const Vector3 up       = camera->GetActualUp();
+
+    const float weaveX = std::sin(weaveTimer_ * kWeaveSpeedX) * kWeaveAmplitudeX;
+    const float weaveY = std::sin(weaveTimer_ * kWeaveSpeedY) * kWeaveAmplitudeY;
+
+    owner_->GetTransform().translate = {
+        playerPos.x + forward.x * kHoverDistanceFromPlayer + right.x * weaveX + up.x * weaveY,
+        playerPos.y + forward.y * kHoverDistanceFromPlayer + right.y * weaveX + up.y * weaveY,
+        playerPos.z + forward.z * kHoverDistanceFromPlayer + right.z * weaveX + up.z * weaveY
+    };
 }
 
 void BossComponent::UpdatePhase() {
@@ -104,16 +163,7 @@ void SpawnBossBullet(const Vector3& spawnPos, const Vector3& vel) {
 
 void BossComponent::FireAimedShot(float speed) {
     if (!owner_) return;
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-
-    std::shared_ptr<AbsoluteEngine::GameObject> playerObj;
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            playerObj = obj;
-            break;
-        }
-    }
+    auto playerObj = FindPlayer();
     if (!playerObj) return;
 
     const Vector3 spawnPos = owner_->GetTransform().translate;
@@ -131,16 +181,7 @@ void BossComponent::FireAimedShot(float speed) {
 
 void BossComponent::FireSpreadShot(int count, float spreadAngleDeg, float speed) {
     if (!owner_ || count <= 0) return;
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-
-    std::shared_ptr<AbsoluteEngine::GameObject> playerObj;
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            playerObj = obj;
-            break;
-        }
-    }
+    auto playerObj = FindPlayer();
     if (!playerObj) return;
 
     const Vector3 spawnPos = owner_->GetTransform().translate;
@@ -179,6 +220,15 @@ void BossComponent::TakeDamage(int damage) {
         isActive_ = false; // 撃破
         if (owner_) {
             owner_->Destroy();
+        }
+    } else if (owner_) {
+        // 即死しなかった場合の被弾リアクション
+        if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+            if (hitFlashTimer_ <= 0.0f) {
+                colorBeforeFlash_ = modelComp->GetColor();
+            }
+            modelComp->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+            hitFlashTimer_ = kHitFlashDuration;
         }
     }
 }
